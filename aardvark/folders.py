@@ -71,11 +71,13 @@ def next_category_number(dbConn, domain, area):
         row["ac_number"]
         for row in db.list_categories(dbConn, domain, areaId=area["area_id"])
     ]
-    candidate = area["decade_start"] if not existing else max(existing) + 1
+    # THE X0 NUMBER IN EACH DECADE IS RESERVED (MIRRORS 00-09 BEING RESERVED
+    # FOR THE SYSTEM FOLDER AT THE AREA LEVEL), SO CATEGORIES RUN X1..X9
+    candidate = area["decade_start"] + 1 if not existing else max(existing) + 1
     if candidate > area["decade_end"]:
         raise CategoryExhaustedError(
             f"no more category numbers available in area "
-            f"{area['decade_start']}-{area['decade_end']} (max 10 categories per area)"
+            f"{area['decade_start']}-{area['decade_end']} (max 9 categories per area)"
         )
     return candidate
 

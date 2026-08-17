@@ -36,12 +36,12 @@ def test_next_category_number_sequence_and_exhaustion(dbConn):
     areaId = db.insert_area(dbConn, "areas", 10, 19, "Health", "", "🏥", "10-19 Health 🏥", "/tmp/h")
     area = db.get_area(dbConn, "areas", 10)
     seen = []
-    for _ in range(10):
+    for _ in range(9):
         acNumber = folders.next_category_number(dbConn, "areas", area)
         seen.append(acNumber)
         db.insert_category(dbConn, areaId, "areas", acNumber, f"C{acNumber}", "", "📁",
                             folders.category_folder_name(acNumber, f"C{acNumber}", "📁"), "/tmp/h")
-    assert seen == list(range(10, 20))
+    assert seen == list(range(11, 20))
     with pytest.raises(folders.CategoryExhaustedError):
         folders.next_category_number(dbConn, "areas", area)
 
