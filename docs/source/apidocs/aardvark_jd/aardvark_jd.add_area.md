@@ -23,7 +23,7 @@
 
 ### API
 
-`````{py:class} add_area(log, dbConn, domain, title, description)
+`````{py:class} add_area(log, dbConn, domain, title, description, chosenEmoji=None, settings=None)
 :canonical: aardvark_jd.add_area.add_area
 
 Bases: {py:obj}`object`

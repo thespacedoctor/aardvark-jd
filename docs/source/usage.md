@@ -6,10 +6,12 @@
     
     Usage:
         aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
-        aardvark new_project [<templateName>] [<projectTitle>] [-s <pathToSettingsFile>]
-        aardvark add_area <domain> <title> <description> [-s <pathToSettingsFile>]
-        aardvark add_category <domain> <area> <title> <description> [-s <pathToSettingsFile>]
+        aardvark new_project [<templateName>] [<projectTitle>] [-e <emoji>] [-s <pathToSettingsFile>]
+        aardvark add_area <domain> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
+        aardvark add_category <domain> <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
         aardvark add_id <domain> <category> <title> <description> [-s <pathToSettingsFile>]
+        aardvark set_emoji <domain> <ref> <emoji> [-s <pathToSettingsFile>]
+        aardvark repair_emoji [-s <pathToSettingsFile>]
         aardvark search <term>... [-s <pathToSettingsFile>]
     
     Commands:
@@ -18,6 +20,8 @@
         add_area                               add a new Johnny Decimal area to `areas` or `resources`
         add_category                           add a new Johnny Decimal category to an existing area
         add_id                                 add a new Johnny Decimal ID to an existing category
+        set_emoji                              change the emoji on an existing folder, moving it and repointing the index
+        repair_emoji                           reset every static system folder to its declared emoji
         search                                 search the index by keyword or phrase
     
     Arguments:
@@ -25,9 +29,11 @@
         parentPath                             the path in which the system's root folder is created
         templateName                           a `04_templates` zip's basename, or "blank"
         projectTitle                           the new project's title
-        domain                                 "areas" or "resources"
+        domain                                 "areas" or "resources"; set_emoji also takes "projects" and "system"
         area                                   an area reference, e.g. "10" or "10-19"
         category                               a category reference, e.g. "11"
+        ref                                    what to retarget: an area ("10"), category ("11"), project title, or system folder key ("root.areas")
+        emoji                                  an emoji character
         title                                  a title
         description                            a description
         term                                   a search word or phrase
@@ -35,6 +41,7 @@
     Options:
         -h, --help                             show this help message
         -v, --version                          show version
+        -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
         -s, --settings <pathToSettingsFile>    the settings file
     
 

@@ -35,6 +35,10 @@
   - ```{autodoc2-docstring} aardvark_jd.db.get_meta
     :summary:
     ```
+* - {py:obj}`get_project_by_title <aardvark_jd.db.get_project_by_title>`
+  - ```{autodoc2-docstring} aardvark_jd.db.get_project_by_title
+    :summary:
+    ```
 * - {py:obj}`get_system_folder <aardvark_jd.db.get_system_folder>`
   - ```{autodoc2-docstring} aardvark_jd.db.get_system_folder
     :summary:
@@ -75,8 +79,32 @@
   - ```{autodoc2-docstring} aardvark_jd.db.list_ids
     :summary:
     ```
+* - {py:obj}`list_system_folders <aardvark_jd.db.list_system_folders>`
+  - ```{autodoc2-docstring} aardvark_jd.db.list_system_folders
+    :summary:
+    ```
+* - {py:obj}`rewrite_folder_path_prefix <aardvark_jd.db.rewrite_folder_path_prefix>`
+  - ```{autodoc2-docstring} aardvark_jd.db.rewrite_folder_path_prefix
+    :summary:
+    ```
 * - {py:obj}`set_meta <aardvark_jd.db.set_meta>`
   - ```{autodoc2-docstring} aardvark_jd.db.set_meta
+    :summary:
+    ```
+* - {py:obj}`update_area_emoji <aardvark_jd.db.update_area_emoji>`
+  - ```{autodoc2-docstring} aardvark_jd.db.update_area_emoji
+    :summary:
+    ```
+* - {py:obj}`update_category_emoji <aardvark_jd.db.update_category_emoji>`
+  - ```{autodoc2-docstring} aardvark_jd.db.update_category_emoji
+    :summary:
+    ```
+* - {py:obj}`update_project_emoji <aardvark_jd.db.update_project_emoji>`
+  - ```{autodoc2-docstring} aardvark_jd.db.update_project_emoji
+    :summary:
+    ```
+* - {py:obj}`update_system_folder <aardvark_jd.db.update_system_folder>`
+  - ```{autodoc2-docstring} aardvark_jd.db.update_system_folder
     :summary:
     ```
 ````
@@ -115,6 +143,13 @@
 :canonical: aardvark_jd.db.get_meta
 
 ```{autodoc2-docstring} aardvark_jd.db.get_meta
+```
+````
+
+````{py:function} get_project_by_title(dbConn, title)
+:canonical: aardvark_jd.db.get_project_by_title
+
+```{autodoc2-docstring} aardvark_jd.db.get_project_by_title
 ```
 ````
 
@@ -188,9 +223,51 @@
 ```
 ````
 
+````{py:function} list_system_folders(dbConn)
+:canonical: aardvark_jd.db.list_system_folders
+
+```{autodoc2-docstring} aardvark_jd.db.list_system_folders
+```
+````
+
+````{py:function} rewrite_folder_path_prefix(dbConn, oldPrefix, newPrefix)
+:canonical: aardvark_jd.db.rewrite_folder_path_prefix
+
+```{autodoc2-docstring} aardvark_jd.db.rewrite_folder_path_prefix
+```
+````
+
 ````{py:function} set_meta(dbConn, key, value)
 :canonical: aardvark_jd.db.set_meta
 
 ```{autodoc2-docstring} aardvark_jd.db.set_meta
+```
+````
+
+````{py:function} update_area_emoji(dbConn, areaId, emoji, folderName, folderPath)
+:canonical: aardvark_jd.db.update_area_emoji
+
+```{autodoc2-docstring} aardvark_jd.db.update_area_emoji
+```
+````
+
+````{py:function} update_category_emoji(dbConn, categoryId, emoji, folderName, folderPath)
+:canonical: aardvark_jd.db.update_category_emoji
+
+```{autodoc2-docstring} aardvark_jd.db.update_category_emoji
+```
+````
+
+````{py:function} update_project_emoji(dbConn, projectId, emoji, folderName, folderPath)
+:canonical: aardvark_jd.db.update_project_emoji
+
+```{autodoc2-docstring} aardvark_jd.db.update_project_emoji
+```
+````
+
+````{py:function} update_system_folder(dbConn, folderKey, folderName, folderPath)
+:canonical: aardvark_jd.db.update_system_folder
+
+```{autodoc2-docstring} aardvark_jd.db.update_system_folder
 ```
 ````

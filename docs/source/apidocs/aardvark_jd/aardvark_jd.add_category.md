@@ -23,7 +23,7 @@
 
 ### API
 
-`````{py:class} add_category(log, dbConn, domain, areaRef, title, description)
+`````{py:class} add_category(log, dbConn, domain, areaRef, title, description, chosenEmoji=None, settings=None)
 :canonical: aardvark_jd.add_category.add_category
 
 Bases: {py:obj}`object`

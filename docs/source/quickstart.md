@@ -8,7 +8,46 @@ Create a new PARA + Johnny Decimal system by giving it a name and a parent folde
 aardvark init "My Life" ~/
 ```
 
-This creates the full folder tree (`00_index`, `01_inbox`, `P.ROJECTS`, `A.REAS`, `R.ESOURCES`, `09_archive`) under `~/My Life`, an `aardvark.db` SQLite index inside `00_index`, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml`. Non-ID folders are automatically suffixed with an emoji picked from their title/description.
+This creates the full folder tree (`00_index`, `01_inbox`, `P.ROJECTS`, `A.REAS`, `R.ESOURCES`, `09_archive`) under `~/My Life`, an `aardvark.db` SQLite index inside `00_index`, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml`. Every non-ID folder is suffixed with an emoji; the static system folders carry a fixed emoji each.
+
+## Folder emoji
+
+Areas, categories and projects get an emoji suggested from their title and description. Suggestions come from the Claude API, so make credentials available the way the [Anthropic SDK expects](https://platform.claude.com/docs/en/api/overview) - typically an `ANTHROPIC_API_KEY` environment variable. Without them aardvark quietly falls back to an offline keyword search, which is thinner: it has no entry for "doctor" or "finance", so those land on the generic 📁.
+
+In an interactive session the suggestion is shown for you to accept or replace:
+
+```bash
+aardvark add_area areas "Doctors" "GP and specialists"
+# Suggested emoji for 'Doctors': 🩺
+# Press Enter to accept, or type a replacement emoji:
+```
+
+Pass `--emoji` to skip both the API call and the prompt:
+
+```bash
+aardvark add_area areas "Taxes" "Self assessment and receipts" --emoji 🧾
+```
+
+To stay offline permanently, set `use_llm: false` under `emoji:` in your settings file.
+
+### Changing an emoji later
+
+`set_emoji` retargets something that already exists, renaming the folder and repointing the index at it in one step:
+
+```bash
+aardvark set_emoji areas 10 🏥            # an area
+aardvark set_emoji areas 11 🩺            # a category
+aardvark set_emoji projects "Website Rebuild" 🌐
+aardvark set_emoji system root.areas 🧭   # a static system folder
+```
+
+Renaming a folder moves everything nested inside it, so the paths recorded for those descendants are rewritten at the same time - nothing is left pointing at the old location.
+
+If you created your system before v0.2.0, its static system folders were named by the old keyword search and most will be sitting on 📁. Reset them all at once:
+
+```bash
+aardvark repair_emoji
+```
 
 ## Growing the Johnny Decimal index
 

@@ -35,6 +35,10 @@
   - ```{autodoc2-docstring} aardvark_jd.codes.parse_area_ref
     :summary:
     ```
+* - {py:obj}`parse_area_ref_is_area <aardvark_jd.codes.parse_area_ref_is_area>`
+  - ```{autodoc2-docstring} aardvark_jd.codes.parse_area_ref_is_area
+    :summary:
+    ```
 * - {py:obj}`parse_category_ref <aardvark_jd.codes.parse_category_ref>`
   - ```{autodoc2-docstring} aardvark_jd.codes.parse_category_ref
     :summary:
@@ -115,6 +119,13 @@
 :canonical: aardvark_jd.codes.parse_area_ref
 
 ```{autodoc2-docstring} aardvark_jd.codes.parse_area_ref
+```
+````
+
+````{py:function} parse_area_ref_is_area(text)
+:canonical: aardvark_jd.codes.parse_area_ref_is_area
+
+```{autodoc2-docstring} aardvark_jd.codes.parse_area_ref_is_area
 ```
 ````
 

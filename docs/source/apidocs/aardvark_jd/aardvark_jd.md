@@ -34,7 +34,9 @@ aardvark_jd.folders
 aardvark_jd.initialiser
 aardvark_jd.new_project
 aardvark_jd.paths
+aardvark_jd.repair_emoji
 aardvark_jd.search
+aardvark_jd.set_emoji
 aardvark_jd.settings_writer
 aardvark_jd.utKit
 ```

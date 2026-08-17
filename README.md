@@ -24,10 +24,11 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 ## Features
 
 * `init` a PARA + Johnny Decimal root folder structure, indexed in a local SQLite database
-* `add-area` / `add-category` / `add-id` to grow the Johnny Decimal index under Areas or Resources, with auto-numbering
-* `new-project` to spin up a new (optionally templated) project folder under Projects
+* `add_area` / `add_category` / `add_id` to grow the Johnny Decimal index under Areas or Resources, with auto-numbering
+* `new_project` to spin up a new (optionally templated) project folder under Projects
 * `search` the index by keyword or phrase
-* every non-ID folder is automatically suffixed with a relevant emoji
+* every non-ID folder is suffixed with a relevant emoji, suggested by Claude and confirmable at the prompt (or set outright with `--emoji`)
+* `set_emoji` / `repair_emoji` to change an emoji after the fact, moving the folder and repointing the index together
 
 
 

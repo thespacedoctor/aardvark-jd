@@ -27,6 +27,10 @@
   - ```{autodoc2-docstring} aardvark_jd.paths.resolve
     :summary:
     ```
+* - {py:obj}`skeleton_entry <aardvark_jd.paths.skeleton_entry>`
+  - ```{autodoc2-docstring} aardvark_jd.paths.skeleton_entry
+    :summary:
+    ```
 ````
 
 ### Data
@@ -60,7 +64,7 @@
 ````{py:data} SYSTEM_SKELETON
 :canonical: aardvark_jd.paths.SYSTEM_SKELETON
 :value: >
-   [('root.index', None, '00_index', 'Index', 'The aardvark database and system index'), ('root.inbox',...
+   [('root.index', None, '00_index', 'Index', 'The aardvark database and system index', '🗂️'), ('root.i...
 
 ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SKELETON
 ```
@@ -85,5 +89,12 @@
 :canonical: aardvark_jd.paths.resolve
 
 ```{autodoc2-docstring} aardvark_jd.paths.resolve
+```
+````
+
+````{py:function} skeleton_entry(folderKey)
+:canonical: aardvark_jd.paths.skeleton_entry
+
+```{autodoc2-docstring} aardvark_jd.paths.skeleton_entry
 ```
 ````
