@@ -1,58 +1,66 @@
-from __future__ import print_function
-from builtins import str
 import os
-import unittest
-import shutil
-import yaml
-from aardvark.utKit import utKit
-from fundamentals import tools
-from os.path import expanduser
+
+import pytest
 from docopt import docopt
+
 from aardvark import cl_utils
 
 doc = cl_utils.__doc__
-home = expanduser("~")
-
-packageDirectory = utKit("").get_project_root()
-settingsFile = packageDirectory + "/test_settings.yaml"
-
-su = tools(
-    arguments={"settingsFile": settingsFile},
-    docString=__doc__,
-    logLevel="DEBUG",
-    options_first=False,
-    projectName=None,
-    defaultSettingsFile=False,
-)
-arguments, settings, log, dbConn = su.setup()
-
-# SETUP PATHS TO COMMON DIRECTORIES FOR TEST DATA
-moduleDirectory = os.path.dirname(__file__)
-pathToInputDir = moduleDirectory + "/input/"
-pathToOutputDir = moduleDirectory + "/output/"
-
-try:
-    shutil.rmtree(pathToOutputDir)
-except:
-    pass
-# COPY INPUT TO OUTPUT DIR
-shutil.copytree(pathToInputDir, pathToOutputDir)
-
-# Recursively create missing directories
-if not os.path.exists(pathToOutputDir):
-    os.makedirs(pathToOutputDir)
 
 
-class test_cl_utils(unittest.TestCase):
+@pytest.mark.parametrize("command,expectedKey", [
+    ("init TestSystem /tmp/somewhere", "init"),
+    ("new_project blank Title", "new_project"),
+    ("add_area areas Health desc", "add_area"),
+    ("add_category areas 10 Doctors desc", "add_category"),
+    ("add_id areas 11 Cardiologist desc", "add_id"),
+    ("search cardio", "search"),
+])
+def test_docopt_parses_each_subcommand(command, expectedKey):
+    args = docopt(doc, command.split(" "))
+    assert args[expectedKey] is True
 
-    # import pytest
-    # @pytest.mark.full
 
-    def test_init(self):
-        # TEST CL-OPTIONS
-        command = "aardvark init"
-        args = docopt(doc, command.split(" ")[1:])
-        cl_utils.main(args)
-        return
+@pytest.fixture
+def isolatedHome(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
 
-    # x-class-to-test-named-worker-function
+
+def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    assert "initialised" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc"]))
+    assert "A.10-19" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["add_category", "areas", "10", "Doctors", "desc"]))
+    assert "A.11" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["add_id", "areas", "11", "Cardiologist", "desc"]))
+    assert "A.11.01" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["search", "cardiologist"]))
+    assert "A.11.01" in capsys.readouterr().out
+
+
+def test_main_reports_missing_system(isolatedHome, capsys):
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["search", "anything"]))
+    assert excInfo.value.code == 1
+    assert "run `aardvark init" in capsys.readouterr().err
+
+
+def test_main_reports_clear_error_for_invalid_domain(isolatedHome, capsys):
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["add_area", "projects", "X", "desc"]))
+    assert excInfo.value.code == 1
+    assert "error:" in capsys.readouterr().err
