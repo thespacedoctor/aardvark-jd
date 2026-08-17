@@ -7,9 +7,12 @@ Author
 : David Young
 """
 
+import glob
+
 from aardvark import db
 
-DB_RELATIVE_PATH = "00_index/aardvark.db"
+DB_BASENAME = "aardvark.db"
+_ROOT_INDEX_GLOB = "00_index*"
 
 # ORDERED DESCRIPTION OF EVERY STATIC FOLDER `init` MUST CREATE.
 # EACH ENTRY: (folderKey, parentKey or None, baseName, title, description)
@@ -56,9 +59,29 @@ def _append_system_subfolders(skeleton):
 _append_system_subfolders(SYSTEM_SKELETON)
 
 
-def get_db_path(rootPath):
+def get_db_path_in_folder(indexFolderPath):
     """
-    *the path to `aardvark.db` under a given root*
+    *the path to `aardvark.db` inside an already-resolved index folder*
+
+    **Key Arguments:**
+
+    - ``indexFolderPath`` -- the root's `00_index` folder path (emoji-suffixed)
+
+    **Return:**
+
+    - ``pathToDb`` -- the path to `aardvark.db`
+    """
+    return f"{indexFolderPath}/{DB_BASENAME}"
+
+
+def find_db_path(rootPath):
+    """
+    *locate `aardvark.db` under a root whose `00_index` folder name (and emoji) is not yet known*
+
+    The `00_index` folder is the one static folder that must be locatable
+    before any database connection exists, so it is found by globbing for
+    its deterministic `00_index*` name prefix rather than via
+    `system_folders` (which lives inside the database itself).
 
     **Key Arguments:**
 
@@ -68,7 +91,10 @@ def get_db_path(rootPath):
 
     - ``pathToDb`` -- the path to `aardvark.db`
     """
-    return f"{rootPath}/{DB_RELATIVE_PATH}"
+    matches = sorted(glob.glob(f"{rootPath}/{_ROOT_INDEX_GLOB}"))
+    if not matches:
+        raise FileNotFoundError(f"no '00_index' folder found under '{rootPath}'")
+    return get_db_path_in_folder(matches[0])
 
 
 def resolve(dbConn, folderKey):
