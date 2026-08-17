@@ -533,7 +533,7 @@ def rewrite_folder_path_prefix(dbConn, oldPrefix, newPrefix):
     this rewrites all of them in one pass.
 
     Matching is done with `substr` rather than `LIKE` because aardvark
-    folder names are full of underscores (`00_index`), which `LIKE` would
+    folder names are full of underscores (`00_INDEX`), which `LIKE` would
     treat as single-character wildcards.
 
     Does **not** commit - the caller owns the transaction so the rename and

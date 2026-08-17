@@ -23,7 +23,7 @@ class new_project(object):
     *create a new project folder, either from a `04_templates` zip or a blank scaffold*
 
     Projects are not Johnny-Decimal coded - they live directly under
-    `P.ROJECTS/`.
+    `02_P.ROJECTS/`.
 
     **Key Arguments:**
 

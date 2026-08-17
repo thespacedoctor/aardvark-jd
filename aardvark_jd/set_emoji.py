@@ -21,7 +21,7 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     *rename a folder on disk and repoint the index at it, atomically*
 
     The database write is committed **before** the physical rename, not
-    after. `00_index` is itself one of the folders this function can rename,
+    after. `00_INDEX` is itself one of the folders this function can rename,
     and it's the folder the open SQLite connection's file lives in - a
     rollback-journal commit has to `unlink()` its journal file by path, and
     if the parent directory has already been renamed away that path no
@@ -64,8 +64,18 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     if newFolderPath == oldFolderPath:
         return newFolderPath
 
+    # ON A CASE-INSENSITIVE FILESYSTEM (THE macOS DEFAULT), A RENAME THAT
+    # ONLY CHANGES CASE - e.g. "01_inbox" -> "01_INBOX" - MAKES
+    # `os.path.exists(newFolderPath)` TRUE, BECAUSE IT RESOLVES TO THE SAME
+    # ENTRY AS `oldFolderPath`. `os.path.samefile` TELLS THAT APART FROM A
+    # GENUINE COLLISION WITH SOME OTHER, UNRELATED FOLDER.
     if os.path.exists(newFolderPath):
-        raise ValueError(f"'{newFolderPath}' already exists - refusing to overwrite it")
+        try:
+            isTheSameFolder = os.path.samefile(newFolderPath, oldFolderPath)
+        except OSError:
+            isTheSameFolder = False
+        if not isTheSameFolder:
+            raise ValueError(f"'{newFolderPath}' already exists - refusing to overwrite it")
     if not os.path.isdir(oldFolderPath):
         raise ValueError(f"'{oldFolderPath}' is not on disk - the index is out of step with the filesystem")
 

@@ -7,24 +7,26 @@ Author
 : David Young
 """
 
-import glob
+import os
 
 from aardvark_jd import db
 
 DB_BASENAME = "aardvark.db"
-_ROOT_INDEX_GLOB = "00_index*"
+_ROOT_INDEX_PREFIX = "00_index"
 
 # THE STATIC SKELETON IS A FIXED, KNOWN LIST, SO ITS EMOJI ARE DECLARED HERE
 # RATHER THAN GUESSED - KEYWORD SEARCH GOT 11 OF THESE 14 TITLES WRONG.
 # ORDERED DESCRIPTION OF EVERY STATIC FOLDER `init` MUST CREATE.
 # EACH ENTRY: (folderKey, parentKey or None, baseName, title, description, emoji)
+# ROOT-LEVEL BASE NAMES CARRY A TWO-DIGIT PREFIX, MATCHING THE CONVENTION
+# ALREADY USED INSIDE EACH 00_09_system FOLDER BELOW (05-08 RESERVED/UNUSED).
 SYSTEM_SKELETON = [
-    ("root.index", None, "00_index", "Index", "The aardvark database and system index", "🗂️"),
-    ("root.inbox", None, "01_inbox", "Inbox", "Unsorted items awaiting filing", "📥"),
-    ("root.projects", None, "P.ROJECTS", "Projects", "Active and future projects", "🚀"),
-    ("root.areas", None, "A.REAS", "Areas", "Ongoing areas of responsibility", "🧭"),
-    ("root.resources", None, "R.ESOURCES", "Resources", "Reference material and resources", "📚"),
-    ("root.archive", None, "09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
+    ("root.index", None, "00_INDEX", "Index", "The aardvark database and system index", "🗂️"),
+    ("root.inbox", None, "01_INBOX", "Inbox", "Unsorted items awaiting filing", "📥"),
+    ("root.projects", None, "02_P.ROJECTS", "Projects", "Active and future projects", "🚀"),
+    ("root.areas", None, "03_A.REAS", "Areas", "Ongoing areas of responsibility", "🧭"),
+    ("root.resources", None, "04_R.ESOURCES", "Resources", "Reference material and resources", "📚"),
+    ("root.archive", None, "09_ARCHIVE", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
 
 # THE 10 SYSTEM SUBFOLDERS REPEATED UNDER PROJECTS, AREAS AND RESOURCES
@@ -35,7 +37,7 @@ _SYSTEM_SUBFOLDERS = [
     ("03_checklists", "Checklists", "Checklists", "☑️"),
     ("04_templates", "Templates", "Templates", "📐"),
     ("05_links", "Links", "Links", "🔗"),
-    ("06_bin", "Bin", "Items pending deletion", "🗑️"),
+    ("06_bin", "Bin", "Scripts and executables for this section", "📜"),
     ("07_settings", "Settings", "Settings", "🎛️"),
     ("08_someday", "Someday", "Someday / maybe items", "💭"),
     ("09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
@@ -100,7 +102,7 @@ def get_db_path_in_folder(indexFolderPath):
 
     **Key Arguments:**
 
-    - ``indexFolderPath`` -- the root's `00_index` folder path (emoji-suffixed)
+    - ``indexFolderPath`` -- the root's `00_INDEX` folder path (emoji-suffixed)
 
     **Return:**
 
@@ -111,12 +113,16 @@ def get_db_path_in_folder(indexFolderPath):
 
 def find_db_path(rootPath):
     """
-    *locate `aardvark.db` under a root whose `00_index` folder name (and emoji) is not yet known*
+    *locate `aardvark.db` under a root whose `00_INDEX` folder name (and emoji) is not yet known*
 
-    The `00_index` folder is the one static folder that must be locatable
-    before any database connection exists, so it is found by globbing for
-    its deterministic `00_index*` name prefix rather than via
-    `system_folders` (which lives inside the database itself).
+    The `00_INDEX` folder is the one static folder that must be locatable
+    before any database connection exists, so it is found by scanning the
+    root for a directory whose name starts with `00_index`, case-insensitive,
+    rather than via `system_folders` (which lives inside the database
+    itself). Matching case-insensitively - rather than a single literal
+    prefix - means this still finds a system created before the folder was
+    renumbered to `00_INDEX`, which is exactly the system `repair_emoji`
+    needs to be able to open in order to fix.
 
     **Key Arguments:**
 
@@ -126,9 +132,12 @@ def find_db_path(rootPath):
 
     - ``pathToDb`` -- the path to `aardvark.db`
     """
-    matches = sorted(glob.glob(f"{rootPath}/{_ROOT_INDEX_GLOB}"))
+    matches = sorted(
+        entry.path for entry in os.scandir(rootPath)
+        if entry.is_dir() and entry.name.lower().startswith(_ROOT_INDEX_PREFIX)
+    )
     if not matches:
-        raise FileNotFoundError(f"no '00_index' folder found under '{rootPath}'")
+        raise FileNotFoundError(f"no '00_INDEX' folder found under '{rootPath}'")
     return get_db_path_in_folder(matches[0])
 
 

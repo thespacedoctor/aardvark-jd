@@ -1,6 +1,13 @@
 
 ## Release Notes
 
+**v0.3.0 - August 17, 2026**
+
+- **ENHANCEMENT:** renumbered the six root skeleton folders onto the same two-digit, uppercase scheme already used inside each `00_09_system` folder: `00_index`→`00_INDEX`, `01_inbox`→`01_INBOX`, `P.ROJECTS`→`02_P.ROJECTS`, `A.REAS`→`03_A.REAS`, `R.ESOURCES`→`04_R.ESOURCES`, `09_archive`→`09_ARCHIVE` (numbers 05-08 stay reserved). Run `repair_emoji` to renumber an existing system.
+- **FIXED:** `06_bin` was described as "items pending deletion" with a 🗑️ trash-can emoji; it's actually a Unix-`/bin`-style folder for scripts and executables. Description and emoji (now 📜) corrected; the folder's base name is unchanged.
+- **FIXED:** `find_db_path` now locates the index folder by a case-insensitive scan rather than an exact-case glob, so it can still find a system's database before that system has been renumbered onto the new uppercase scheme.
+- **FIXED:** a rename that only changes a folder's case (e.g. `01_inbox` → `01_INBOX`) no longer raises a false "already exists" error. On a case-insensitive filesystem - the macOS default - the old and new paths resolve to the same directory entry; the collision check now uses `os.path.samefile` to tell that apart from an actual collision with something else.
+
 **v0.2.1 - August 17, 2026**
 
 - **FIXED:** `repair_emoji` failed with `sqlite3.OperationalError: attempt to write a readonly database` against an existing system, because renaming `root.index` - the folder `aardvark.db` itself lives in - permanently write-poisons the open connection for every write that follows, even though the rename that caused it succeeds. `root.index` is now always repaired last, and `set_emoji`'s index write is committed before the physical rename rather than after.

@@ -8,7 +8,7 @@ Create a new PARA + Johnny Decimal system by giving it a name and a parent folde
 aardvark init "My Life" ~/
 ```
 
-This creates the full folder tree (`00_index`, `01_inbox`, `P.ROJECTS`, `A.REAS`, `R.ESOURCES`, `09_archive`) under `~/My Life`, an `aardvark.db` SQLite index inside `00_index`, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml`. Every non-ID folder is suffixed with an emoji; the static system folders carry a fixed emoji each.
+This creates the full folder tree (`00_INDEX`, `01_INBOX`, `02_P.ROJECTS`, `03_A.REAS`, `04_R.ESOURCES`, `09_ARCHIVE`) under `~/My Life`, an `aardvark.db` SQLite index inside `00_INDEX`, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml`. Every non-ID folder is suffixed with an emoji; the static system folders carry a fixed emoji each.
 
 ## Folder emoji
 
@@ -51,7 +51,7 @@ aardvark repair_emoji
 
 ## Growing the Johnny Decimal index
 
-Only `A.REAS` and `R.ESOURCES` are Johnny Decimal systems. Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
+Only `03_A.REAS` and `04_R.ESOURCES` are Johnny Decimal systems. Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
 
 ```bash
 aardvark add_area areas "Health" "Everything related to my physical and mental health"
@@ -65,7 +65,7 @@ aardvark add_id areas 11 "Cardiologist" "Dr Smith, cardiology follow-ups"
 aardvark new_project
 ```
 
-Lists any zip templates found in `P.ROJECTS/00_09_system/04_templates/` plus a blank option (`README.md`, `input/`, `output/`), and creates the chosen project folder under `P.ROJECTS/`.
+Lists any zip templates found in `02_P.ROJECTS/00_09_system/04_templates/` plus a blank option (`README.md`, `input/`, `output/`), and creates the chosen project folder under `02_P.ROJECTS/`.
 
 ## Searching the index
 

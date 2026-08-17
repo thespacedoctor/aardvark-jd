@@ -64,7 +64,7 @@
 ````{py:data} SYSTEM_SKELETON
 :canonical: aardvark_jd.paths.SYSTEM_SKELETON
 :value: >
-   [('root.index', None, '00_index', 'Index', 'The aardvark database and system index', '🗂️'), ('root.i...
+   [('root.index', None, '00_INDEX', 'Index', 'The aardvark database and system index', '🗂️'), ('root.i...
 
 ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SKELETON
 ```

@@ -11,7 +11,7 @@ from aardvark_jd.add_id import add_id
 from aardvark_jd.initialiser import initialiser
 from aardvark_jd.new_project import new_project
 from aardvark_jd.repair_emoji import repair_emoji
-from aardvark_jd.set_emoji import set_emoji
+from aardvark_jd.set_emoji import rename_folder_and_reindex, set_emoji
 
 log = logging.getLogger("test_set_emoji")
 log.addHandler(logging.NullHandler())
@@ -120,7 +120,7 @@ def test_set_system_folder_emoji_cascades_to_the_whole_domain(populatedSystem):
         log=log, dbConn=dbConn, domain="system", ref="root.areas", newEmoji="🎯"
     ).get()
 
-    assert os.path.basename(newFolderPath) == "A.REAS🎯"
+    assert os.path.basename(newFolderPath) == "03_A.REAS🎯"
     # RENAMING A SECTION FOLDER MOVES EVERY AREA, CATEGORY AND ID BENEATH IT
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
@@ -191,6 +191,43 @@ def test_set_emoji_refuses_to_clobber_an_existing_folder(populatedSystem):
     assert os.path.isdir(area["folder_path"])
 
 
+def test_rename_allows_a_case_only_change(populatedSystem, tmp_path):
+    """*a rename that only changes case must not trip the collision check*
+
+    On a case-insensitive filesystem (the macOS default - confirmed live
+    against a real Dropbox system this session, where renaming
+    `01_inbox` to `01_INBOX` failed for exactly this reason before the
+    fix), `os.path.exists` on the new, differently-cased path returns True
+    even though it resolves to the *same* directory entry as the old path.
+    Treating that as a collision would make it impossible to ever correct
+    a folder's casing - exactly what renumbering the root skeleton to
+    `00_INDEX`/`02_P.ROJECTS`/etc. needs to do for anyone upgrading from
+    the old lowercase scheme.
+    """
+    _rootPath, dbConn = populatedSystem
+
+    oldPath = str(tmp_path / "casetest")
+    os.makedirs(oldPath)
+
+    try:
+        isCaseInsensitiveFs = os.path.exists(oldPath.upper()) and os.path.samefile(oldPath.upper(), oldPath)
+    except OSError:
+        isCaseInsensitiveFs = False
+    if not isCaseInsensitiveFs:
+        pytest.skip("this filesystem is case-sensitive - the scenario under test can't arise")
+
+    updated = {}
+    newFolderPath = rename_folder_and_reindex(
+        dbConn, oldPath, "CASETEST",
+        lambda name, path: updated.update(name=name, path=path),
+    )
+
+    assert newFolderPath == str(tmp_path / "CASETEST")
+    assert os.path.isdir(newFolderPath)
+    assert os.path.basename(newFolderPath) == "CASETEST", "the on-disk name must actually carry the new case"
+    assert updated == {"name": "CASETEST", "path": newFolderPath}
+
+
 def test_failed_index_write_rolls_back_the_rename(populatedSystem, monkeypatch):
     _rootPath, dbConn = populatedSystem
     area = db.get_area(dbConn, "areas", 10)
@@ -244,7 +281,7 @@ def test_repair_emoji_resets_drifted_system_folders(populatedSystem):
     assert "root.areas" in repairedKeys
     assert "areas.system.02_llm" in repairedKeys
 
-    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "A.REAS🧭"
+    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "03_A.REAS🧭"
     assert db.get_system_folder(dbConn, "areas.system.02_llm")["folder_name"] == "02_llm🤖"
 
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
@@ -284,9 +321,11 @@ def test_repair_emoji_handles_the_folder_holding_the_open_database(populatedSyst
     setupConn.commit()
     os.rename(areasRow["folder_path"], driftedAreasPath)
 
+    # THE DRIFTED NAME MUST STILL MATCH `_ROOT_INDEX_GLOB` ("00_INDEX*") - IT'S
+    # SIMULATING A WRONG *EMOJI*, NOT A DB THAT'S BECOME UNFINDABLE.
     indexRow = db.get_system_folder(setupConn, "root.index")
-    driftedIndexPath = os.path.dirname(indexRow["folder_path"].rstrip("/")) + "/00_index❓"
-    db.update_system_folder(setupConn, "root.index", "00_index❓", driftedIndexPath)
+    driftedIndexPath = os.path.dirname(indexRow["folder_path"].rstrip("/")) + "/00_INDEX❓"
+    db.update_system_folder(setupConn, "root.index", "00_INDEX❓", driftedIndexPath)
     db.rewrite_folder_path_prefix(setupConn, indexRow["folder_path"], driftedIndexPath)
     setupConn.commit()
     os.rename(indexRow["folder_path"], driftedIndexPath)
@@ -303,10 +342,10 @@ def test_repair_emoji_handles_the_folder_holding_the_open_database(populatedSyst
 
     indexRow = db.get_system_folder(repairConn, "root.index")
     expectedEmoji = paths.skeleton_entry("root.index")[5]
-    assert indexRow["folder_name"] == folders.system_folder_name("00_index", expectedEmoji)
+    assert indexRow["folder_name"] == folders.system_folder_name("00_INDEX", expectedEmoji)
     assert os.path.isdir(indexRow["folder_path"])
     assert os.path.isfile(f"{indexRow['folder_path']}/aardvark.db")
-    assert db.get_system_folder(repairConn, "root.areas")["folder_name"] == "A.REAS🧭"
+    assert db.get_system_folder(repairConn, "root.areas")["folder_name"] == "03_A.REAS🧭"
 
     for descriptor, folderPath in _all_indexed_paths(repairConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"

@@ -183,7 +183,7 @@ def system_folder_name(baseName, emoji):
 
     **Key Arguments:**
 
-    - ``baseName`` -- the folder's base name, e.g. `"P.ROJECTS"`
+    - ``baseName`` -- the folder's base name, e.g. `"02_P.ROJECTS"`
     - ``emoji`` -- the emoji to append
 
     **Return:**
