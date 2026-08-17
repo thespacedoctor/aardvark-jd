@@ -19,24 +19,35 @@
   - ```{autodoc2-docstring} aardvark.cl_utils.main
     :summary:
     ```
-* - {py:obj}`tab_complete <aardvark.cl_utils.tab_complete>`
-  - ```{autodoc2-docstring} aardvark.cl_utils.tab_complete
+````
+
+### Data
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`CLEAR_ERRORS <aardvark.cl_utils.CLEAR_ERRORS>`
+  - ```{autodoc2-docstring} aardvark.cl_utils.CLEAR_ERRORS
     :summary:
     ```
 ````
 
 ### API
 
+````{py:data} CLEAR_ERRORS
+:canonical: aardvark.cl_utils.CLEAR_ERRORS
+:value: >
+   ()
+
+```{autodoc2-docstring} aardvark.cl_utils.CLEAR_ERRORS
+```
+
+````
+
 ````{py:function} main(arguments=None)
 :canonical: aardvark.cl_utils.main
 
 ```{autodoc2-docstring} aardvark.cl_utils.main
-```
-````
-
-````{py:function} tab_complete(text, state)
-:canonical: aardvark.cl_utils.tab_complete
-
-```{autodoc2-docstring} aardvark.cl_utils.tab_complete
 ```
 ````

@@ -62,16 +62,14 @@ python setup.py install
 
 To check installation was successful run `aardvark -v`. This should return the version number of the install.
 
-## Initialising aardvark
+## Initialising a system
 
-Before using aardvark you need to use the `init` command to generate a user settings file. Running the following creates a [yaml](https://learnxinyminutes.com/docs/yaml/) settings file in your home folder under `~/.config/aardvark/aardvark.yaml`:
+Give your system a name and a parent folder to live in:
 
 ```bash
-aardvark init
+aardvark init "My Life" ~/
 ```
 
-The file is initially populated with aardvark's default settings which can be adjusted to your preference.
+This builds the full PARA + Johnny Decimal folder tree, creates the `aardvark.db` SQLite index, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml` (created automatically on first run, populated with aardvark's default settings).
 
-If at any point the user settings file becomes corrupted or you just want to start afresh, simply trash the `aardvark.yaml` file and rerun `aardvark init`.
-
-You are now ready to start using aardvark.
+You are now ready to start using aardvark - see the [quickstart](https://aardvark.readthedocs.io/en/main/quickstart.html) for the full command reference.

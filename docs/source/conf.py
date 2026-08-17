@@ -59,7 +59,6 @@ extensions = [
     "sphinx.ext.linkcode",
     "sphinx_tippy",
     "sphinx_remove_toctrees",
-    "sphinxcontrib.bibtex",
 ]
 myst_enable_extensions = [
     "tasklist",
@@ -103,28 +102,16 @@ link_resolver_url = (
 remove_from_toctrees = ["utils/[!_]*"]
 
 
-# BIBTEX STUFF
-bibtex_bibfiles = ["dry-bookends-references.bib"]
-# bibtex_reference_style = 'author_year'
-# bibtex_default_style = 'unsrtalpha'
-
-# AUTODOC2 AND BIBTEX PLUGS CLASH DUE TO THIS ISSUE: https://github.com/pylint-dev/astroid/issues/2191
-# UNTIL THIS IS FIXED SWITCH BETWEEN THE TWO
-runAutodoc2 = os.getenv("AUTODOC2")
-
-
-if True or (runAutodoc2 and runAutodoc2 != "None"):
-    print("RUNNING AUTODOC2")
-    autodoc2_packages = [
-        {
-            "path": "../../aardvark",
-            "exclude_files": ["*test_*.py"],
-        }
-    ]
-    autodoc2_render_plugin = "myst"
-    autodoc2_skip_module_regexes = [r".*test.*"]
-    autodoc2_hidden_objects = ["private"]
-    autodoc2_sort_names = True
+autodoc2_packages = [
+    {
+        "path": "../../aardvark",
+        "exclude_files": ["*test_*.py"],
+    }
+]
+autodoc2_render_plugin = "myst"
+autodoc2_skip_module_regexes = [r".*test.*"]
+autodoc2_hidden_objects = ["private"]
+autodoc2_sort_names = True
 
 
 # OpenGraph metadata

@@ -48,7 +48,6 @@ docs = [
     "pygments-csv-lexer",
     "sphinxcontrib-svg2pdfconverter",
     "sphinx-remove-toctrees",
-    "sphinxcontrib.bibtex",
 ]
 tests = [
     "pytest",

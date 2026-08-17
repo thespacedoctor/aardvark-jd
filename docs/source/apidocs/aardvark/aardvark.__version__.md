@@ -26,7 +26,7 @@
 ````{py:data} __version__
 :canonical: aardvark.__version__.__version__
 :value: >
-   '0.2.2.dev0'
+   '0.1.dev6'
 
 ```{autodoc2-docstring} aardvark.__version__.__version__
 ```
