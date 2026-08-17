@@ -1,0 +1,34 @@
+# {py:mod}`aardvark_jd.__version__`
+
+```{py:module} aardvark_jd.__version__
+```
+
+```{autodoc2-docstring} aardvark_jd.__version__
+:allowtitles:
+```
+
+## Module Contents
+
+### Data
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`__version__ <aardvark_jd.__version__.__version__>`
+  - ```{autodoc2-docstring} aardvark_jd.__version__.__version__
+    :summary:
+    ```
+````
+
+### API
+
+````{py:data} __version__
+:canonical: aardvark_jd.__version__.__version__
+:value: >
+   '0.1.1.dev5'
+
+```{autodoc2-docstring} aardvark_jd.__version__.__version__
+```
+
+````
