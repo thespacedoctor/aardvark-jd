@@ -1,6 +1,11 @@
 
 ## Release Notes
 
+**v0.2.1 - August 17, 2026**
+
+- **FIXED:** `repair_emoji` failed with `sqlite3.OperationalError: attempt to write a readonly database` against an existing system, because renaming `root.index` - the folder `aardvark.db` itself lives in - permanently write-poisons the open connection for every write that follows, even though the rename that caused it succeeds. `root.index` is now always repaired last, and `set_emoji`'s index write is committed before the physical rename rather than after.
+- **FIXED:** dropped the space between a folder's title and its emoji (`Health🏥`, not `Health 🏥`).
+
 **v0.2.0 - August 17, 2026**
 
 - **FEATURE:** new `set_emoji` command, changing the emoji on an existing area, category, project or static system folder. Renaming a folder invalidates the stored path of everything nested inside it, so the rename and a path rewrite across every descendant row land in a single transaction, with the directory move undone if any of the index work fails.
