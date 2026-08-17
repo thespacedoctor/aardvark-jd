@@ -31,6 +31,8 @@ class new_project(object):
     - ``dbConn`` -- an open SQLite connection
     - ``templateName`` -- the template zip's basename (with or without `.zip`), or `"blank"`. If `None`, prompts interactively. Default `None`.
     - ``projectTitle`` -- the new project's title. If `None`, prompts interactively. Default `None`.
+    - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.
+    - ``settings`` -- the aardvark settings dict. Default `None`.
 
     **Usage:**
 
@@ -40,11 +42,13 @@ class new_project(object):
     ```
     """
 
-    def __init__(self, log, dbConn, templateName=None, projectTitle=None):
+    def __init__(self, log, dbConn, templateName=None, projectTitle=None, chosenEmoji=None, settings=None):
         self.log = log
         self.dbConn = dbConn
         self.templateName = templateName
         self.projectTitle = projectTitle
+        self.chosenEmoji = chosenEmoji
+        self.settings = settings
 
     def get(self):
         """
@@ -64,7 +68,9 @@ class new_project(object):
         templateChoice = self._resolve_template_choice(templateZips)
         title = self._resolve_title()
 
-        pickedEmoji = emoji_picker.pick_emoji(title)
+        pickedEmoji = emoji_picker.resolve_emoji(
+            title, chosenEmoji=self.chosenEmoji, settings=self.settings, log=self.log
+        )
         folderName = folders.project_folder_name(title, pickedEmoji)
         parentPath = paths.resolve(self.dbConn, "root.projects")
         folderPath = folders.make_folder(parentPath, folderName)

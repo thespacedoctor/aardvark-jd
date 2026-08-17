@@ -85,6 +85,40 @@ def parse_area_ref(text):
     return decadeStart
 
 
+def parse_area_ref_is_area(text):
+    """
+    *decide whether a reference points at an area rather than a category*
+
+    Area decades are always multiples of ten (`10-19`, `20-29`, ...), and the
+    `X0` slot inside each decade is reserved, so category numbers never are.
+    That makes a bare two-digit reference unambiguous.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference supplied on the command-line
+
+    **Return:**
+
+    - ``isArea`` -- `True` if the reference names an area, `False` if a category
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    isArea = codes.parse_area_ref_is_area("10")
+    ```
+    """
+    text = str(text).strip()
+    match = _AREA_REF_RE.match(text)
+    if not match:
+        raise ValueError(
+            f"'{text}' is not a valid area or category reference - expected e.g. '10', '10-19' or '11'"
+        )
+    if match.group(2) is not None:
+        return True
+    return int(match.group(1)) % 10 == 0
+
+
 def parse_category_ref(text):
     """
     *parse a user-supplied category reference into its AC number*

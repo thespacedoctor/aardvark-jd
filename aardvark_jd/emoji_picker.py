@@ -8,6 +8,8 @@ Author
 """
 
 import re
+import sys
+
 import emoji
 
 FALLBACK_EMOJI = "📁"
@@ -193,6 +195,79 @@ def suggest_emoji(title, description="", settings=None, log=None):
             return suggestedEmoji
 
     return pick_emoji(title, description)
+
+
+def resolve_emoji(title, description="", chosenEmoji=None, settings=None, log=None):
+    """
+    *settle on the emoji for a new folder, from an explicit choice, a prompt, or the suggester*
+
+    Resolution order:
+
+    1. ``chosenEmoji`` given (the `--emoji` flag) - used verbatim, with no API call and no prompt
+    2. an interactive session - the suggestion is shown for the user to accept or replace
+    3. a non-interactive session - the suggestion is accepted silently
+
+    **Key Arguments:**
+
+    - ``title`` -- the folder's title
+    - ``description`` -- the folder's description. Default `""`.
+    - ``chosenEmoji`` -- an emoji supplied on the command-line. Default `None`.
+    - ``settings`` -- the aardvark settings dict. Default `None`.
+    - ``log`` -- logger. Default `None`.
+
+    **Return:**
+
+    - ``resolvedEmoji`` -- the emoji to append to the folder name
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import emoji_picker
+    resolvedEmoji = emoji_picker.resolve_emoji("Doctors", "GP and specialists", chosenEmoji="🩺")
+    ```
+    """
+    if chosenEmoji:
+        return validate_chosen_emoji(chosenEmoji)
+
+    suggestedEmoji = suggest_emoji(title, description, settings=settings, log=log)
+
+    if not sys.stdin.isatty():
+        return suggestedEmoji
+
+    print(f"Suggested emoji for '{title}': {suggestedEmoji}")
+    while True:
+        reply = input("Press Enter to accept, or type a replacement emoji: ").strip()
+        if not reply:
+            return suggestedEmoji
+        try:
+            return validate_chosen_emoji(reply)
+        except ValueError as error:
+            print(f"  {error}")
+
+
+def validate_chosen_emoji(chosenEmoji):
+    """
+    *check a user-supplied emoji is usable in a folder name*
+
+    Deliberately permissive about what counts as an emoji - a user who
+    wants a plain symbol should get one - but rejects the characters that
+    would break or redirect folder creation.
+
+    **Key Arguments:**
+
+    - ``chosenEmoji`` -- the emoji supplied by the user
+
+    **Return:**
+
+    - ``chosenEmoji`` -- the validated emoji, stripped of surrounding whitespace
+    """
+    candidate = (chosenEmoji or "").strip()
+    if not candidate:
+        raise ValueError("an emoji is required")
+    for illegal in ("/", "\\", "\n", "\r", "\0"):
+        if illegal in candidate:
+            raise ValueError(f"'{candidate}' cannot be used in a folder name")
+    return candidate
 
 
 def llm_enabled(settings):

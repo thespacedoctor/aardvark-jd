@@ -88,3 +88,27 @@ def test_init_is_idempotent(tmp_path, settingsFile):
     dbConn.close()
 
     assert countAfter == countBefore
+
+
+def test_no_static_folder_uses_the_fallback_emoji():
+    from aardvark_jd.emoji_picker import FALLBACK_EMOJI
+
+    for entry in paths.SYSTEM_SKELETON:
+        folderEmoji = entry[5]
+        assert folderEmoji and folderEmoji != FALLBACK_EMOJI, f"{entry[0]} has no declared emoji"
+
+
+def test_every_created_static_folder_carries_its_declared_emoji(tmp_path, settingsFile):
+    from aardvark_jd import folders
+
+    rootPath = initialiser(
+        log=log, systemName="My Life", parentPath=str(tmp_path), pathToSettingsFile=settingsFile
+    ).get()
+    dbConn = db.get_connection(paths.find_db_path(rootPath))
+
+    for folderKey, _parentKey, baseName, _title, _description, folderEmoji in paths.SYSTEM_SKELETON:
+        row = db.get_system_folder(dbConn, folderKey)
+        assert row["folder_name"] == folders.system_folder_name(baseName, folderEmoji)
+        assert os.path.isdir(row["folder_path"])
+
+    dbConn.close()

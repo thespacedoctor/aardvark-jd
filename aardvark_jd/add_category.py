@@ -22,6 +22,8 @@ class add_category(object):
     - ``areaRef`` -- the parent area reference, e.g. `"10"` or `"10-19"`
     - ``title`` -- the category's title
     - ``description`` -- the category's description
+    - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.
+    - ``settings`` -- the aardvark settings dict. Default `None`.
 
     **Usage:**
 
@@ -33,13 +35,15 @@ class add_category(object):
     ```
     """
 
-    def __init__(self, log, dbConn, domain, areaRef, title, description):
+    def __init__(self, log, dbConn, domain, areaRef, title, description, chosenEmoji=None, settings=None):
         self.log = log
         self.dbConn = dbConn
         self.domain = codes.validate_domain(domain)
         self.areaRef = areaRef
         self.title = title
         self.description = description
+        self.chosenEmoji = chosenEmoji
+        self.settings = settings
 
     def get(self):
         """
@@ -58,7 +62,10 @@ class add_category(object):
             raise ValueError(f"no area '{self.areaRef}' found in domain '{self.domain}'")
 
         acNumber = folders.next_category_number(self.dbConn, self.domain, area)
-        pickedEmoji = emoji_picker.pick_emoji(self.title, self.description)
+        pickedEmoji = emoji_picker.resolve_emoji(
+            self.title, self.description, chosenEmoji=self.chosenEmoji,
+            settings=self.settings, log=self.log,
+        )
         folderName = folders.category_folder_name(acNumber, self.title, pickedEmoji)
         folderPath = folders.make_folder(area["folder_path"], folderName)
 

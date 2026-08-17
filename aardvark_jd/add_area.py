@@ -21,6 +21,8 @@ class add_area(object):
     - ``domain`` -- `areas` or `resources`
     - ``title`` -- the area's title
     - ``description`` -- the area's description
+    - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.
+    - ``settings`` -- the aardvark settings dict. Default `None`.
 
     **Usage:**
 
@@ -32,12 +34,14 @@ class add_area(object):
     ```
     """
 
-    def __init__(self, log, dbConn, domain, title, description):
+    def __init__(self, log, dbConn, domain, title, description, chosenEmoji=None, settings=None):
         self.log = log
         self.dbConn = dbConn
         self.domain = codes.validate_domain(domain)
         self.title = title
         self.description = description
+        self.chosenEmoji = chosenEmoji
+        self.settings = settings
 
     def get(self):
         """
@@ -51,7 +55,10 @@ class add_area(object):
         self.log.debug("starting the ``get`` method")
 
         decadeStart, decadeEnd = folders.next_area_decade(self.dbConn, self.domain)
-        pickedEmoji = emoji_picker.pick_emoji(self.title, self.description)
+        pickedEmoji = emoji_picker.resolve_emoji(
+            self.title, self.description, chosenEmoji=self.chosenEmoji,
+            settings=self.settings, log=self.log,
+        )
         folderName = folders.area_folder_name(decadeStart, decadeEnd, self.title, pickedEmoji)
         parentPath = paths.resolve(self.dbConn, f"root.{self.domain}")
         folderPath = folders.make_folder(parentPath, folderName)

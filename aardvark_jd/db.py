@@ -518,6 +518,159 @@ def list_ids(dbConn, domain, categoryId):
     ).fetchall()
 
 
+# EVERY TABLE THAT PERSISTS AN ABSOLUTE `folder_path`, AND SO HAS TO BE
+# REWRITTEN WHEN AN ANCESTOR FOLDER IS RENAMED.
+_PATH_BEARING_TABLES = ("system_folders", "areas", "categories", "ids", "projects")
+
+
+def rewrite_folder_path_prefix(dbConn, oldPrefix, newPrefix):
+    """
+    *repoint every descendant row from an old ancestor folder path to a new one*
+
+    Renaming a folder silently invalidates the stored `folder_path` of
+    everything nested inside it - categories and IDs under an area, IDs
+    under a category, and the whole domain under a section folder - so
+    this rewrites all of them in one pass.
+
+    Matching is done with `substr` rather than `LIKE` because aardvark
+    folder names are full of underscores (`00_index`), which `LIKE` would
+    treat as single-character wildcards.
+
+    Does **not** commit - the caller owns the transaction so the rename and
+    the rewrite land together.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``oldPrefix`` -- the ancestor folder's old absolute path
+    - ``newPrefix`` -- the ancestor folder's new absolute path
+
+    **Return:**
+
+    - ``rewritten`` -- the total number of descendant rows repointed
+    """
+    oldParent = oldPrefix.rstrip("/") + "/"
+    newParent = newPrefix.rstrip("/") + "/"
+    prefixLength = len(oldParent)
+
+    rewritten = 0
+    for tableName in _PATH_BEARING_TABLES:
+        cursor = dbConn.execute(
+            f"UPDATE {tableName} SET folder_path = ? || substr(folder_path, ?) "
+            f"WHERE substr(folder_path, 1, ?) = ?",
+            (newParent, prefixLength + 1, prefixLength, oldParent),
+        )
+        rewritten += cursor.rowcount
+    return rewritten
+
+
+def update_area_emoji(dbConn, areaId, emoji, folderName, folderPath):
+    """
+    *update an area's emoji, folder name and folder path (without committing)*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``areaId`` -- the area's primary key
+    - ``emoji`` -- the new emoji
+    - ``folderName`` -- the area's new on-disk folder name
+    - ``folderPath`` -- the area's new absolute folder path
+    """
+    dbConn.execute(
+        "UPDATE areas SET emoji = ?, folder_name = ?, folder_path = ?, "
+        "updated_at = strftime('%Y-%m-%d %H:%M:%S','now') WHERE area_id = ?",
+        (emoji, folderName, folderPath, areaId),
+    )
+
+
+def update_category_emoji(dbConn, categoryId, emoji, folderName, folderPath):
+    """
+    *update a category's emoji, folder name and folder path (without committing)*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``categoryId`` -- the category's primary key
+    - ``emoji`` -- the new emoji
+    - ``folderName`` -- the category's new on-disk folder name
+    - ``folderPath`` -- the category's new absolute folder path
+    """
+    dbConn.execute(
+        "UPDATE categories SET emoji = ?, folder_name = ?, folder_path = ?, "
+        "updated_at = strftime('%Y-%m-%d %H:%M:%S','now') WHERE category_id = ?",
+        (emoji, folderName, folderPath, categoryId),
+    )
+
+
+def update_project_emoji(dbConn, projectId, emoji, folderName, folderPath):
+    """
+    *update a project's emoji, folder name and folder path (without committing)*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``projectId`` -- the project's primary key
+    - ``emoji`` -- the new emoji
+    - ``folderName`` -- the project's new on-disk folder name
+    - ``folderPath`` -- the project's new absolute folder path
+    """
+    dbConn.execute(
+        "UPDATE projects SET emoji = ?, folder_name = ?, folder_path = ?, "
+        "updated_at = strftime('%Y-%m-%d %H:%M:%S','now') WHERE project_id = ?",
+        (emoji, folderName, folderPath, projectId),
+    )
+
+
+def update_system_folder(dbConn, folderKey, folderName, folderPath):
+    """
+    *update a static system folder's name and path (without committing)*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``folderKey`` -- the logical folder key, e.g. `"root.areas"`
+    - ``folderName`` -- the folder's new on-disk name
+    - ``folderPath`` -- the folder's new absolute path
+    """
+    dbConn.execute(
+        "UPDATE system_folders SET folder_name = ?, folder_path = ? WHERE folder_key = ?",
+        (folderName, folderPath, folderKey),
+    )
+
+
+def list_system_folders(dbConn):
+    """
+    *list every recorded static system folder*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+
+    **Return:**
+
+    - ``rows`` -- the `system_folders` rows
+    """
+    return dbConn.execute("SELECT * FROM system_folders ORDER BY folder_key").fetchall()
+
+
+def get_project_by_title(dbConn, title):
+    """
+    *look up a project by its title, case-insensitively*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``title`` -- the project's title
+
+    **Return:**
+
+    - ``row`` -- the `projects` row, or `None` if not found
+    """
+    return dbConn.execute(
+        "SELECT * FROM projects WHERE lower(title) = lower(?)", (title,)
+    ).fetchone()
+
+
 def insert_project(dbConn, title, description, emoji, folderName, folderPath, templateUsed):
     """
     *insert a new project row*

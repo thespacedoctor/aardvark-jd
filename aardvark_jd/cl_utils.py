@@ -5,10 +5,12 @@ Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
 
 Usage:
     aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
-    aardvark new_project [<templateName>] [<projectTitle>] [-s <pathToSettingsFile>]
-    aardvark add_area <domain> <title> <description> [-s <pathToSettingsFile>]
-    aardvark add_category <domain> <area> <title> <description> [-s <pathToSettingsFile>]
+    aardvark new_project [<templateName>] [<projectTitle>] [-e <emoji>] [-s <pathToSettingsFile>]
+    aardvark add_area <domain> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
+    aardvark add_category <domain> <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
     aardvark add_id <domain> <category> <title> <description> [-s <pathToSettingsFile>]
+    aardvark set_emoji <domain> <ref> <emoji> [-s <pathToSettingsFile>]
+    aardvark repair_emoji [-s <pathToSettingsFile>]
     aardvark search <term>... [-s <pathToSettingsFile>]
 
 Commands:
@@ -17,6 +19,8 @@ Commands:
     add_area                               add a new Johnny Decimal area to `areas` or `resources`
     add_category                           add a new Johnny Decimal category to an existing area
     add_id                                 add a new Johnny Decimal ID to an existing category
+    set_emoji                              change the emoji on an existing area, category or project
+    repair_emoji                           reset every static system folder to its declared emoji
     search                                 search the index by keyword or phrase
 
 Arguments:
@@ -27,6 +31,8 @@ Arguments:
     domain                                 "areas" or "resources"
     area                                   an area reference, e.g. "10" or "10-19"
     category                               a category reference, e.g. "11"
+    ref                                    an area ("10"), category ("11") or project title to retarget
+    emoji                                  an emoji character
     title                                  a title
     description                            a description
     term                                   a search word or phrase
@@ -34,6 +40,7 @@ Arguments:
 Options:
     -h, --help                             show this help message
     -v, --version                          show version
+    -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
     -s, --settings <pathToSettingsFile>    the settings file
 """
 
@@ -48,7 +55,9 @@ from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
 from aardvark_jd.initialiser import initialiser
 from aardvark_jd.new_project import new_project
+from aardvark_jd.repair_emoji import repair_emoji
 from aardvark_jd.search import search, format_result
+from aardvark_jd.set_emoji import set_emoji
 
 CLEAR_ERRORS = (
     ValueError,
@@ -108,7 +117,7 @@ def main(arguments=None):
 
             indexDbConn = db.get_connection(paths.find_db_path(rootPath))
             try:
-                _dispatch(a, log, indexDbConn)
+                _dispatch(a, log, indexDbConn, settings)
             finally:
                 indexDbConn.close()
 
@@ -126,7 +135,7 @@ def main(arguments=None):
     return
 
 
-def _dispatch(a, log, indexDbConn):
+def _dispatch(a, log, indexDbConn, settings):
     """
     *dispatch to the relevant worker class for the parsed command, and print its result*
 
@@ -135,16 +144,19 @@ def _dispatch(a, log, indexDbConn):
     - ``a`` -- the friendly-named docopt arguments dict
     - ``log`` -- logger
     - ``indexDbConn`` -- an open SQLite connection to the active system's index
+    - ``settings`` -- the aardvark settings dict
     """
     if a["new_project"]:
         title, folderPath, templateUsed = new_project(
             log=log, dbConn=indexDbConn, templateName=a["templateName"], projectTitle=a["projectTitle"],
+            chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"project '{title}' created at {folderPath} (template: {templateUsed})")
 
     elif a["add_area"]:
         code, folderPath = add_area(
             log=log, dbConn=indexDbConn, domain=a["domain"], title=a["title"], description=a["description"],
+            chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
 
@@ -152,8 +164,22 @@ def _dispatch(a, log, indexDbConn):
         code, folderPath = add_category(
             log=log, dbConn=indexDbConn, domain=a["domain"], areaRef=a["area"],
             title=a["title"], description=a["description"],
+            chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
+
+    elif a["set_emoji"]:
+        label, folderPath = set_emoji(
+            log=log, dbConn=indexDbConn, domain=a["domain"], ref=a["ref"], newEmoji=a["emoji"],
+        ).get()
+        print(f"{label}  {folderPath}")
+
+    elif a["repair_emoji"]:
+        repaired = repair_emoji(log=log, dbConn=indexDbConn).get()
+        if not repaired:
+            print("every system folder already carries its declared emoji")
+        for folderKey, folderPath in repaired:
+            print(f"{folderKey}  {folderPath}")
 
     elif a["add_id"]:
         code, folderPath = add_id(
