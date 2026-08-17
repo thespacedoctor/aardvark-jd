@@ -74,6 +74,7 @@ def main(arguments=None):
         logLevel="WARNING",
         options_first=False,
         projectName="aardvark",
+        distributionName="aardvark-jd",
         defaultSettingsFile=True,
     )
     arguments, settings, log, dbConn = su.setup()
