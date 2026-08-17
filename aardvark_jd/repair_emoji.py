@@ -53,8 +53,16 @@ class repair_emoji(object):
 
         # DEEPEST FIRST: RENAMING A PARENT REWRITES ITS DESCENDANTS' PATHS, SO
         # HANDLING CHILDREN FIRST KEEPS EVERY PATH THIS LOOP READS CURRENT.
+        # `root.index` GOES ABSOLUTE LAST REGARDLESS OF DEPTH: IT'S THE FOLDER
+        # `self.dbConn`'s OWN SQLITE FILE LIVES IN, AND ONCE IT'S RENAMED,
+        # SQLITE'S CACHED PATH FOR THE MAIN DB FILE IS STALE - ANY *FURTHER*
+        # WRITE ON THIS CONNECTION FAILS WITH "ATTEMPT TO WRITE A READONLY
+        # DATABASE", EVEN THOUGH THE RENAME ITSELF SUCCEEDED. PROCESSING IT
+        # LAST MEANS NOTHING ELSE IN THIS RUN WRITES THROUGH THE CONNECTION
+        # AFTERWARDS - THE NEXT COMMAND GETS A FRESH ONE.
         skeletonByDepth = sorted(
-            paths.SYSTEM_SKELETON, key=lambda entry: entry[0].count("."), reverse=True
+            paths.SYSTEM_SKELETON,
+            key=lambda entry: (entry[0] == "root.index", -entry[0].count(".")),
         )
 
         repaired = []

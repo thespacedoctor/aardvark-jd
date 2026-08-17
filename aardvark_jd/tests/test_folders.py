@@ -60,11 +60,11 @@ def test_next_id_number_sequence_and_exhaustion(dbConn):
 
 
 def test_area_folder_name_format():
-    assert folders.area_folder_name(10, 19, "Health", "🏥") == "10-19 Health 🏥"
+    assert folders.area_folder_name(10, 19, "Health", "🏥") == "10-19 Health🏥"
 
 
 def test_category_folder_name_format():
-    assert folders.category_folder_name(11, "Doctors", "🩺") == "11 Doctors 🩺"
+    assert folders.category_folder_name(11, "Doctors", "🩺") == "11 Doctors🩺"
 
 
 def test_id_folder_name_has_no_emoji():
@@ -75,7 +75,7 @@ def test_id_folder_name_has_no_emoji():
 
 
 def test_project_folder_name_format():
-    assert folders.project_folder_name("My Project", "🗂️") == "My Project 🗂️"
+    assert folders.project_folder_name("My Project", "🗂️") == "My Project🗂️"
 
 
 def test_make_folder_is_idempotent(tmp_path):

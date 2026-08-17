@@ -20,11 +20,22 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     """
     *rename a folder on disk and repoint the index at it, atomically*
 
-    The rename and every database write land together: the folder is moved
-    first, and if any of the index work then fails the move is undone before
-    the error propagates. Renaming a folder invalidates the stored
-    `folder_path` of everything nested inside it, so descendants are
-    rewritten in the same transaction as the target row itself.
+    The database write is committed **before** the physical rename, not
+    after. `00_index` is itself one of the folders this function can rename,
+    and it's the folder the open SQLite connection's file lives in - a
+    rollback-journal commit has to `unlink()` its journal file by path, and
+    if the parent directory has already been renamed away that path no
+    longer resolves, so the commit fails with `sqlite3.OperationalError:
+    disk I/O error` even though every write up to that point succeeded.
+    Committing first means the transaction finalises while `oldFolderPath`
+    is still valid; only the plain filesystem rename happens afterwards. If
+    that rename then fails, the index briefly points at a path that doesn't
+    exist yet - the old values are written back and committed again before
+    re-raising, so the index and the filesystem never end up disagreeing for
+    longer than it takes to run the compensating write. Renaming a folder
+    invalidates the stored `folder_path` of everything nested inside it, so
+    descendants are rewritten in the same transaction as the target row
+    itself.
 
     **Key Arguments:**
 
@@ -42,7 +53,7 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     ```python
     from aardvark_jd.set_emoji import rename_folder_and_reindex
     newPath = rename_folder_and_reindex(
-        dbConn, oldPath, "10-19 Health 🏥",
+        dbConn, oldPath, "10-19 Health🏥",
         lambda name, path: db.update_area_emoji(dbConn, areaId, "🏥", name, path),
     )
     ```
@@ -58,14 +69,22 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     if not os.path.isdir(oldFolderPath):
         raise ValueError(f"'{oldFolderPath}' is not on disk - the index is out of step with the filesystem")
 
-    os.rename(oldFolderPath, newFolderPath)
+    oldFolderName = os.path.basename(oldFolderPath.rstrip("/"))
+
     try:
         updateRow(newFolderName, newFolderPath)
         db.rewrite_folder_path_prefix(dbConn, oldFolderPath, newFolderPath)
         dbConn.commit()
     except Exception:
         dbConn.rollback()
-        os.rename(newFolderPath, oldFolderPath)
+        raise
+
+    try:
+        os.rename(oldFolderPath, newFolderPath)
+    except Exception:
+        updateRow(oldFolderName, oldFolderPath)
+        db.rewrite_folder_path_prefix(dbConn, newFolderPath, oldFolderPath)
+        dbConn.commit()
         raise
 
     return newFolderPath

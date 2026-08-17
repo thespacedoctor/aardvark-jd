@@ -98,7 +98,7 @@ def test_main_set_emoji_and_repair_emoji_end_to_end(isolatedHome, monkeypatch, c
     cl_utils.main(docopt(doc, ["set_emoji", "areas", "10", "Y"]))
     out = capsys.readouterr().out
     assert "A.10-19" in out
-    assert "10-19 Health Y" in out
+    assert "10-19 HealthY" in out
 
     # a freshly initialised system needs no repair
     cl_utils.main(docopt(doc, ["repair_emoji"]))
@@ -126,4 +126,4 @@ def test_main_emoji_flag_skips_the_suggester(isolatedHome, monkeypatch, capsys):
     capsys.readouterr()
 
     cl_utils.main(docopt(doc, ["add_area", "areas", "Taxes", "desc", "-e", "T"]))
-    assert "10-19 Taxes T" in capsys.readouterr().out
+    assert "10-19 TaxesT" in capsys.readouterr().out

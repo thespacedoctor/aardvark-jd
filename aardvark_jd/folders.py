@@ -124,7 +124,7 @@ def area_folder_name(decadeStart, decadeEnd, title, emoji):
 
     - ``folderName`` -- the area folder's on-disk name
     """
-    return f"{decadeStart:02d}-{decadeEnd:02d} {title} {emoji}"
+    return f"{decadeStart:02d}-{decadeEnd:02d} {title}{emoji}"
 
 
 def category_folder_name(acNumber, title, emoji):
@@ -141,7 +141,7 @@ def category_folder_name(acNumber, title, emoji):
 
     - ``folderName`` -- the category folder's on-disk name
     """
-    return f"{acNumber:02d} {title} {emoji}"
+    return f"{acNumber:02d} {title}{emoji}"
 
 
 def id_folder_name(acNumber, itemNumber, title):
@@ -174,7 +174,7 @@ def project_folder_name(title, emoji):
 
     - ``folderName`` -- the project folder's on-disk name
     """
-    return f"{title} {emoji}"
+    return f"{title}{emoji}"
 
 
 def system_folder_name(baseName, emoji):
@@ -190,7 +190,7 @@ def system_folder_name(baseName, emoji):
 
     - ``folderName`` -- the system folder's on-disk name
     """
-    return f"{baseName} {emoji}"
+    return f"{baseName}{emoji}"
 
 
 def make_folder(parentPath, folderName):

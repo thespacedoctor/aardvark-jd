@@ -4,7 +4,7 @@ import os
 import pytest
 import yaml
 
-from aardvark_jd import db, paths
+from aardvark_jd import db, folders, paths
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -76,7 +76,7 @@ def test_set_area_emoji_cascades_to_categories_and_ids(populatedSystem):
     ).get()
 
     assert label == "A.10-19"
-    assert os.path.basename(newFolderPath) == "10-19 Health 🏥"
+    assert os.path.basename(newFolderPath) == "10-19 Health🏥"
     assert os.path.isdir(newFolderPath)
 
     # THE CASCADE: EVERY DESCENDANT ROW MUST NOW POINT SOMEWHERE REAL
@@ -101,7 +101,7 @@ def test_set_category_emoji_cascades_to_its_ids_only(populatedSystem):
         log=log, dbConn=dbConn, domain="areas", ref="11", newEmoji="🩻"
     ).get()
 
-    assert os.path.basename(newFolderPath) == "11 Doctors 🩻"
+    assert os.path.basename(newFolderPath) == "11 Doctors🩻"
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
 
@@ -120,7 +120,7 @@ def test_set_system_folder_emoji_cascades_to_the_whole_domain(populatedSystem):
         log=log, dbConn=dbConn, domain="system", ref="root.areas", newEmoji="🎯"
     ).get()
 
-    assert os.path.basename(newFolderPath) == "A.REAS 🎯"
+    assert os.path.basename(newFolderPath) == "A.REAS🎯"
     # RENAMING A SECTION FOLDER MOVES EVERY AREA, CATEGORY AND ID BENEATH IT
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
@@ -156,7 +156,7 @@ def test_set_project_emoji(tmp_path, settingsFile):
     ).get()
 
     assert label == "Website Rebuild"
-    assert os.path.basename(newFolderPath) == "Website Rebuild 🌐"
+    assert os.path.basename(newFolderPath) == "Website Rebuild🌐"
     assert os.path.isdir(newFolderPath)
     assert os.path.isfile(f"{newFolderPath}/README.md")
     dbConn.close()
@@ -180,7 +180,7 @@ def test_set_emoji_is_idempotent(populatedSystem):
 def test_set_emoji_refuses_to_clobber_an_existing_folder(populatedSystem):
     _rootPath, dbConn = populatedSystem
     area = db.get_area(dbConn, "areas", 10)
-    collidingPath = os.path.dirname(area["folder_path"]) + "/10-19 Health 🏥"
+    collidingPath = os.path.dirname(area["folder_path"]) + "/10-19 Health🏥"
     os.makedirs(collidingPath)
 
     with pytest.raises(ValueError, match="refusing to overwrite"):
@@ -244,11 +244,81 @@ def test_repair_emoji_resets_drifted_system_folders(populatedSystem):
     assert "root.areas" in repairedKeys
     assert "areas.system.02_llm" in repairedKeys
 
-    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "A.REAS 🧭"
-    assert db.get_system_folder(dbConn, "areas.system.02_llm")["folder_name"] == "02_llm 🤖"
+    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "A.REAS🧭"
+    assert db.get_system_folder(dbConn, "areas.system.02_llm")["folder_name"] == "02_llm🤖"
 
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
+
+
+def test_repair_emoji_handles_the_folder_holding_the_open_database(populatedSystem):
+    """*repairing `root.index` renames the very directory the open connection's sqlite file lives in*
+
+    An already-open sqlite connection is permanently write-poisoned the
+    instant its containing directory is renamed by *anyone* - even a rename
+    it had nothing to do with, and even before that connection has ever
+    written anything. Reads still work; every future write fails with
+    "attempt to write a readonly database". So this test can't drift
+    `root.index` using the fixture's already-open `dbConn` and then keep
+    using that same connection for the call under test - by the time the
+    drift is in place, `dbConn` is already broken for writes.
+
+    Instead the drift is set up with a short-lived, throwaway connection
+    that's closed immediately afterwards - exactly the shape `cl_utils.main`
+    itself uses (one fresh connection per CLI invocation) - and
+    `repair_emoji` is exercised against a second fresh connection, matching
+    how the real "next command" recovers after a run that renamed
+    `root.index`.
+    """
+    rootPath, dbConn = populatedSystem
+    dbConn.close()
+
+    # SIMULATE A LEGACY SYSTEM WHERE root.index AND root.areas ALREADY
+    # CARRY THE WRONG EMOJI, VIA A CONNECTION THAT'S DISCARDED RIGHT AFTER -
+    # NOTHING FROM HERE ON TOUCHES THIS CONNECTION AGAIN.
+    setupConn = db.get_connection(paths.find_db_path(rootPath))
+    areasRow = db.get_system_folder(setupConn, "root.areas")
+    driftedAreasPath = os.path.dirname(areasRow["folder_path"].rstrip("/")) + "/A.REAS❓"
+    db.update_system_folder(setupConn, "root.areas", "A.REAS❓", driftedAreasPath)
+    db.rewrite_folder_path_prefix(setupConn, areasRow["folder_path"], driftedAreasPath)
+    setupConn.commit()
+    os.rename(areasRow["folder_path"], driftedAreasPath)
+
+    indexRow = db.get_system_folder(setupConn, "root.index")
+    driftedIndexPath = os.path.dirname(indexRow["folder_path"].rstrip("/")) + "/00_index❓"
+    db.update_system_folder(setupConn, "root.index", "00_index❓", driftedIndexPath)
+    db.rewrite_folder_path_prefix(setupConn, indexRow["folder_path"], driftedIndexPath)
+    setupConn.commit()
+    os.rename(indexRow["folder_path"], driftedIndexPath)
+    setupConn.close()
+
+    # THE ACTUAL COMMAND UNDER TEST: A FRESH CONNECTION, AS `cl_utils.main`
+    # OPENS PER INVOCATION - IT HAS NEVER WRITTEN THROUGH A RENAMED FOLDER
+    # BEFORE, SO ITS OWN RENAMES (ENDING WITH root.index) MUST ALL SUCCEED.
+    repairConn = db.get_connection(paths.find_db_path(rootPath))
+    repaired = repair_emoji(log=log, dbConn=repairConn).get()
+    repairedKeys = [folderKey for folderKey, _path in repaired]
+    assert set(repairedKeys) == {"root.index", "root.areas"}
+    assert repairedKeys[-1] == "root.index", "root.index must be repaired last, or later renames break"
+
+    indexRow = db.get_system_folder(repairConn, "root.index")
+    expectedEmoji = paths.skeleton_entry("root.index")[5]
+    assert indexRow["folder_name"] == folders.system_folder_name("00_index", expectedEmoji)
+    assert os.path.isdir(indexRow["folder_path"])
+    assert os.path.isfile(f"{indexRow['folder_path']}/aardvark.db")
+    assert db.get_system_folder(repairConn, "root.areas")["folder_name"] == "A.REAS🧭"
+
+    for descriptor, folderPath in _all_indexed_paths(repairConn).items():
+        assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
+    repairConn.close()
+
+    # THE NEXT COMMAND ALSO OPENS ITS OWN FRESH CONNECTION AND MUST BE ABLE
+    # TO WRITE, EVEN THOUGH `repairConn` CANNOT ANY MORE.
+    nextConn = db.get_connection(paths.find_db_path(rootPath))
+    db.insert_system_folder(nextConn, "test.canary", "canary", "/tmp/canary")
+    nextConn.commit()
+    assert db.get_system_folder(nextConn, "test.canary") is not None
+    nextConn.close()
 
 
 def test_repair_emoji_is_idempotent(populatedSystem):
