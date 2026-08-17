@@ -3,7 +3,7 @@ import os
 import pytest
 from docopt import docopt
 
-from aardvark import cl_utils
+from aardvark_jd import cl_utils
 
 doc = cl_utils.__doc__
 

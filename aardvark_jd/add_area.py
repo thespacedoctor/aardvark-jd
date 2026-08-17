@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark import codes, db, emoji_picker, folders, paths
+from aardvark_jd import codes, db, emoji_picker, folders, paths
 
 
 class add_area(object):
@@ -25,7 +25,7 @@ class add_area(object):
     **Usage:**
 
     ```python
-    from aardvark.add_area import add_area
+    from aardvark_jd.add_area import add_area
     code, folderPath = add_area(
         log=log, dbConn=dbConn, domain="areas", title="Health", description="..."
     ).get()

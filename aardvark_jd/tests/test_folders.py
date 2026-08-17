@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from aardvark import db, folders
+from aardvark_jd import db, folders
 
 
 @pytest.fixture

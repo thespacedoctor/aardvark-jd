@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark import codes, db, emoji_picker, folders
+from aardvark_jd import codes, db, emoji_picker, folders
 
 
 class add_category(object):
@@ -26,7 +26,7 @@ class add_category(object):
     **Usage:**
 
     ```python
-    from aardvark.add_category import add_category
+    from aardvark_jd.add_category import add_category
     code, folderPath = add_category(
         log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="..."
     ).get()

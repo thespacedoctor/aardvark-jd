@@ -3,12 +3,12 @@ import logging
 import pytest
 import yaml
 
-from aardvark import db, paths
-from aardvark.add_area import add_area
-from aardvark.add_category import add_category
-from aardvark.add_id import add_id
-from aardvark.initialiser import initialiser
-from aardvark.search import search
+from aardvark_jd import db, paths
+from aardvark_jd.add_area import add_area
+from aardvark_jd.add_category import add_category
+from aardvark_jd.add_id import add_id
+from aardvark_jd.initialiser import initialiser
+from aardvark_jd.search import search
 
 log = logging.getLogger("test_search")
 log.addHandler(logging.NullHandler())

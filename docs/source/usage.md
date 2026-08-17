@@ -2,7 +2,7 @@
 
 ```bash
     
-    Documentation for aardvark can be found here: http://aardvark.readthedocs.org
+    Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
     
     Usage:
         aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]

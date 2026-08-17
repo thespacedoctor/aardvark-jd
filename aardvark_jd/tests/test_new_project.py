@@ -5,9 +5,9 @@ import zipfile
 import pytest
 import yaml
 
-from aardvark import db, paths
-from aardvark.initialiser import initialiser
-from aardvark.new_project import new_project
+from aardvark_jd import db, paths
+from aardvark_jd.initialiser import initialiser
+from aardvark_jd.new_project import new_project
 
 log = logging.getLogger("test_new_project")
 log.addHandler(logging.NullHandler())

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Documentation for aardvark can be found here: http://aardvark.readthedocs.org
+Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
 
 Usage:
     aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
@@ -42,13 +42,13 @@ import sys
 
 from fundamentals import tools, times
 
-from aardvark import db, folders, paths
-from aardvark.add_area import add_area
-from aardvark.add_category import add_category
-from aardvark.add_id import add_id
-from aardvark.initialiser import initialiser
-from aardvark.new_project import new_project
-from aardvark.search import search, format_result
+from aardvark_jd import db, folders, paths
+from aardvark_jd.add_area import add_area
+from aardvark_jd.add_category import add_category
+from aardvark_jd.add_id import add_id
+from aardvark_jd.initialiser import initialiser
+from aardvark_jd.new_project import new_project
+from aardvark_jd.search import search, format_result
 
 CLEAR_ERRORS = (
     ValueError,

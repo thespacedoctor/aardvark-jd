@@ -4,9 +4,9 @@ import os
 import pytest
 import yaml
 
-from aardvark import db, folders, paths
-from aardvark.add_area import add_area
-from aardvark.initialiser import initialiser
+from aardvark_jd import db, folders, paths
+from aardvark_jd.add_area import add_area
+from aardvark_jd.initialiser import initialiser
 
 log = logging.getLogger("test_add_area")
 log.addHandler(logging.NullHandler())

@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark import codes, db, folders
+from aardvark_jd import codes, db, folders
 
 
 class add_id(object):
@@ -28,7 +28,7 @@ class add_id(object):
     **Usage:**
 
     ```python
-    from aardvark.add_id import add_id
+    from aardvark_jd.add_id import add_id
     code, folderPath = add_id(
         log=log, dbConn=dbConn, domain="areas", categoryRef="11", title="Cardiologist", description="..."
     ).get()
