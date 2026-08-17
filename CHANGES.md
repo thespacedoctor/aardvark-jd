@@ -1,6 +1,10 @@
 
 ## Release Notes
 
+**v0.1.3 - August 17, 2026**
+
+- **FIXED:** the v0.1.2 tag itself still carried a mismatched version stamp (`0.1.1` instead of `0.1.2`) since the fix committed for v0.1.1 was tagged one release too late. This release ships with a version stamp that correctly matches its own tag.
+
 **v0.1.2 - August 17, 2026**
 
 - **FIXED:** corrected a stale dev-build version stamp committed at the v0.1.1 tag (`0.1.1.dev5` instead of `0.1.1`), which made setuptools-scm see a dirty tree mid-build and bump the computed version forward on any fresh build.
