@@ -23,7 +23,8 @@ dependencies = [
     'pyyaml',
     'fundamentals',
     'docopt',
-    'emoji'
+    'emoji',
+    'anthropic'
 ]
 
 [project.urls]

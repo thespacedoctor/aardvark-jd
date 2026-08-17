@@ -4,6 +4,11 @@ system:
     name: null
     root_path: null
 
+emoji:
+    # ask Claude to suggest folder emoji, falling back to an offline keyword
+    # search whenever the API is unreachable. set to false to stay offline.
+    use_llm: true
+
 logging settings:
     formatters:
         file_style:

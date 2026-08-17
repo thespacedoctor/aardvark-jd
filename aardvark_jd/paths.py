@@ -14,30 +14,35 @@ from aardvark_jd import db
 DB_BASENAME = "aardvark.db"
 _ROOT_INDEX_GLOB = "00_index*"
 
+# THE STATIC SKELETON IS A FIXED, KNOWN LIST, SO ITS EMOJI ARE DECLARED HERE
+# RATHER THAN GUESSED - KEYWORD SEARCH GOT 11 OF THESE 14 TITLES WRONG.
 # ORDERED DESCRIPTION OF EVERY STATIC FOLDER `init` MUST CREATE.
-# EACH ENTRY: (folderKey, parentKey or None, baseName, title, description)
+# EACH ENTRY: (folderKey, parentKey or None, baseName, title, description, emoji)
 SYSTEM_SKELETON = [
-    ("root.index", None, "00_index", "Index", "The aardvark database and system index"),
-    ("root.inbox", None, "01_inbox", "Inbox", "Unsorted items awaiting filing"),
-    ("root.projects", None, "P.ROJECTS", "Projects", "Active and future projects"),
-    ("root.areas", None, "A.REAS", "Areas", "Ongoing areas of responsibility"),
-    ("root.resources", None, "R.ESOURCES", "Resources", "Reference material and resources"),
-    ("root.archive", None, "09_archive", "Archive", "Inactive material kept for reference"),
+    ("root.index", None, "00_index", "Index", "The aardvark database and system index", "🗂️"),
+    ("root.inbox", None, "01_inbox", "Inbox", "Unsorted items awaiting filing", "📥"),
+    ("root.projects", None, "P.ROJECTS", "Projects", "Active and future projects", "🚀"),
+    ("root.areas", None, "A.REAS", "Areas", "Ongoing areas of responsibility", "🧭"),
+    ("root.resources", None, "R.ESOURCES", "Resources", "Reference material and resources", "📚"),
+    ("root.archive", None, "09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
 
 # THE 10 SYSTEM SUBFOLDERS REPEATED UNDER PROJECTS, AREAS AND RESOURCES
 _SYSTEM_SUBFOLDERS = [
-    ("00_index", "Index", "The index for this section"),
-    ("01_inbox", "Inbox", "Unsorted items awaiting filing"),
-    ("02_llm", "LLM", "LLM prompts, context and output"),
-    ("03_checklists", "Checklists", "Checklists"),
-    ("04_templates", "Templates", "Templates"),
-    ("05_links", "Links", "Links"),
-    ("06_bin", "Bin", "Items pending deletion"),
-    ("07_settings", "Settings", "Settings"),
-    ("08_someday", "Someday", "Someday / maybe items"),
-    ("09_archive", "Archive", "Inactive material kept for reference"),
+    ("00_index", "Index", "The index for this section", "🗂️"),
+    ("01_inbox", "Inbox", "Unsorted items awaiting filing", "📥"),
+    ("02_llm", "LLM", "LLM prompts, context and output", "🤖"),
+    ("03_checklists", "Checklists", "Checklists", "☑️"),
+    ("04_templates", "Templates", "Templates", "📐"),
+    ("05_links", "Links", "Links", "🔗"),
+    ("06_bin", "Bin", "Items pending deletion", "🗑️"),
+    ("07_settings", "Settings", "Settings", "🎛️"),
+    ("08_someday", "Someday", "Someday / maybe items", "💭"),
+    ("09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
+
+_SYSTEM_FOLDER_EMOJI = "⚙️"
+
 
 def _append_system_subfolders(skeleton):
     """
@@ -50,13 +55,43 @@ def _append_system_subfolders(skeleton):
     for sectionKey in ("projects", "areas", "resources"):
         systemKey = f"{sectionKey}.system"
         skeleton.append(
-            (systemKey, f"root.{sectionKey}", "00_09_system", "System", "Johnny Decimal system folder (00-09)")
+            (
+                systemKey, f"root.{sectionKey}", "00_09_system", "System",
+                "Johnny Decimal system folder (00-09)", _SYSTEM_FOLDER_EMOJI,
+            )
         )
-        for baseName, title, description in _SYSTEM_SUBFOLDERS:
-            skeleton.append((f"{sectionKey}.system.{baseName}", systemKey, baseName, title, description))
+        for baseName, title, description, folderEmoji in _SYSTEM_SUBFOLDERS:
+            skeleton.append(
+                (f"{sectionKey}.system.{baseName}", systemKey, baseName, title, description, folderEmoji)
+            )
 
 
 _append_system_subfolders(SYSTEM_SKELETON)
+
+
+def skeleton_entry(folderKey):
+    """
+    *look up a static skeleton entry by its logical folder key*
+
+    **Key Arguments:**
+
+    - ``folderKey`` -- the logical folder key, e.g. `"root.areas"`
+
+    **Return:**
+
+    - ``entry`` -- the matching `SYSTEM_SKELETON` tuple
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import paths
+    folderKey, parentKey, baseName, title, description, folderEmoji = paths.skeleton_entry("root.areas")
+    ```
+    """
+    for entry in SYSTEM_SKELETON:
+        if entry[0] == folderKey:
+            return entry
+    raise KeyError(f"'{folderKey}' is not a static skeleton folder key")
 
 
 def get_db_path_in_folder(indexFolderPath):

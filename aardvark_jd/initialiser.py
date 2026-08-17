@@ -10,7 +10,7 @@ Author
 import os
 import zipfile
 
-from aardvark_jd import db, emoji_picker, folders, paths, settings_writer
+from aardvark_jd import db, folders, paths, settings_writer
 
 _BLANK_TEMPLATE_NAME = "blank_starter.zip"
 
@@ -74,7 +74,11 @@ class initialiser(object):
 
     def _create_skeleton_folders(self, rootPath):
         """
-        *create every static folder in `paths.SYSTEM_SKELETON`, choosing an emoji for each*
+        *create every static folder in `paths.SYSTEM_SKELETON`, using its declared emoji*
+
+        The skeleton is a fixed, known list, so each folder's emoji is
+        declared alongside it in `paths.SYSTEM_SKELETON` rather than
+        guessed from the title.
 
         **Key Arguments:**
 
@@ -85,10 +89,9 @@ class initialiser(object):
         - ``createdPaths`` -- a dict mapping folder key -> (folderName, folderPath)
         """
         createdPaths = {}
-        for folderKey, parentKey, baseName, title, description in paths.SYSTEM_SKELETON:
+        for folderKey, parentKey, baseName, _title, _description, folderEmoji in paths.SYSTEM_SKELETON:
             parentPath = rootPath if parentKey is None else createdPaths[parentKey][1]
-            pickedEmoji = emoji_picker.pick_emoji(title, description)
-            folderName = folders.system_folder_name(baseName, pickedEmoji)
+            folderName = folders.system_folder_name(baseName, folderEmoji)
             folderPath = folders.make_folder(parentPath, folderName)
             createdPaths[folderKey] = (folderName, folderPath)
         return createdPaths

@@ -12,6 +12,24 @@ import emoji
 
 FALLBACK_EMOJI = "📁"
 
+# THE CLAUDE MODEL AND REQUEST SHAPE USED BY `suggest_emoji`. THINKING IS LEFT
+# AT ITS OPUS 5 DEFAULT (ADAPTIVE) - DISABLING IT CAN LEAK `<thinking>` TAGS
+# INTO THE VISIBLE REPLY - AND `low` EFFORT KEEPS THIS TRIVIAL CLASSIFICATION
+# FAST. `max_tokens` CAPS THINKING + REPLY TOGETHER, SO IT NEEDS HEADROOM.
+CLAUDE_MODEL = "claude-opus-5"
+CLAUDE_MAX_TOKENS = 1024
+CLAUDE_EFFORT = "low"
+CLAUDE_TIMEOUT_SECONDS = 20.0
+CLAUDE_MAX_RETRIES = 1
+
+_SUGGESTER_SYSTEM_PROMPT = (
+    "You choose a single emoji to label a folder in a personal knowledge-filing "
+    "system. Pick the emoji that best captures the folder's subject, favouring "
+    "common, instantly-recognisable emoji over obscure ones. Reply with exactly "
+    "one emoji character and nothing else: no words, no punctuation, no "
+    "explanation, no code fences."
+)
+
 _STOPWORDS = {
     "a", "an", "the", "and", "or", "of", "for", "to", "in", "on", "at",
     "with", "my", "our", "your",
@@ -76,13 +94,44 @@ def _tokenise(text):
     return [word for word in words if word not in _STOPWORDS]
 
 
+def _singular_forms(word):
+    """
+    *candidate singular spellings for a word, most-specific rule first*
+
+    The CLDR short names behind the keyword index are singular, so plural
+    titles ("Films", "Templates") miss an otherwise-available emoji. Exact
+    matches are always tried before these candidates, so this only ever
+    adds coverage.
+
+    **Key Arguments:**
+
+    - ``word`` -- the lowercase word to singularise
+
+    **Return:**
+
+    - ``candidates`` -- a list of candidate singular spellings
+    """
+    candidates = []
+    if len(word) > 4 and word.endswith("ies"):
+        candidates.append(word[:-3] + "y")
+    if len(word) > 3 and word.endswith("es"):
+        candidates.append(word[:-2])
+    if len(word) > 2 and word.endswith("s") and not word.endswith("ss"):
+        candidates.append(word[:-1])
+    return candidates
+
+
 def pick_emoji(title, description=""):
     """
-    *pick an appropriate emoji for a folder from its title and description*
+    *pick an appropriate emoji for a folder from its title and description, offline*
 
     Looks up each word of ``title`` in turn against the `emoji` package's
-    keyword index, then falls back to ``description`` if nothing in the
-    title matched, and finally to :py:data:`FALLBACK_EMOJI`.
+    keyword index (trying the word as written before its singular forms),
+    then falls back to ``description`` if nothing in the title matched, and
+    finally to :py:data:`FALLBACK_EMOJI`.
+
+    This is the offline picker, used as the fallback whenever
+    :py:func:`suggest_emoji` cannot reach the Claude API.
 
     **Key Arguments:**
 
@@ -92,12 +141,155 @@ def pick_emoji(title, description=""):
     **Return:**
 
     - ``pickedEmoji`` -- the picked emoji character
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import emoji_picker
+    pickedEmoji = emoji_picker.pick_emoji("Hospital", "Appointments and visits")
+    ```
     """
     keywordIndex = _get_keyword_index()
 
     for text in (title, description):
         for token in _tokenise(text or ""):
-            if token in keywordIndex:
-                return keywordIndex[token]
+            for candidate in [token] + _singular_forms(token):
+                if candidate in keywordIndex:
+                    return keywordIndex[candidate]
 
     return FALLBACK_EMOJI
+
+
+def suggest_emoji(title, description="", settings=None, log=None):
+    """
+    *suggest an emoji for a folder, asking Claude first and falling back offline*
+
+    Asks the Claude API for a single emoji, validates that the reply really
+    is one emoji, and degrades to :py:func:`pick_emoji` on any problem at
+    all - the `anthropic` package missing, no credentials configured, no
+    network, a policy refusal, or a reply that is not a single emoji.
+
+    **Key Arguments:**
+
+    - ``title`` -- the folder's title
+    - ``description`` -- the folder's description. Default `""`.
+    - ``settings`` -- the aardvark settings dict, used to honour `emoji: use_llm: false`. Default `None`.
+    - ``log`` -- logger. Default `None`.
+
+    **Return:**
+
+    - ``suggestedEmoji`` -- the suggested emoji character
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import emoji_picker
+    suggestedEmoji = emoji_picker.suggest_emoji("Doctors", "GP and specialists", settings=settings, log=log)
+    ```
+    """
+    if llm_enabled(settings):
+        suggestedEmoji = _suggest_via_claude(title, description, log=log)
+        if suggestedEmoji:
+            return suggestedEmoji
+
+    return pick_emoji(title, description)
+
+
+def llm_enabled(settings):
+    """
+    *check whether the Claude-backed suggester is switched on in the settings*
+
+    **Key Arguments:**
+
+    - ``settings`` -- the aardvark settings dict, or `None`
+
+    **Return:**
+
+    - ``enabled`` -- `True` unless the settings explicitly disable it
+    """
+    emojiSettings = (settings or {}).get("emoji") or {}
+    return bool(emojiSettings.get("use_llm", True))
+
+
+def _validate_single_emoji(text):
+    """
+    *accept a model reply only if it is exactly one known emoji*
+
+    `emoji.EMOJI_DATA` membership covers bare, variation-selector and ZWJ
+    sequence spellings while rejecting anything with stray text around it,
+    so it doubles as the guard against a chatty reply.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reply text
+
+    **Return:**
+
+    - ``validated`` -- the emoji character, or `None` if the reply was not one emoji
+    """
+    candidate = (text or "").strip()
+    return candidate if candidate in emoji.EMOJI_DATA else None
+
+
+def _suggest_via_claude(title, description="", log=None):
+    """
+    *ask Claude for a single emoji for a folder, returning `None` on any failure*
+
+    **Key Arguments:**
+
+    - ``title`` -- the folder's title
+    - ``description`` -- the folder's description. Default `""`.
+    - ``log`` -- logger. Default `None`.
+
+    **Return:**
+
+    - ``suggestedEmoji`` -- the validated emoji character, or `None`
+    """
+    # IMPORTED LAZILY SO THE OFFLINE PATH NEVER PAYS THE IMPORT COST AND A
+    # MISSING PACKAGE DEGRADES INSTEAD OF CRASHING.
+    try:
+        import anthropic
+    except ImportError:
+        if log:
+            log.debug("the `anthropic` package is not installed - using the offline emoji picker")
+        return None
+
+    prompt = f"Folder title: {title}"
+    if description:
+        prompt += f"\nFolder description: {description}"
+
+    try:
+        client = anthropic.Anthropic(
+            timeout=CLAUDE_TIMEOUT_SECONDS, max_retries=CLAUDE_MAX_RETRIES
+        )
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=CLAUDE_MAX_TOKENS,
+            output_config={"effort": CLAUDE_EFFORT},
+            system=_SUGGESTER_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as error:
+        if log:
+            log.debug(f"could not reach the Claude API ({error}) - using the offline emoji picker")
+        return None
+
+    # CHECKED BEFORE READING `content`: A POLICY REFUSAL COMES BACK AS A
+    # SUCCESSFUL RESPONSE WHOSE `content` MAY BE EMPTY.
+    if getattr(response, "stop_reason", None) == "refusal":
+        if log:
+            log.debug("the Claude API declined the emoji request - using the offline emoji picker")
+        return None
+
+    replyText = ""
+    for block in getattr(response, "content", None) or []:
+        if getattr(block, "type", None) == "text":
+            replyText = block.text
+            break
+
+    suggestedEmoji = _validate_single_emoji(replyText)
+    if suggestedEmoji is None and log:
+        log.debug(
+            f"the Claude API reply {replyText!r} was not a single emoji - using the offline emoji picker"
+        )
+    return suggestedEmoji
