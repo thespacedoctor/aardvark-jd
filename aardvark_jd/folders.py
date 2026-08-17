@@ -9,7 +9,7 @@ Author
 
 import os
 
-from aardvark import db
+from aardvark_jd import db
 
 MAX_DECADE_START = 90
 MAX_ITEM_NUMBER = 99

@@ -1,6 +1,6 @@
 import pytest
 
-from aardvark import codes
+from aardvark_jd import codes
 
 
 def test_domain_letter():

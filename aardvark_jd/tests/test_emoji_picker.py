@@ -1,4 +1,4 @@
-from aardvark import emoji_picker
+from aardvark_jd import emoji_picker
 
 
 def test_known_keyword_match():

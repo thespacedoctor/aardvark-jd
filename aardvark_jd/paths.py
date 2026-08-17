@@ -9,7 +9,7 @@ Author
 
 import glob
 
-from aardvark import db
+from aardvark_jd import db
 
 DB_BASENAME = "aardvark.db"
 _ROOT_INDEX_GLOB = "00_index*"

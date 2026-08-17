@@ -3,7 +3,7 @@ exclude *
 recursive-exclude * */
 
 # NOW INCLUDE BACK EVERYTHING FROM THE CODE FOLDER .. THEN TRIM BACK
-recursive-include aardvark *.*
+recursive-include aardvark_jd *.*
 global-exclude *.pyo
 global-exclude *.pyc
 global-exclude test_*.py

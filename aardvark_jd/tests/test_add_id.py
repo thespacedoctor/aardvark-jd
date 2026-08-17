@@ -4,11 +4,11 @@ import os
 import pytest
 import yaml
 
-from aardvark import db, folders, paths
-from aardvark.add_area import add_area
-from aardvark.add_category import add_category
-from aardvark.add_id import add_id
-from aardvark.initialiser import initialiser
+from aardvark_jd import db, folders, paths
+from aardvark_jd.add_area import add_area
+from aardvark_jd.add_category import add_category
+from aardvark_jd.add_id import add_id
+from aardvark_jd.initialiser import initialiser
 
 log = logging.getLogger("test_add_id")
 log.addHandler(logging.NullHandler())

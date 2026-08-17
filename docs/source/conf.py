@@ -14,9 +14,9 @@ on_rtd = os.environ.get("READTHEDOCS") == "True"
 # WHERE DOES THIS conf.py FILE LIVE?
 moduleDirectory = os.path.dirname(os.path.realpath(__file__))
 # GET PACKAGE __version__ INTO locals()
-exec(open(moduleDirectory + "/../../aardvark/__version__.py").read())
+exec(open(moduleDirectory + "/../../aardvark_jd/__version__.py").read())
 sys.path.insert(
-    0, os.path.abspath("../../aardvark/aardvark")
+    0, os.path.abspath("../../aardvark_jd")
 )
 
 # General information about the project.
@@ -96,7 +96,7 @@ myst_heading_anchors = 3
 todo_include_todos = True
 
 link_resolver_url = (
-    "https://github.com/thespacedoctor/aardvark/blob/main"
+    "https://github.com/thespacedoctor/aardvark-jd/blob/main"
 )
 
 remove_from_toctrees = ["utils/[!_]*"]
@@ -104,7 +104,7 @@ remove_from_toctrees = ["utils/[!_]*"]
 
 autodoc2_packages = [
     {
-        "path": "../../aardvark",
+        "path": "../../aardvark_jd",
         "exclude_files": ["*test_*.py"],
     }
 ]
@@ -115,7 +115,7 @@ autodoc2_sort_names = True
 
 
 # OpenGraph metadata
-ogp_site_url = "https://aardvark.readthedocs.io/en"
+ogp_site_url = "https://aardvark-jd.readthedocs.io/en"
 # This is the image that GitHub stores for our social media previews
 ogp_image = "https://live.staticflickr.com/65535/51602359158_6105a9d0c7_b.png"
 ogp_custom_meta_tags = [
@@ -128,7 +128,7 @@ html_static_path = ["_static", "_images"]
 html_theme_options = {
     "light_logo": "thespacedoctor_icon_dark_circle.png",
     "dark_logo": "thespacedoctor_icon_white_circle.png",
-    "source_repository": "https://github.com/thespacedoctor/aardvark/",
+    "source_repository": "https://github.com/thespacedoctor/aardvark-jd/",
     "source_branch": "main",
     "source_directory": "docs/source/",
 }
@@ -187,7 +187,7 @@ def updateUsageMd():
     """
     *Grab the usage from cl_utils.py to display in README.md*
     """
-    from aardvark import cl_utils
+    from aardvark_jd import cl_utils
     import codecs
 
     usage = cl_utils.__doc__

@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from aardvark import db
+from aardvark_jd import db
 
 
 @pytest.fixture

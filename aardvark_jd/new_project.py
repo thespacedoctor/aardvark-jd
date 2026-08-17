@@ -13,7 +13,7 @@ import shutil
 import sys
 import zipfile
 
-from aardvark import db, emoji_picker, folders, paths
+from aardvark_jd import db, emoji_picker, folders, paths
 
 BLANK_CHOICE = "blank"
 
@@ -35,7 +35,7 @@ class new_project(object):
     **Usage:**
 
     ```python
-    from aardvark.new_project import new_project
+    from aardvark_jd.new_project import new_project
     title, folderPath, templateUsed = new_project(log=log, dbConn=dbConn).get()
     ```
     """

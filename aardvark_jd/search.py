@@ -9,7 +9,7 @@ Author
 
 import sqlite3
 
-from aardvark import db
+from aardvark_jd import db
 
 # FTS5 COLUMN ORDER: entity_type, code, title, description, path - WEIGHT
 # TITLE MATCHES ABOVE DESCRIPTION MATCHES, IGNORE THE UNINDEXED COLUMNS
@@ -29,7 +29,7 @@ class search(object):
     **Usage:**
 
     ```python
-    from aardvark.search import search
+    from aardvark_jd.search import search
     results = search(log=log, dbConn=dbConn, terms=["cardio"]).get()
     ```
     """
