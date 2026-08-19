@@ -5,7 +5,7 @@ Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
 
 Usage:
     aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
-    aardvark new_project [<templateName>] [<projectTitle>] [-e <emoji>] [-s <pathToSettingsFile>]
+    aardvark new_project <category> [<templateName>] [<projectTitle>] [-s <pathToSettingsFile>]
     aardvark add_area <domain> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
     aardvark add_category <domain> <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
     aardvark add_id <domain> <category> <title> <description> [-s <pathToSettingsFile>]
@@ -17,7 +17,7 @@ Usage:
 
 Commands:
     init                                   create a new PARA + Johnny Decimal root and index
-    new_project                            create a new project under Projects, from a template or blank
+    new_project                            create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank
     add_area                               add a new Johnny Decimal area to `areas` or `resources`
     add_category                           add a new Johnny Decimal category to an existing area
     add_id                                 add a new Johnny Decimal ID to an existing category
@@ -32,10 +32,10 @@ Arguments:
     parentPath                             the path in which the system's root folder is created
     templateName                           a `04_templates` zip's basename, or "blank"
     projectTitle                           the new project's title
-    domain                                 "areas" or "resources"; set_emoji also takes "projects" and "system"
+    domain                                 "areas", "resources" or "projects"; set_emoji also takes "system"
     area                                   an area reference, e.g. "10" or "10-19"
     category                               a category reference, e.g. "11"
-    ref                                    what to retarget: an area ("10"), category ("11"), project title, or system folder key ("root.areas")
+    ref                                    what to retarget: an area ("10"), category ("11"), or system folder key ("root.areas")
     emoji                                  an emoji character
     title                                  a title
     description                            a description
@@ -198,11 +198,11 @@ def _dispatch(a, log, indexDbConn, settings):
     - ``settings`` -- the aardvark settings dict
     """
     if a["new_project"]:
-        title, folderPath, templateUsed = new_project(
-            log=log, dbConn=indexDbConn, templateName=a["templateName"], projectTitle=a["projectTitle"],
-            chosenEmoji=a["emojiFlag"], settings=settings,
+        code, title, folderPath, templateUsed = new_project(
+            log=log, dbConn=indexDbConn, categoryRef=a["category"], templateName=a["templateName"],
+            projectTitle=a["projectTitle"], settings=settings,
         ).get()
-        print(f"project '{title}' created at {folderPath} (template: {templateUsed})")
+        print(f"{code}  {title}  {folderPath} (template: {templateUsed})")
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_area"]:

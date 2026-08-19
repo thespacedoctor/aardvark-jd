@@ -11,7 +11,7 @@ doc = cl_utils.__doc__
 
 @pytest.mark.parametrize("command,expectedKey", [
     ("init TestSystem /tmp/somewhere", "init"),
-    ("new_project blank Title", "new_project"),
+    ("new_project P11 blank Title", "new_project"),
     ("add_area areas Health desc", "add_area"),
     ("add_category areas 10 Doctors desc", "add_category"),
     ("add_id areas 11 Cardiologist desc", "add_id"),
@@ -29,7 +29,6 @@ def test_docopt_parses_each_subcommand(command, expectedKey):
 @pytest.mark.parametrize("command", [
     "add_area areas Health desc",
     "add_category areas 10 Doctors desc",
-    "new_project blank Title",
 ])
 def test_docopt_accepts_the_emoji_flag(command):
     assert docopt(doc, command.split(" ") + ["-e", "X"])["--emoji"] == "X"
@@ -66,6 +65,15 @@ def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["add_id", "areas", "11", "Cardiologist", "desc"]))
     assert "A11.10" in capsys.readouterr().out
 
+    cl_utils.main(docopt(doc, ["add_area", "projects", "Launches", "desc"]))
+    assert "P10-19" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["add_category", "projects", "10", "Website", "desc"]))
+    assert "P11" in capsys.readouterr().out
+
+    cl_utils.main(docopt(doc, ["new_project", "P11", "blank", "Relaunch"]))
+    assert "P11.10" in capsys.readouterr().out
+
     cl_utils.main(docopt(doc, ["search", "cardiologist"]))
     assert "A11.10" in capsys.readouterr().out
 
@@ -84,7 +92,7 @@ def test_main_reports_clear_error_for_invalid_domain(isolatedHome, capsys):
     capsys.readouterr()
 
     with pytest.raises(SystemExit) as excInfo:
-        cl_utils.main(docopt(doc, ["add_area", "projects", "X", "desc"]))
+        cl_utils.main(docopt(doc, ["add_area", "bogus", "X", "desc"]))
     assert excInfo.value.code == 1
     assert "error:" in capsys.readouterr().err
 

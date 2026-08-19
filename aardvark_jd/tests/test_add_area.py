@@ -25,10 +25,9 @@ def dbConn(tmp_path):
     conn.close()
 
 
-@pytest.mark.parametrize("domain", ["areas", "resources"])
-def test_add_area_happy_path(dbConn, domain):
+@pytest.mark.parametrize("domain,letter", [("areas", "A"), ("resources", "R"), ("projects", "P")])
+def test_add_area_happy_path(dbConn, domain, letter):
     code, folderPath = add_area(log=log, dbConn=dbConn, domain=domain, title="Health", description="desc").get()
-    letter = "A" if domain == "areas" else "R"
     assert code == f"{letter}10-19"
     assert f"{letter}10_19_health" in folderPath
     assert os.path.isdir(folderPath)
@@ -50,7 +49,7 @@ def test_add_area_exhaustion_surfaces_clear_error(dbConn):
 
 def test_add_area_invalid_domain(dbConn):
     with pytest.raises(ValueError):
-        add_area(log=log, dbConn=dbConn, domain="projects", title="X", description="").get()
+        add_area(log=log, dbConn=dbConn, domain="bogus", title="X", description="").get()
 
 
 def test_add_area_creates_its_reserved_system_folder(dbConn):

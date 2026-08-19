@@ -37,7 +37,7 @@ To stay offline permanently, set `use_llm: false` under `emoji:` in your setting
 ```bash
 aardvark set_emoji areas 10 🏥            # an area
 aardvark set_emoji areas 11 🩺            # a category
-aardvark set_emoji projects "Website Rebuild" 🌐
+aardvark set_emoji projects 11 🌐         # a project category
 aardvark set_emoji system root.areas 🧭   # a static system folder
 ```
 
@@ -51,7 +51,7 @@ aardvark repair_emoji
 
 ## Growing the Johnny Decimal index
 
-Only `03_AREAS` and `04_RESOURCES` are Johnny Decimal systems. Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
+`02_PROJECTS`, `03_AREAS` and `04_RESOURCES` are all Johnny Decimal systems. Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
 
 ```bash
 aardvark add_area areas "Health" "Everything related to my physical and mental health"
@@ -81,11 +81,15 @@ and backfills any missing reserved scaffolding - safe to run repeatedly.
 
 ## Starting a new project
 
+A project is a Johnny Decimal ID in the `projects` domain, so it needs an existing project category to live in - add an area and category first, the same way as for `areas`/`resources`:
+
 ```bash
-aardvark new_project
+aardvark add_area projects "Launches" "Things I'm shipping"
+aardvark add_category projects 10 "Website" "The site rebuild"
+aardvark new_project P11
 ```
 
-Lists any zip templates found in `02_PROJECTS/00_09_system/04_templates/` plus a blank option (`README.md`, `input/`, `output/`), and creates the chosen project folder under `02_PROJECTS/`.
+Lists any zip templates found in `02_PROJECTS/00_09_system/04_templates/` plus a blank option (`README.md`, `input/`, `output/`), and creates the chosen project inside category `P11` as `P11.10_<title>`, with no emoji - matching every other Johnny Decimal ID.
 
 ## Searching the index
 

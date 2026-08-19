@@ -42,6 +42,27 @@ def test_add_id_happy_path(dbConnWithCategory):
     assert os.path.isdir(folderPath)
 
 
+def test_add_id_happy_path_projects_domain(tmp_path):
+    settingsPath = str(tmp_path / "settings.yaml")
+    with open(settingsPath, "w") as stream:
+        yaml.safe_dump({"version": 1, "system": {"name": None, "root_path": None}}, stream)
+    rootPath = initialiser(
+        log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
+    ).get()
+    conn = db.get_connection(paths.find_db_path(rootPath))
+    add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
+    add_category(log=log, dbConn=conn, domain="projects", areaRef="10", title="Website", description="").get()
+
+    code, folderPath = add_id(
+        log=log, dbConn=conn, domain="projects", categoryRef="11",
+        title="Redesign", description="",
+    ).get()
+    assert code == "P11.10"
+    assert os.path.basename(folderPath) == "P11.10_redesign"
+    assert os.path.isdir(folderPath)
+    conn.close()
+
+
 def test_add_id_unknown_category_raises_clear_error(dbConnWithCategory):
     with pytest.raises(ValueError):
         add_id(

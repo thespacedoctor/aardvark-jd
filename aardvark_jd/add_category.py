@@ -18,7 +18,7 @@ class add_category(object):
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``areaRef`` -- the parent area reference, e.g. `"10"` or `"10-19"`
     - ``title`` -- the category's title
     - ``description`` -- the category's description

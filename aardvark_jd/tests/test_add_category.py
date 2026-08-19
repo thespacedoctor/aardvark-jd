@@ -36,6 +36,25 @@ def test_add_category_happy_path(dbConnWithArea):
     assert os.path.isdir(folderPath)
 
 
+def test_add_category_happy_path_projects_domain(tmp_path):
+    settingsPath = str(tmp_path / "settings.yaml")
+    with open(settingsPath, "w") as stream:
+        yaml.safe_dump({"version": 1, "system": {"name": None, "root_path": None}}, stream)
+    rootPath = initialiser(
+        log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
+    ).get()
+    conn = db.get_connection(paths.find_db_path(rootPath))
+    add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
+
+    code, folderPath = add_category(
+        log=log, dbConn=conn, domain="projects", areaRef="10", title="Website", description="desc"
+    ).get()
+    assert code == "P11"
+    assert "P11_website" in folderPath
+    assert os.path.isdir(folderPath)
+    conn.close()
+
+
 def test_add_category_accepts_range_ref(dbConnWithArea):
     code, _ = add_category(
         log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10-19", title="Doctors", description=""

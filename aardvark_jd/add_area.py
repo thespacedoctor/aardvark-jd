@@ -18,7 +18,7 @@ class add_area(object):
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``title`` -- the area's title
     - ``description`` -- the area's description
     - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.

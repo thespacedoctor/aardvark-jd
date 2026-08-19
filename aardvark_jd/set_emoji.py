@@ -12,8 +12,7 @@ import os
 from aardvark_jd import codes, db, emoji_picker, folders, paths
 
 SYSTEM_DOMAIN = "system"
-PROJECTS_DOMAIN = "projects"
-SET_EMOJI_DOMAINS = codes.DOMAINS + (PROJECTS_DOMAIN, SYSTEM_DOMAIN)
+SET_EMOJI_DOMAINS = codes.DOMAINS + (SYSTEM_DOMAIN,)
 
 
 def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
@@ -109,7 +108,7 @@ class set_emoji(object):
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
     - ``domain`` -- `areas`, `resources`, `projects` or `system`
-    - ``ref`` -- an area ref (`"10"`), category ref (`"11"`), project title, or system folder key
+    - ``ref`` -- an area ref (`"10"`), category ref (`"11"`), or system folder key
     - ``newEmoji`` -- the emoji to use
 
     **Usage:**
@@ -142,8 +141,6 @@ class set_emoji(object):
 
         if self.domain == SYSTEM_DOMAIN:
             label, folderPath = self._set_system_folder_emoji()
-        elif self.domain == PROJECTS_DOMAIN:
-            label, folderPath = self._set_project_emoji()
         elif codes.parse_area_ref_is_area(self.ref):
             label, folderPath = self._set_area_emoji()
         else:
@@ -221,28 +218,6 @@ class set_emoji(object):
         )
         label = codes.format_category_code(self.domain, category["ac_number"])
         return label, folderPath
-
-    def _set_project_emoji(self):
-        """
-        *retarget a project folder*
-
-        **Return:**
-
-        - ``label`` -- the project's title
-        - ``folderPath`` -- the project folder's new absolute path
-        """
-        project = db.get_project_by_title(self.dbConn, self.ref)
-        if project is None:
-            raise ValueError(f"no project titled '{self.ref}' found")
-
-        newFolderName = folders.project_folder_name(project["title"], self.newEmoji)
-        folderPath = rename_folder_and_reindex(
-            self.dbConn, project["folder_path"], newFolderName,
-            lambda name, path: db.update_project_emoji(
-                self.dbConn, project["project_id"], self.newEmoji, name, path
-            ),
-        )
-        return project["title"], folderPath
 
     def _set_system_folder_emoji(self):
         """

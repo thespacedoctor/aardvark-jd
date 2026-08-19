@@ -20,8 +20,9 @@ def test_schema_creates_all_tables(dbConn):
             "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
         ).fetchall()
     }
-    for expected in ("meta", "system_folders", "areas", "categories", "ids", "projects", "craft_links", "search_index"):
+    for expected in ("meta", "system_folders", "areas", "categories", "ids", "craft_links", "search_index"):
         assert expected in tables
+    assert "projects" not in tables
 
 
 def test_fts5_enabled_by_default(dbConn):
@@ -54,11 +55,96 @@ def test_foreign_key_cascade_delete(dbConn):
     assert dbConn.execute("SELECT * FROM search_index").fetchall() == []
 
 
-def test_list_projects_orders_by_title(dbConn):
-    db.insert_project(dbConn, "Zebra", "", "📁", "Zebra", "/tmp/z", "blank")
-    db.insert_project(dbConn, "Apple", "", "📁", "Apple", "/tmp/a", "blank")
-    titles = [row["title"] for row in db.list_projects(dbConn)]
-    assert titles == ["Apple", "Zebra"]
+def test_migrate_schema_upgrades_a_pre_projects_domain_database(tmp_path):
+    """*an old database (CHECK-constrained to ('areas','resources'), with the legacy flat `projects` table) is upgraded in place, preserving existing rows*"""
+    dbPath = str(tmp_path / "legacy.db")
+    conn = db.get_connection(dbPath)
+    conn.executescript("""
+        CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE areas (
+            area_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+            decade_start INTEGER NOT NULL, decade_end INTEGER NOT NULL,
+            title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            emoji TEXT NOT NULL DEFAULT '📁', folder_name TEXT NOT NULL, folder_path TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            UNIQUE (domain, decade_start)
+        );
+        CREATE TABLE categories (
+            category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            area_id INTEGER NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
+            domain TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+            ac_number INTEGER NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            emoji TEXT NOT NULL DEFAULT '📁', folder_name TEXT NOT NULL, folder_path TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            UNIQUE (domain, ac_number)
+        );
+        CREATE TABLE ids (
+            id_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_id INTEGER NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
+            domain TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+            ac_number INTEGER NOT NULL, item_number INTEGER NOT NULL,
+            title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            folder_name TEXT NOT NULL, folder_path TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            UNIQUE (domain, ac_number, item_number)
+        );
+        CREATE TABLE projects (
+            project_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            emoji TEXT NOT NULL DEFAULT '📁', folder_name TEXT NOT NULL UNIQUE, folder_path TEXT NOT NULL,
+            template_used TEXT, status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
+        );
+    """)
+    areaId = conn.execute(
+        "INSERT INTO areas(domain, decade_start, decade_end, title, description, emoji, folder_name, folder_path) "
+        "VALUES ('areas', 10, 19, 'Health', '', '🏥', '10-19 Health', '/tmp/h')"
+    ).lastrowid
+    catId = conn.execute(
+        "INSERT INTO categories(area_id, domain, ac_number, title, description, emoji, folder_name, folder_path) "
+        "VALUES (?, 'areas', 11, 'Doctors', '', '🩺', '11 Doctors', '/tmp/h/11')", (areaId,)
+    ).lastrowid
+    conn.execute(
+        "INSERT INTO ids(category_id, domain, ac_number, item_number, title, description, folder_name, folder_path) "
+        "VALUES (?, 'areas', 11, 1, 'Cardiologist', '', '11.01 Cardiologist', '/tmp/h/11/1')", (catId,)
+    )
+    conn.execute(
+        "INSERT INTO projects(title, description, emoji, folder_name, folder_path, template_used) "
+        "VALUES ('Old Project', '', '📁', 'Old Project', '/tmp/old', 'blank')"
+    )
+    conn.commit()
+    conn.close()
+
+    upgradedConn = db.get_connection(dbPath)
+    db.initialise_schema(upgradedConn)
+
+    tables = {
+        row["name"] for row in upgradedConn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+    assert "projects" not in tables
+
+    checkSql = upgradedConn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'areas'"
+    ).fetchone()["sql"]
+    assert "'projects'" in checkSql
+
+    area = upgradedConn.execute("SELECT * FROM areas WHERE area_id = ?", (areaId,)).fetchone()
+    assert area["title"] == "Health"
+    category = upgradedConn.execute("SELECT * FROM categories WHERE category_id = ?", (catId,)).fetchone()
+    assert category["title"] == "Doctors"
+    idRow = upgradedConn.execute("SELECT * FROM ids WHERE category_id = ?", (catId,)).fetchone()
+    assert idRow["title"] == "Cardiologist"
+
+    # A NEW `PROJECTS` DOMAIN AREA CAN NOW BE INSERTED AGAINST THE WIDENED CHECK
+    db.insert_area(upgradedConn, "projects", 10, 19, "Launches", "", "🚀", "P10_19_launches", "/tmp/p")
+    upgradedConn.close()
 
 
 def test_craft_link_round_trip(dbConn):

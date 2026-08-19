@@ -268,12 +268,25 @@ def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst + summary["indexes_refreshed"]
 
 
-def test_craft_sync_mirrors_projects_as_flat_documents(dbConn, craftSettings, fakeClient):
+def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn, craftSettings, fakeClient):
     from aardvark_jd.new_project import new_project
 
-    new_project(log=log, dbConn=dbConn, templateName="blank", projectTitle="Website Relaunch").get()
+    add_area(log=log, dbConn=dbConn, domain="projects", title="Launches", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="projects", areaRef="10", title="Website", description="d2").get()
+    new_project(log=log, dbConn=dbConn, categoryRef="P11", templateName="blank", projectTitle="Relaunch").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 
+    byName = {name: (folderId, parent) for folderId, name, parent in fakeClient.folders}
+    projectsRootId, _ = byName["02 PROJECTS🚀"]
+    areaFolderId, areaParent = next(
+        (fid, parent) for name, (fid, parent) in byName.items() if name.startswith("P10-19 launches")
+    )
+    assert areaParent == projectsRootId
+    categoryFolderId, categoryParent = next(
+        (fid, parent) for name, (fid, parent) in byName.items() if name.startswith("P11 website")
+    )
+    assert categoryParent == areaFolderId
+
     documentTitles = {title for _id, title, _folder in fakeClient.documents}
-    assert "Website Relaunch📁" in documentTitles
+    assert any(title.startswith("P11.10 relaunch") for title in documentTitles)

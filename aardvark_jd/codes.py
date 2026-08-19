@@ -9,16 +9,16 @@ Author
 
 import re
 
-DOMAINS = ("areas", "resources")
-DOMAIN_LETTER = {"areas": "A", "resources": "R"}
+DOMAINS = ("areas", "resources", "projects")
+DOMAIN_LETTER = {"areas": "A", "resources": "R", "projects": "P"}
 
-_AREA_REF_RE = re.compile(r"^(?:[AR]\.?)?(\d{2})(?:-(\d{2}))?$")
-_CATEGORY_REF_RE = re.compile(r"^(?:[AR]\.?)?(\d{2})$")
+_AREA_REF_RE = re.compile(r"^(?:[APR]\.?)?(\d{2})(?:-(\d{2}))?$")
+_CATEGORY_REF_RE = re.compile(r"^(?:[APR]\.?)?(\d{2})$")
 
 
 def validate_domain(domain):
     """
-    *check a domain is either `areas` or `resources`, raising a clear error otherwise*
+    *check a domain is one of `areas`, `resources` or `projects`, raising a clear error otherwise*
 
     **Key Arguments:**
 
@@ -37,11 +37,11 @@ def validate_domain(domain):
 
 def domain_letter(domain):
     """
-    *return the single-letter code for a domain (`areas` -> `A`, `resources` -> `R`)*
+    *return the single-letter code for a domain (`areas` -> `A`, `resources` -> `R`, `projects` -> `P`)*
 
     **Key Arguments:**
 
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
 
     **Return:**
 
@@ -150,7 +150,7 @@ def format_area_code(domain, decadeStart, decadeEnd):
 
     **Key Arguments:**
 
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``decadeStart`` -- the area's decade-start number
     - ``decadeEnd`` -- the area's decade-end number
 
@@ -167,7 +167,7 @@ def format_category_code(domain, acNumber):
 
     **Key Arguments:**
 
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``acNumber`` -- the category's 2-digit AC number
 
     **Return:**
@@ -183,7 +183,7 @@ def format_id_code(domain, acNumber, itemNumber):
 
     **Key Arguments:**
 
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``acNumber`` -- the parent category's 2-digit AC number
     - ``itemNumber`` -- the ID's 2-digit item number
 
