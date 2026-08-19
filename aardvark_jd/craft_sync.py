@@ -7,18 +7,17 @@ The top-level PARA folders become top-level Craft folders (Craft spaces
 cannot be created via API), areas and categories nest as folders below
 them, and IDs become Craft documents named with their `X.AC.ID` code.
 
-Every domain root and every area also gets its own `<X>_system` folder
-mirrored alongside its areas/categories, with the ten reserved subfolders
-(`.00_index`-`.09_archive`) mirrored inside it as Craft folders or
-documents per `paths.SYSTEM_SUBFOLDERS`'s declared kind; a category has no
-system folder of its own, so its ten reserved subfolders sit directly
-inside the category folder instead. The reserved `.00_index` document at
-each of these levels lists the level directly below it, one level deep,
-with each child's code+title linking to its Craft folder or document -
-this replaces the free-standing "00 Index" document that used to sit at
-area/category level. The space-root index and the flat projects listing
-are unaffected - there is no system folder above the PARA roots, and
-`projects` isn't Johnny-Decimal coded.
+Every domain root (`projects`, `areas`, `resources`) and every area also
+gets its own `<X>_system` folder mirrored alongside its areas/categories,
+with the ten reserved subfolders (`.00_index`-`.09_archive`) mirrored
+inside it as Craft folders or documents per `paths.SYSTEM_SUBFOLDERS`'s
+declared kind; a category has no system folder of its own, so its ten
+reserved subfolders sit directly inside the category folder instead. The
+reserved `.00_index` document at each of these levels lists the level
+directly below it, one level deep, with each child's code+title linking
+to its Craft folder or document - this replaces the free-standing "00
+Index" document that used to sit at area/category level. The space-root
+index is unaffected - there is no system folder above the PARA roots.
 
 Author
 : David Young
@@ -28,7 +27,7 @@ from aardvark_jd import db, folders, paths
 from aardvark_jd.craft_client import CraftClient
 
 _ROOT_FOLDER_KEYS = ("root.inbox", "root.projects", "root.areas", "root.resources", "root.archive")
-_DOMAIN_ROOT_KEY = {"areas": "root.areas", "resources": "root.resources"}
+_DOMAIN_ROOT_KEY = {"projects": "root.projects", "areas": "root.areas", "resources": "root.resources"}
 _INDEX_DOC_TITLE = "00 Index"
 
 
@@ -90,7 +89,6 @@ class craft_sync(object):
         for domain, rootKey in _DOMAIN_ROOT_KEY.items():
             self._sync_domain(domain, rootFolderIds[rootKey])
 
-        self._sync_projects(rootFolderIds["root.projects"])
         self._refresh_space_index(rootFolderIds)
 
         self.log.debug("completed the ``get`` method")
@@ -142,7 +140,7 @@ class craft_sync(object):
 
         **Key Arguments:**
 
-        - ``domain`` -- `areas` or `resources`
+        - ``domain`` -- `projects`, `areas` or `resources`
         - ``domainRootFolderId`` -- the domain's root Craft folder id
         """
         areaChildren = []
@@ -180,24 +178,6 @@ class craft_sync(object):
             )
 
         self._sync_system_folder(f"{domain}.system", f"{domain}.system", domainRootFolderId, areaChildren)
-
-    def _sync_projects(self, projectsRootFolderId):
-        """
-        *sync every project into Craft as a flat document under the Projects root folder*
-
-        **Key Arguments:**
-
-        - ``projectsRootFolderId`` -- the Projects root Craft folder id
-        """
-        projectChildren = []
-        for project in db.list_projects(self.dbConn):
-            projectName = folders.display_name(project["folder_name"])
-            _documentId, url = self._ensure_document(
-                "project", str(project["project_id"]), projectName, projectsRootFolderId,
-            )
-            projectChildren.append((None, projectName, project["description"], url))
-
-        self._refresh_index("system_folder", "root.projects", projectsRootFolderId, projectChildren)
 
     def _refresh_space_index(self, rootFolderIds):
         """
@@ -282,8 +262,8 @@ class craft_sync(object):
         *ensure a generic "00 Index" document exists, then (re)write its content*
 
         Used only where there is no reserved `.00_index` scaffolding
-        document to reuse instead - the space-root index and the projects
-        domain (see `_sync_reserved_subfolders` for everywhere else).
+        document to reuse instead - the space-root index (see
+        `_sync_reserved_subfolders` for everywhere else).
 
         **Key Arguments:**
 

@@ -9,7 +9,6 @@ from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
 from aardvark_jd.initialiser import initialiser
-from aardvark_jd.new_project import new_project
 from aardvark_jd.repair_emoji import repair_emoji
 from aardvark_jd.set_emoji import rename_folder_and_reindex, set_emoji
 
@@ -56,7 +55,7 @@ def _all_indexed_paths(dbConn):
     for row in db.list_system_folders(dbConn):
         indexed[f"system:{row['folder_key']}"] = row["folder_path"]
     for table, key in (("areas", "area_id"), ("categories", "category_id"),
-                       ("ids", "id_id"), ("projects", "project_id")):
+                       ("ids", "id_id")):
         for row in dbConn.execute(f"SELECT {key}, folder_path FROM {table}").fetchall():
             indexed[f"{table}:{row[key]}"] = row["folder_path"]
     return indexed
@@ -143,22 +142,28 @@ def test_search_still_resolves_after_a_rename(populatedSystem):
         assert os.path.isdir(row["path"]), "the search index kept a stale path"
 
 
-def test_set_project_emoji(tmp_path, settingsFile):
+def test_set_projects_domain_area_and_category_emoji(tmp_path, settingsFile):
     rootPath = initialiser(
         log=log, systemName="My Life", parentPath=str(tmp_path), pathToSettingsFile=settingsFile
     ).get()
     dbConn = db.get_connection(paths.find_db_path(rootPath))
-    new_project(log=log, dbConn=dbConn, templateName="blank", projectTitle="Website Rebuild",
-                chosenEmoji="🚧").get()
+    add_area(log=log, dbConn=dbConn, domain="projects", title="Launches", description="", chosenEmoji="🚀").get()
+    add_category(log=log, dbConn=dbConn, domain="projects", areaRef="10", title="Website",
+                 description="", chosenEmoji="🌐").get()
 
     label, newFolderPath = set_emoji(
-        log=log, dbConn=dbConn, domain="projects", ref="Website Rebuild", newEmoji="🌐"
+        log=log, dbConn=dbConn, domain="projects", ref="10", newEmoji="🎯"
     ).get()
-
-    assert label == "Website Rebuild"
-    assert os.path.basename(newFolderPath) == "Website Rebuild🌐"
+    assert label == "P10-19"
+    assert os.path.basename(newFolderPath) == "P10_19_launches🎯"
     assert os.path.isdir(newFolderPath)
-    assert os.path.isfile(f"{newFolderPath}/README.md")
+
+    label, newFolderPath = set_emoji(
+        log=log, dbConn=dbConn, domain="projects", ref="11", newEmoji="🖥️"
+    ).get()
+    assert label == "P11"
+    assert os.path.basename(newFolderPath) == "P11_website🖥️"
+    assert os.path.isdir(newFolderPath)
     dbConn.close()
 
 
@@ -254,8 +259,8 @@ def test_unknown_refs_raise_clear_errors(populatedSystem):
         set_emoji(log=log, dbConn=dbConn, domain="areas", ref="90", newEmoji="🏥").get()
     with pytest.raises(ValueError, match="no category"):
         set_emoji(log=log, dbConn=dbConn, domain="areas", ref="19", newEmoji="🏥").get()
-    with pytest.raises(ValueError, match="no project"):
-        set_emoji(log=log, dbConn=dbConn, domain="projects", ref="Nope", newEmoji="🏥").get()
+    with pytest.raises(ValueError, match="no area"):
+        set_emoji(log=log, dbConn=dbConn, domain="projects", ref="90", newEmoji="🏥").get()
     with pytest.raises(KeyError):
         set_emoji(log=log, dbConn=dbConn, domain="system", ref="root.nope", newEmoji="🏥").get()
 

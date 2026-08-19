@@ -61,16 +61,15 @@ def _append_system_subfolders(skeleton):
     """
     *append the `00_09_system` folder + its 10 subfolders under each of projects/areas/resources*
 
-    Under `areas`/`resources` this domain-level system folder and its
-    subfolders are rendered onto the same `<X>` naming convention as
-    Johnny Decimal areas/categories (e.g. `A00_09_system⚙️`,
-    `A00_index🗂️`), since they occupy the reserved `00-09` decade/category
-    slots exactly as if they were one. Under `projects` - which isn't
-    Johnny-Decimal coded - the plain base name is kept as-is. Folder
-    *keys* (`f"{sectionKey}.system.{baseName}"`) always use the original,
-    un-prefixed `baseName`, regardless of domain, so they stay stable
-    across this rendering change and existing `system_folders` rows keep
-    resolving.
+    All three domains (`areas`, `resources`, `projects`) are Johnny
+    Decimal coded, so this domain-level system folder and its subfolders
+    are rendered onto the same `<X>` naming convention as Johnny Decimal
+    areas/categories (e.g. `A00_09_system⚙️`, `A00_index🗂️`), since they
+    occupy the reserved `00-09` decade/category slots exactly as if they
+    were one. Folder *keys* (`f"{sectionKey}.system.{baseName}"`) always
+    use the original, un-prefixed `baseName`, regardless of domain, so
+    they stay stable across this rendering change and existing
+    `system_folders` rows keep resolving.
 
     **Key Arguments:**
 

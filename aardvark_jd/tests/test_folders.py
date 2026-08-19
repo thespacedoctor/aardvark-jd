@@ -85,10 +85,6 @@ def test_slugify_lowercases_and_underscores_whitespace():
     assert folders.slugify("  Multi   Word Title ") == "multi_word_title"
 
 
-def test_project_folder_name_format():
-    assert folders.project_folder_name("My Project", "🗂️") == "My Project🗂️"
-
-
 def test_display_name_swaps_underscores_and_keeps_the_emoji():
     assert folders.display_name("01_INBOX📥") == "01 INBOX📥"
     assert folders.display_name("A.11_doctors🩺") == "A.11 doctors🩺"

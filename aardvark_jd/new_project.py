@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-*Create a new project folder under Projects, from a template zip or blank*
+*Create a new project (Johnny Decimal ID) in an existing project category, from a template zip or blank*
 
 Author
 : David Young
@@ -13,54 +13,60 @@ import shutil
 import sys
 import zipfile
 
-from aardvark_jd import db, emoji_picker, folders, paths
+from aardvark_jd import codes, db, folders, paths
 
 BLANK_CHOICE = "blank"
 
 
 class new_project(object):
     """
-    *create a new project folder, either from a `04_templates` zip or a blank scaffold*
+    *create a new project ID within a `projects` category, either from a `04_templates` zip or a blank scaffold*
 
-    Projects are not Johnny-Decimal coded - they live directly under
-    `02_PROJECTS/`.
+    Projects are Johnny Decimal coded like Areas/Resources - a project is a
+    plain ID (no emoji) created inside an existing project category.
 
     **Key Arguments:**
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
+    - ``categoryRef`` -- the parent project category reference, e.g. `"P11"` or `"11"`
     - ``templateName`` -- the template zip's basename (with or without `.zip`), or `"blank"`. If `None`, prompts interactively. Default `None`.
     - ``projectTitle`` -- the new project's title. If `None`, prompts interactively. Default `None`.
-    - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.
     - ``settings`` -- the aardvark settings dict. Default `None`.
 
     **Usage:**
 
     ```python
     from aardvark_jd.new_project import new_project
-    title, folderPath, templateUsed = new_project(log=log, dbConn=dbConn).get()
+    code, title, folderPath, templateUsed = new_project(log=log, dbConn=dbConn, categoryRef="P11").get()
     ```
     """
 
-    def __init__(self, log, dbConn, templateName=None, projectTitle=None, chosenEmoji=None, settings=None):
+    def __init__(self, log, dbConn, categoryRef, templateName=None, projectTitle=None, settings=None):
         self.log = log
         self.dbConn = dbConn
+        self.categoryRef = categoryRef
         self.templateName = templateName
         self.projectTitle = projectTitle
-        self.chosenEmoji = chosenEmoji
         self.settings = settings
 
     def get(self):
         """
-        *resolve the template choice and title, then create the project*
+        *resolve the category, template choice and title, then create the project ID*
 
         **Return:**
 
+        - ``code`` -- the new project's Johnny Decimal code, e.g. `P11.01`
         - ``title`` -- the new project's title
         - ``folderPath`` -- the new project folder's absolute path
         - ``templateUsed`` -- `"blank"` or the template zip's basename
         """
         self.log.debug("starting the ``get`` method")
+
+        acNumber = codes.parse_category_ref(self.categoryRef)
+        category = db.get_category(self.dbConn, "projects", acNumber)
+        if category is None:
+            raise ValueError(f"no category '{self.categoryRef}' found in domain 'projects'")
 
         templatesFolder = paths.resolve(self.dbConn, "projects.system.04_templates")
         templateZips = sorted(glob.glob(f"{templatesFolder}/*.zip"))
@@ -68,12 +74,9 @@ class new_project(object):
         templateChoice = self._resolve_template_choice(templateZips)
         title = self._resolve_title()
 
-        pickedEmoji = emoji_picker.resolve_emoji(
-            title, chosenEmoji=self.chosenEmoji, settings=self.settings, log=self.log
-        )
-        folderName = folders.project_folder_name(title, pickedEmoji)
-        parentPath = paths.resolve(self.dbConn, "root.projects")
-        folderPath = folders.make_folder(parentPath, folderName)
+        itemNumber = folders.next_id_number(self.dbConn, "projects", category)
+        folderName = folders.id_folder_name("projects", acNumber, itemNumber, title)
+        folderPath = folders.make_folder(category["folder_path"], folderName)
 
         if templateChoice == BLANK_CHOICE:
             self._build_blank_scaffold(folderPath)
@@ -83,10 +86,14 @@ class new_project(object):
                 zipHandle.extractall(folderPath)
             templateUsed = os.path.basename(templateChoice)
 
-        db.insert_project(self.dbConn, title, "", pickedEmoji, folderName, folderPath, templateUsed)
+        db.insert_id(
+            self.dbConn, category["category_id"], "projects", acNumber, itemNumber,
+            title, "", folderName, folderPath,
+        )
+        code = codes.format_id_code("projects", acNumber, itemNumber)
 
         self.log.debug("completed the ``get`` method")
-        return title, folderPath, templateUsed
+        return code, title, folderPath, templateUsed
 
     def _resolve_template_choice(self, templateZips):
         """

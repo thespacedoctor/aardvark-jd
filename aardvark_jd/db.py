@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS system_folders (
 
 CREATE TABLE IF NOT EXISTS areas (
     area_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources','projects')),
     decade_start  INTEGER NOT NULL,
     decade_end    INTEGER NOT NULL,
     title         TEXT NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS areas (
 CREATE TABLE IF NOT EXISTS categories (
     category_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     area_id       INTEGER NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
-    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources','projects')),
     ac_number     INTEGER NOT NULL,
     title         TEXT NOT NULL,
     description   TEXT NOT NULL DEFAULT '',
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS categories (
 CREATE TABLE IF NOT EXISTS ids (
     id_id         INTEGER PRIMARY KEY AUTOINCREMENT,
     category_id   INTEGER NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
-    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources')),
+    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources','projects')),
     ac_number     INTEGER NOT NULL,
     item_number   INTEGER NOT NULL,
     title         TEXT NOT NULL,
@@ -67,19 +67,6 @@ CREATE TABLE IF NOT EXISTS ids (
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
     updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
     UNIQUE (domain, ac_number, item_number)
-);
-
-CREATE TABLE IF NOT EXISTS projects (
-    project_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-    title          TEXT NOT NULL,
-    description    TEXT NOT NULL DEFAULT '',
-    emoji          TEXT NOT NULL DEFAULT '📁',
-    folder_name    TEXT NOT NULL UNIQUE,
-    folder_path    TEXT NOT NULL,
-    template_used  TEXT,
-    status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','archived')),
-    created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
-    updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
 );
 
 CREATE TABLE IF NOT EXISTS craft_links (
@@ -107,9 +94,6 @@ DROP TRIGGER IF EXISTS categories_ad;
 DROP TRIGGER IF EXISTS ids_ai;
 DROP TRIGGER IF EXISTS ids_au;
 DROP TRIGGER IF EXISTS ids_ad;
-DROP TRIGGER IF EXISTS projects_ai;
-DROP TRIGGER IF EXISTS projects_au;
-DROP TRIGGER IF EXISTS projects_ad;
 """
 
 _SEARCH_TRIGGERS = """
@@ -117,7 +101,7 @@ CREATE TRIGGER IF NOT EXISTS areas_ai AFTER INSERT ON areas BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         100000000000 + NEW.area_id, 'area',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) ||
             printf('%02d', NEW.decade_start) || '-' || printf('%02d', NEW.decade_start + 9),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -127,7 +111,7 @@ CREATE TRIGGER IF NOT EXISTS areas_au AFTER UPDATE ON areas BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         100000000000 + NEW.area_id, 'area',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) ||
             printf('%02d', NEW.decade_start) || '-' || printf('%02d', NEW.decade_start + 9),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -141,7 +125,7 @@ CREATE TRIGGER IF NOT EXISTS categories_ai AFTER INSERT ON categories BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         200000000000 + NEW.category_id, 'category',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || printf('%02d', NEW.ac_number),
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) || printf('%02d', NEW.ac_number),
         NEW.title, NEW.description, NEW.folder_path
     );
 END;
@@ -150,7 +134,7 @@ CREATE TRIGGER IF NOT EXISTS categories_au AFTER UPDATE ON categories BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         200000000000 + NEW.category_id, 'category',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || printf('%02d', NEW.ac_number),
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) || printf('%02d', NEW.ac_number),
         NEW.title, NEW.description, NEW.folder_path
     );
 END;
@@ -163,7 +147,7 @@ CREATE TRIGGER IF NOT EXISTS ids_ai AFTER INSERT ON ids BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         300000000000 + NEW.id_id, 'id',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) ||
             printf('%02d', NEW.ac_number) || '.' || printf('%02d', NEW.item_number),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -173,7 +157,7 @@ CREATE TRIGGER IF NOT EXISTS ids_au AFTER UPDATE ON ids BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         300000000000 + NEW.id_id, 'id',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' WHEN 'projects' THEN 'P' ELSE 'R' END) ||
             printf('%02d', NEW.ac_number) || '.' || printf('%02d', NEW.item_number),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -181,20 +165,6 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS ids_ad AFTER DELETE ON ids BEGIN
     DELETE FROM search_index WHERE rowid = 300000000000 + OLD.id_id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
-    INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
-    VALUES (400000000000 + NEW.project_id, 'project', 'PRJ', NEW.title, NEW.description, NEW.folder_path);
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
-    INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
-    VALUES (400000000000 + NEW.project_id, 'project', 'PRJ', NEW.title, NEW.description, NEW.folder_path);
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
-    DELETE FROM search_index WHERE rowid = 400000000000 + OLD.project_id;
 END;
 """
 
@@ -220,6 +190,57 @@ CREATE TABLE IF NOT EXISTS search_index (
 );
 CREATE INDEX IF NOT EXISTS idx_search_index_title ON search_index(title);
 """
+
+# BUMP WHEN `_BASE_SCHEMA` CHANGES IN A WAY THAT AN ALREADY-INITIALISED
+# DATABASE CAN'T PICK UP VIA THE `IF NOT EXISTS` DDL ALONE (E.G. A WIDENED
+# `CHECK` CONSTRAINT), AND ADD THE ONE-OFF REBUILD TO `_migrate_schema`.
+_SCHEMA_VERSION = "2"
+
+
+def _migrate_schema(dbConn):
+    """
+    *rebuild `areas`/`categories`/`ids` onto the current schema and drop the legacy flat `projects` table*
+
+    SQLite cannot alter a `CHECK` constraint in place, so an
+    already-initialised database - whose `areas`/`categories`/`ids` tables
+    are still `CHECK`-constrained to `('areas','resources')` from before
+    Projects became a Johnny Decimal domain - is rebuilt: the three tables
+    are renamed aside, recreated via `_BASE_SCHEMA` (which now carries the
+    widened `('areas','resources','projects')` constraint), their rows
+    copied across, then the renamed-aside tables and the legacy `projects`
+    table are dropped. Gated on `meta['schema_version']` so it only runs
+    once. A brand-new database (created directly against the current
+    `_BASE_SCHEMA`, so already current) just stamps the version.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    """
+    if get_meta(dbConn, "schema_version") == _SCHEMA_VERSION:
+        return
+
+    areasTableExists = dbConn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'areas'"
+    ).fetchone()
+    if areasTableExists is None:
+        set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
+        return
+
+    dbConn.execute("PRAGMA foreign_keys = OFF")
+    dbConn.execute("ALTER TABLE areas RENAME TO areas_old")
+    dbConn.execute("ALTER TABLE categories RENAME TO categories_old")
+    dbConn.execute("ALTER TABLE ids RENAME TO ids_old")
+    dbConn.executescript(_BASE_SCHEMA)
+    dbConn.execute("INSERT INTO areas SELECT * FROM areas_old")
+    dbConn.execute("INSERT INTO categories SELECT * FROM categories_old")
+    dbConn.execute("INSERT INTO ids SELECT * FROM ids_old")
+    dbConn.execute("DROP TABLE areas_old")
+    dbConn.execute("DROP TABLE categories_old")
+    dbConn.execute("DROP TABLE ids_old")
+    dbConn.execute("DROP TABLE IF EXISTS projects")
+    dbConn.execute("PRAGMA foreign_keys = ON")
+    dbConn.commit()
+    set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
 
 
 def get_connection(pathToDb):
@@ -249,12 +270,18 @@ def initialise_schema(dbConn):
     records the outcome in `meta['fts5_enabled']`. The search triggers are
     dropped and recreated on every call, since `CREATE TRIGGER IF NOT
     EXISTS` would otherwise leave an existing database's older trigger
-    bodies in place forever.
+    bodies in place forever. Runs `_migrate_schema` first so an
+    already-initialised database is upgraded onto the current schema
+    before `_BASE_SCHEMA`'s `IF NOT EXISTS` DDL runs.
 
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
     """
+    dbConn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    dbConn.commit()
+    _migrate_schema(dbConn)
+
     dbConn.executescript(_BASE_SCHEMA)
 
     fts5Enabled = get_meta(dbConn, "fts5_enabled")
@@ -553,7 +580,7 @@ def list_ids(dbConn, domain, categoryId):
 
 # EVERY TABLE THAT PERSISTS AN ABSOLUTE `folder_path`, AND SO HAS TO BE
 # REWRITTEN WHEN AN ANCESTOR FOLDER IS RENAMED.
-_PATH_BEARING_TABLES = ("system_folders", "areas", "categories", "ids", "projects")
+_PATH_BEARING_TABLES = ("system_folders", "areas", "categories", "ids")
 
 
 def rewrite_folder_path_prefix(dbConn, oldPrefix, newPrefix):
@@ -656,25 +683,6 @@ def update_id_name(dbConn, idId, folderName, folderPath):
     )
 
 
-def update_project_emoji(dbConn, projectId, emoji, folderName, folderPath):
-    """
-    *update a project's emoji, folder name and folder path (without committing)*
-
-    **Key Arguments:**
-
-    - ``dbConn`` -- an open SQLite connection
-    - ``projectId`` -- the project's primary key
-    - ``emoji`` -- the new emoji
-    - ``folderName`` -- the project's new on-disk folder name
-    - ``folderPath`` -- the project's new absolute folder path
-    """
-    dbConn.execute(
-        "UPDATE projects SET emoji = ?, folder_name = ?, folder_path = ?, "
-        "updated_at = strftime('%Y-%m-%d %H:%M:%S','now') WHERE project_id = ?",
-        (emoji, folderName, folderPath, projectId),
-    )
-
-
 def update_system_folder(dbConn, folderKey, folderName, folderPath):
     """
     *update a static system folder's name and path (without committing)*
@@ -707,66 +715,6 @@ def list_system_folders(dbConn):
     return dbConn.execute("SELECT * FROM system_folders ORDER BY folder_key").fetchall()
 
 
-def get_project_by_title(dbConn, title):
-    """
-    *look up a project by its title, case-insensitively*
-
-    **Key Arguments:**
-
-    - ``dbConn`` -- an open SQLite connection
-    - ``title`` -- the project's title
-
-    **Return:**
-
-    - ``row`` -- the `projects` row, or `None` if not found
-    """
-    return dbConn.execute(
-        "SELECT * FROM projects WHERE lower(title) = lower(?)", (title,)
-    ).fetchone()
-
-
-def insert_project(dbConn, title, description, emoji, folderName, folderPath, templateUsed):
-    """
-    *insert a new project row*
-
-    **Key Arguments:**
-
-    - ``dbConn`` -- an open SQLite connection
-    - ``title`` -- the project's title
-    - ``description`` -- the project's description
-    - ``emoji`` -- the emoji appended to the project's folder name
-    - ``folderName`` -- the project's exact on-disk folder name
-    - ``folderPath`` -- the project's absolute folder path
-    - ``templateUsed`` -- the template zip's basename, or `"blank"`
-
-    **Return:**
-
-    - ``projectId`` -- the new row's primary key
-    """
-    cursor = dbConn.execute(
-        "INSERT INTO projects(title, description, emoji, folder_name, folder_path, template_used) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (title, description, emoji, folderName, folderPath, templateUsed),
-    )
-    dbConn.commit()
-    return cursor.lastrowid
-
-
-def list_projects(dbConn):
-    """
-    *list every project, ordered by title*
-
-    **Key Arguments:**
-
-    - ``dbConn`` -- an open SQLite connection
-
-    **Return:**
-
-    - ``rows`` -- the `projects` rows
-    """
-    return dbConn.execute("SELECT * FROM projects ORDER BY title").fetchall()
-
-
 def upsert_craft_link(
     dbConn, entityType, entityKey, craftFolderId=None, craftDocumentId=None, craftBlockId=None, craftUrl=None,
 ):
@@ -781,7 +729,7 @@ def upsert_craft_link(
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
-    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'`, `'id'` or `'project'`
+    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'` or `'id'`
     - ``entityKey`` -- the entity's key: a `system_folders.folder_key`, or an
       `area_id`/`category_id`/`id_id`/`project_id` cast to text
     - ``craftFolderId`` -- the linked Craft folder's id, if any. Default `None`.
@@ -810,7 +758,7 @@ def get_craft_link(dbConn, entityType, entityKey):
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
-    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'`, `'id'` or `'project'`
+    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'` or `'id'`
     - ``entityKey`` -- the entity's key, as passed to `upsert_craft_link`
 
     **Return:**

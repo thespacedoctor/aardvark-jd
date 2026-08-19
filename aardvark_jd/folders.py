@@ -225,22 +225,6 @@ def id_folder_name(domain, acNumber, itemNumber, title, emoji=""):
     return f"{letter}{acNumber:02d}.{itemNumber:02d}_{slugify(title)}{emoji}"
 
 
-def project_folder_name(title, emoji):
-    """
-    *build a project folder's on-disk name (not Johnny-Decimal coded)*
-
-    **Key Arguments:**
-
-    - ``title`` -- the project's title
-    - ``emoji`` -- the emoji to append
-
-    **Return:**
-
-    - ``folderName`` -- the project folder's on-disk name
-    """
-    return f"{title}{emoji}"
-
-
 def system_folder_name(baseName, emoji):
     """
     *build a static system-skeleton folder's on-disk name*

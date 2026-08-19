@@ -20,7 +20,7 @@ class add_id(object):
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
-    - ``domain`` -- `areas` or `resources`
+    - ``domain`` -- `areas`, `resources` or `projects`
     - ``categoryRef`` -- the parent category reference, e.g. `"11"`
     - ``title`` -- the ID's title
     - ``description`` -- the ID's description
