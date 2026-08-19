@@ -9,6 +9,15 @@ emoji:
     # search whenever the API is unreachable. set to false to stay offline.
     use_llm: true
 
+craft:
+    # mirror the aardvark folder tree into a craft.do space. set up with
+    # `aardvark connect_craft <apiUrl> <apiToken>`, both copied from the
+    # Connections tab of the Craft space you want to mirror into - the API
+    # url is unique per connection, not a fixed global endpoint.
+    enabled: false
+    api_url: null
+    api_token: null
+
 logging settings:
     formatters:
         file_style:

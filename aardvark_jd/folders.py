@@ -8,11 +8,60 @@ Author
 """
 
 import os
+import re
 
-from aardvark_jd import db
+from aardvark_jd import codes, db
 
 MAX_DECADE_START = 90
 MAX_ITEM_NUMBER = 99
+MIN_ITEM_NUMBER = 10
+
+_WHITESPACE_RE = re.compile(r"\s+")
+# THE LEADING `<LETTER><DECADE_START>_<DECADE_END>_` OF AN AREA FOLDER NAME, WHOSE
+# FIRST UNDERSCORE IS A RANGE SEPARATOR RATHER THAN A WORD GAP. THE PERIOD AFTER
+# THE LETTER IS OPTIONAL SO OLDER `A.10_19_` NAMES STILL RENDER CORRECTLY TOO.
+_DECADE_RANGE_RE = re.compile(r"^([A-Z]\.?)?(\d{2})_(\d{2})_")
+
+
+def slugify(title):
+    """
+    *lowercase a title and collapse whitespace to underscores, for on-disk names*
+
+    **Key Arguments:**
+
+    - ``title`` -- the title to slugify
+
+    **Return:**
+
+    - ``slug`` -- the lowercased, underscore-joined title
+    """
+    return _WHITESPACE_RE.sub("_", title.strip().lower())
+
+
+def display_name(folderName):
+    """
+    *render an on-disk folder name for display, swapping underscores for spaces*
+
+    Used to mirror the filesystem's folder names into craft.do. The emoji
+    suffix is left exactly as-is, so the name carries its own icon - Craft's
+    API has no folder icon/emoji field of its own. An area's leading
+    `<letter><start>_<end>_` keeps its decade range readable as a hyphen
+    (`A10_19_health` -> `A10-19 health`) rather than degrading to an
+    ambiguous `A10 19 health`.
+
+    **Key Arguments:**
+
+    - ``folderName`` -- the exact on-disk folder name, e.g. `"A10_19_health🏥"`
+
+    **Return:**
+
+    - ``displayName`` -- the name with underscores rendered as spaces, e.g. `"A10-19 health🏥"`
+
+    **Usage:**
+
+        displayName = folders.display_name("A10_19_health🏥")
+    """
+    return _DECADE_RANGE_RE.sub(r"\1\2-\3 ", folderName).replace("_", " ")
 
 
 class DomainExhaustedError(Exception):
@@ -86,6 +135,10 @@ def next_id_number(dbConn, domain, category):
     """
     *work out the next available item number for a new ID within a category*
 
+    Item numbers `00`-`09` are reserved for the category's ten system IDs
+    (index, inbox, llm, ...), created alongside the category itself, so
+    user-created IDs start at `10`.
+
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
@@ -100,7 +153,7 @@ def next_id_number(dbConn, domain, category):
         row["item_number"]
         for row in db.list_ids(dbConn, domain, category["category_id"])
     ]
-    candidate = 1 if not existing else max(existing) + 1
+    candidate = MIN_ITEM_NUMBER if not existing else max(existing) + 1
     if candidate > MAX_ITEM_NUMBER:
         raise IdExhaustedError(
             f"no more ID numbers available in category {category['ac_number']:02d} "
@@ -109,12 +162,13 @@ def next_id_number(dbConn, domain, category):
     return candidate
 
 
-def area_folder_name(decadeStart, decadeEnd, title, emoji):
+def area_folder_name(domain, decadeStart, decadeEnd, title, emoji):
     """
-    *build an area folder's on-disk name*
+    *build an area folder's on-disk name, e.g. `A10_19_health🏥`*
 
     **Key Arguments:**
 
+    - ``domain`` -- `areas` or `resources`
     - ``decadeStart`` -- the area's decade-start number
     - ``decadeEnd`` -- the area's decade-end number
     - ``title`` -- the area's title
@@ -124,15 +178,17 @@ def area_folder_name(decadeStart, decadeEnd, title, emoji):
 
     - ``folderName`` -- the area folder's on-disk name
     """
-    return f"{decadeStart:02d}-{decadeEnd:02d} {title}{emoji}"
+    letter = codes.domain_letter(domain)
+    return f"{letter}{decadeStart:02d}_{decadeEnd:02d}_{slugify(title)}{emoji}"
 
 
-def category_folder_name(acNumber, title, emoji):
+def category_folder_name(domain, acNumber, title, emoji):
     """
-    *build a category folder's on-disk name*
+    *build a category folder's on-disk name, e.g. `A11_doctors🩺`*
 
     **Key Arguments:**
 
+    - ``domain`` -- `areas` or `resources`
     - ``acNumber`` -- the category's 2-digit AC number
     - ``title`` -- the category's title
     - ``emoji`` -- the emoji to append
@@ -141,24 +197,32 @@ def category_folder_name(acNumber, title, emoji):
 
     - ``folderName`` -- the category folder's on-disk name
     """
-    return f"{acNumber:02d} {title}{emoji}"
+    letter = codes.domain_letter(domain)
+    return f"{letter}{acNumber:02d}_{slugify(title)}{emoji}"
 
 
-def id_folder_name(acNumber, itemNumber, title):
+def id_folder_name(domain, acNumber, itemNumber, title, emoji=""):
     """
-    *build an ID folder's on-disk name (never emoji-suffixed)*
+    *build an ID folder's on-disk name, e.g. `A11.10_cardiologist`*
+
+    Ordinary IDs are never emoji-suffixed. The ten reserved system IDs
+    (`.00`-`.09`) created alongside every category are the one exception,
+    and pass their emoji explicitly.
 
     **Key Arguments:**
 
+    - ``domain`` -- `areas` or `resources`
     - ``acNumber`` -- the parent category's 2-digit AC number
     - ``itemNumber`` -- the ID's 2-digit item number
     - ``title`` -- the ID's title
+    - ``emoji`` -- the emoji to append, for reserved system IDs only. Default `""`.
 
     **Return:**
 
     - ``folderName`` -- the ID folder's on-disk name
     """
-    return f"{acNumber:02d}.{itemNumber:02d} {title}"
+    letter = codes.domain_letter(domain)
+    return f"{letter}{acNumber:02d}.{itemNumber:02d}_{slugify(title)}{emoji}"
 
 
 def project_folder_name(title, emoji):
@@ -183,7 +247,7 @@ def system_folder_name(baseName, emoji):
 
     **Key Arguments:**
 
-    - ``baseName`` -- the folder's base name, e.g. `"02_P.ROJECTS"`
+    - ``baseName`` -- the folder's base name, e.g. `"02_PROJECTS"`
     - ``emoji`` -- the emoji to append
 
     **Return:**

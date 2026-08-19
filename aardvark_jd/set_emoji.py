@@ -53,7 +53,7 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     ```python
     from aardvark_jd.set_emoji import rename_folder_and_reindex
     newPath = rename_folder_and_reindex(
-        dbConn, oldPath, "10-19 Health🏥",
+        dbConn, oldPath, "A.10_19_health🏥",
         lambda name, path: db.update_area_emoji(dbConn, areaId, "🏥", name, path),
     )
     ```
@@ -185,7 +185,7 @@ class set_emoji(object):
             raise ValueError(f"no area '{self.ref}' found in domain '{self.domain}'")
 
         newFolderName = folders.area_folder_name(
-            area["decade_start"], area["decade_end"], area["title"], self.newEmoji
+            self.domain, area["decade_start"], area["decade_end"], area["title"], self.newEmoji
         )
         folderPath = rename_folder_and_reindex(
             self.dbConn, area["folder_path"], newFolderName,
@@ -211,7 +211,7 @@ class set_emoji(object):
             raise ValueError(f"no category '{self.ref}' found in domain '{self.domain}'")
 
         newFolderName = folders.category_folder_name(
-            category["ac_number"], category["title"], self.newEmoji
+            self.domain, category["ac_number"], category["title"], self.newEmoji
         )
         folderPath = rename_folder_and_reindex(
             self.dbConn, category["folder_path"], newFolderName,

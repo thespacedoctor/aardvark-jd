@@ -60,7 +60,7 @@ class add_id(object):
             raise ValueError(f"no category '{self.categoryRef}' found in domain '{self.domain}'")
 
         itemNumber = folders.next_id_number(self.dbConn, self.domain, category)
-        folderName = folders.id_folder_name(acNumber, itemNumber, self.title)
+        folderName = folders.id_folder_name(self.domain, acNumber, itemNumber, self.title)
         folderPath = folders.make_folder(category["folder_path"], folderName)
 
         db.insert_id(

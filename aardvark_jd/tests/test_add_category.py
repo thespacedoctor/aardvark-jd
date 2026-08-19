@@ -31,8 +31,8 @@ def test_add_category_happy_path(dbConnWithArea):
     code, folderPath = add_category(
         log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Doctors", description="desc"
     ).get()
-    assert code == "A.11"
-    assert "11 Doctors" in folderPath
+    assert code == "A11"
+    assert "A11_doctors" in folderPath
     assert os.path.isdir(folderPath)
 
 
@@ -40,7 +40,7 @@ def test_add_category_accepts_range_ref(dbConnWithArea):
     code, _ = add_category(
         log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10-19", title="Doctors", description=""
     ).get()
-    assert code == "A.11"
+    assert code == "A11"
 
 
 def test_add_category_unknown_area_raises_clear_error(dbConnWithArea):
@@ -57,3 +57,20 @@ def test_add_category_exhaustion_surfaces_clear_error(dbConnWithArea):
         add_category(
             log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Overflow", description=""
         ).get()
+
+
+def test_add_category_creates_its_ten_reserved_ids(dbConnWithArea):
+    _code, folderPath = add_category(
+        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Doctors", description="desc"
+    ).get()
+
+    expectedNames = [
+        "A11.00_index🗂️", "A11.01_inbox📥", "A11.02_llm🤖", "A11.03_checklists☑️",
+        "A11.04_templates📐", "A11.05_links🔗", "A11.06_bin📜", "A11.07_settings🎛️",
+        "A11.08_someday💭", "A11.09_archive🗄️",
+    ]
+    for name in expectedNames:
+        assert os.path.isdir(f"{folderPath}/{name}")
+
+    row = db.get_system_folder(dbConnWithArea, "areas.11.04_templates")
+    assert row["folder_name"] == "A11.04_templates📐"

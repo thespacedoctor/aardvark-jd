@@ -39,13 +39,13 @@ def dbConnWithIndex(tmp_path):
 def test_prefix_match_hits_id(dbConnWithIndex):
     results = search(log=log, dbConn=dbConnWithIndex, terms=["cardio"]).get()
     codes = [row["code"] for row in results]
-    assert "A.11.01" in codes
+    assert "A11.10" in codes
 
 
 def test_word_match_hits_category_and_id(dbConnWithIndex):
     results = search(log=log, dbConn=dbConnWithIndex, terms=["doctors"]).get()
     codes = [row["code"] for row in results]
-    assert "A.11" in codes
+    assert "A11" in codes
 
 
 def test_empty_query_returns_empty_list(dbConnWithIndex):
@@ -64,11 +64,11 @@ def test_title_match_ranks_above_description_only_match(dbConnWithIndex):
     ).get()
     results = search(log=log, dbConn=dbConnWithIndex, terms=["health"]).get()
     assert results
-    assert results[0]["code"] == "A.10-19"
+    assert results[0]["code"] == "A10-19"
 
 
 def test_like_fallback_equivalence(dbConnWithIndex, monkeypatch):
     monkeypatch.setattr(db, "fts5_enabled", lambda dbConn: False)
     results = search(log=log, dbConn=dbConnWithIndex, terms=["cardio"]).get()
     codes = [row["code"] for row in results]
-    assert "A.11.01" in codes
+    assert "A11.10" in codes

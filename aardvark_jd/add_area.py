@@ -45,7 +45,7 @@ class add_area(object):
 
     def get(self):
         """
-        *create the area's folder and index row*
+        *create the area's folder and index row, plus its reserved system folder*
 
         **Return:**
 
@@ -59,7 +59,7 @@ class add_area(object):
             self.title, self.description, chosenEmoji=self.chosenEmoji,
             settings=self.settings, log=self.log,
         )
-        folderName = folders.area_folder_name(decadeStart, decadeEnd, self.title, pickedEmoji)
+        folderName = folders.area_folder_name(self.domain, decadeStart, decadeEnd, self.title, pickedEmoji)
         parentPath = paths.resolve(self.dbConn, f"root.{self.domain}")
         folderPath = folders.make_folder(parentPath, folderName)
 
@@ -69,5 +69,24 @@ class add_area(object):
         )
         code = codes.format_area_code(self.domain, decadeStart, decadeEnd)
 
+        self._create_area_system_folder(decadeStart, folderPath)
+
         self.log.debug("completed the ``get`` method")
         return code, folderPath
+
+    def _create_area_system_folder(self, decadeStart, areaFolderPath):
+        """
+        *create the area's reserved `<X>.<D0>_system` folder, occupying the reserved X0 category slot*
+
+        **Key Arguments:**
+
+        - ``decadeStart`` -- the area's decade-start number, also its reserved X0 category number
+        - ``areaFolderPath`` -- the area folder's absolute path, the parent for this folder
+        """
+        systemFolderName = folders.category_folder_name(
+            self.domain, decadeStart, "system", paths.SYSTEM_FOLDER_EMOJI
+        )
+        systemFolderPath = folders.make_folder(areaFolderPath, systemFolderName)
+        db.insert_system_folder(
+            self.dbConn, f"{self.domain}.{decadeStart}.system", systemFolderName, systemFolderPath
+        )

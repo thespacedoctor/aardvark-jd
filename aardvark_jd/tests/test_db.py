@@ -20,7 +20,7 @@ def test_schema_creates_all_tables(dbConn):
             "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
         ).fetchall()
     }
-    for expected in ("meta", "system_folders", "areas", "categories", "ids", "projects", "search_index"):
+    for expected in ("meta", "system_folders", "areas", "categories", "ids", "projects", "craft_links", "search_index"):
         assert expected in tables
 
 
@@ -52,6 +52,38 @@ def test_foreign_key_cascade_delete(dbConn):
     assert dbConn.execute("SELECT * FROM categories").fetchall() == []
     assert dbConn.execute("SELECT * FROM ids").fetchall() == []
     assert dbConn.execute("SELECT * FROM search_index").fetchall() == []
+
+
+def test_list_projects_orders_by_title(dbConn):
+    db.insert_project(dbConn, "Zebra", "", "📁", "Zebra", "/tmp/z", "blank")
+    db.insert_project(dbConn, "Apple", "", "📁", "Apple", "/tmp/a", "blank")
+    titles = [row["title"] for row in db.list_projects(dbConn)]
+    assert titles == ["Apple", "Zebra"]
+
+
+def test_craft_link_round_trip(dbConn):
+    assert db.get_craft_link(dbConn, "area", "1") is None
+
+    db.upsert_craft_link(dbConn, "area", "1", craftFolderId="folder-1", craftUrl="https://craft.example/f/1")
+    row = db.get_craft_link(dbConn, "area", "1")
+    assert row["craft_folder_id"] == "folder-1"
+    assert row["craft_document_id"] is None
+    assert row["craft_url"] == "https://craft.example/f/1"
+
+    # re-upserting the same key updates rather than duplicates
+    db.upsert_craft_link(dbConn, "area", "1", craftFolderId="folder-1", craftUrl="https://craft.example/f/1-renamed")
+    row = db.get_craft_link(dbConn, "area", "1")
+    assert row["craft_url"] == "https://craft.example/f/1-renamed"
+    count = dbConn.execute("SELECT COUNT(*) AS c FROM craft_links").fetchone()["c"]
+    assert count == 1
+
+    # a later upsert that only sets craft_block_id must not clobber the
+    # folder id/url recorded above
+    db.upsert_craft_link(dbConn, "area", "1", craftBlockId="block-1")
+    row = db.get_craft_link(dbConn, "area", "1")
+    assert row["craft_block_id"] == "block-1"
+    assert row["craft_folder_id"] == "folder-1"
+    assert row["craft_url"] == "https://craft.example/f/1-renamed"
 
 
 def test_system_folders_round_trip(dbConn):

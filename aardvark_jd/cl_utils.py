@@ -12,6 +12,8 @@ Usage:
     aardvark set_emoji <domain> <ref> <emoji> [-s <pathToSettingsFile>]
     aardvark repair_emoji [-s <pathToSettingsFile>]
     aardvark search <term>... [-s <pathToSettingsFile>]
+    aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
+    aardvark craft_sync [-s <pathToSettingsFile>]
 
 Commands:
     init                                   create a new PARA + Johnny Decimal root and index
@@ -20,8 +22,10 @@ Commands:
     add_category                           add a new Johnny Decimal category to an existing area
     add_id                                 add a new Johnny Decimal ID to an existing category
     set_emoji                              change the emoji on an existing folder, moving it and repointing the index
-    repair_emoji                           reset every static system folder to its declared emoji
+    repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
     search                                 search the index by keyword or phrase
+    connect_craft                          connect a craft.do space and run the initial full mirror
+    craft_sync                             re-run the craft.do mirror on demand, to backfill or repair drift
 
 Arguments:
     systemName                             the name of the new system, e.g. "My Life"
@@ -36,6 +40,8 @@ Arguments:
     title                                  a title
     description                            a description
     term                                   a search word or phrase
+    apiUrl                                 a craft.do API connection's unique base URL
+    apiToken                               a craft.do API connection token
 
 Options:
     -h, --help                             show this help message
@@ -49,10 +55,11 @@ import sys
 
 from fundamentals import tools, times
 
-from aardvark_jd import db, folders, paths
+from aardvark_jd import db, folders, paths, settings_writer
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
+from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.initialiser import initialiser
 from aardvark_jd.new_project import new_project
 from aardvark_jd.repair_emoji import repair_emoji
@@ -116,8 +123,30 @@ def main(arguments=None):
                 sys.exit(1)
 
             indexDbConn = db.get_connection(paths.find_db_path(rootPath))
+            db.initialise_schema(indexDbConn)
             try:
-                _dispatch(a, log, indexDbConn, settings)
+                if a["connect_craft"]:
+                    pathToSettingsFile = arguments.get("--settings") or su.configSettingsPath
+                    settings.setdefault("craft", {})
+                    settings["craft"]["enabled"] = True
+                    settings["craft"]["api_url"] = a["apiUrl"]
+                    settings["craft"]["api_token"] = a["apiToken"]
+                    settings_writer.write_settings(pathToSettingsFile, settings)
+                    summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+                    print(
+                        f"craft connected - folders created: {summary['folders_created']}, "
+                        f"documents created: {summary['documents_created']}, "
+                        f"indexes refreshed: {summary['indexes_refreshed']}"
+                    )
+                elif a["craft_sync"]:
+                    summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+                    print(
+                        f"craft synced - folders created: {summary['folders_created']}, "
+                        f"documents created: {summary['documents_created']}, "
+                        f"indexes refreshed: {summary['indexes_refreshed']}"
+                    )
+                else:
+                    _dispatch(a, log, indexDbConn, settings)
             finally:
                 indexDbConn.close()
 
@@ -133,6 +162,28 @@ def main(arguments=None):
     )
 
     return
+
+
+def _maybe_sync_craft(log, indexDbConn, settings):
+    """
+    *push a craft.do sync after a mutating command, when craft is connected*
+
+    A craft.do failure here is reported as a warning rather than raised,
+    since the filesystem + SQLite mutation that triggered it has already
+    succeeded and remains the source of truth.
+
+    **Key Arguments:**
+
+    - ``log`` -- logger
+    - ``indexDbConn`` -- an open SQLite connection to the active system's index
+    - ``settings`` -- the aardvark settings dict
+    """
+    if not (settings.get("craft") or {}).get("enabled"):
+        return
+    try:
+        craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+    except Exception as error:
+        print(f"warning: craft sync failed: {error}", file=sys.stderr)
 
 
 def _dispatch(a, log, indexDbConn, settings):
@@ -152,6 +203,7 @@ def _dispatch(a, log, indexDbConn, settings):
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"project '{title}' created at {folderPath} (template: {templateUsed})")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_area"]:
         code, folderPath = add_area(
@@ -159,6 +211,7 @@ def _dispatch(a, log, indexDbConn, settings):
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_category"]:
         code, folderPath = add_category(
@@ -167,19 +220,22 @@ def _dispatch(a, log, indexDbConn, settings):
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["set_emoji"]:
         label, folderPath = set_emoji(
             log=log, dbConn=indexDbConn, domain=a["domain"], ref=a["ref"], newEmoji=a["emoji"],
         ).get()
         print(f"{label}  {folderPath}")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["repair_emoji"]:
         repaired = repair_emoji(log=log, dbConn=indexDbConn).get()
         if not repaired:
-            print("every system folder already carries its declared emoji")
+            print("every folder already matches the current naming convention")
         for folderKey, folderPath in repaired:
             print(f"{folderKey}  {folderPath}")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_id"]:
         code, folderPath = add_id(
@@ -187,6 +243,7 @@ def _dispatch(a, log, indexDbConn, settings):
             title=a["title"], description=a["description"],
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["search"]:
         results = search(log=log, dbConn=indexDbConn, terms=a["term"]).get()

@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import codes, db, emoji_picker, folders
+from aardvark_jd import codes, db, emoji_picker, folders, paths
 
 
 class add_category(object):
@@ -47,7 +47,7 @@ class add_category(object):
 
     def get(self):
         """
-        *create the category's folder and index row*
+        *create the category's folder and index row, plus its ten reserved system IDs*
 
         **Return:**
 
@@ -66,7 +66,7 @@ class add_category(object):
             self.title, self.description, chosenEmoji=self.chosenEmoji,
             settings=self.settings, log=self.log,
         )
-        folderName = folders.category_folder_name(acNumber, self.title, pickedEmoji)
+        folderName = folders.category_folder_name(self.domain, acNumber, self.title, pickedEmoji)
         folderPath = folders.make_folder(area["folder_path"], folderName)
 
         db.insert_category(
@@ -75,5 +75,26 @@ class add_category(object):
         )
         code = codes.format_category_code(self.domain, acNumber)
 
+        self._create_reserved_ids(acNumber, folderPath)
+
         self.log.debug("completed the ``get`` method")
         return code, folderPath
+
+    def _create_reserved_ids(self, acNumber, categoryFolderPath):
+        """
+        *create the category's ten reserved system IDs (`.00`-`.09`)*
+
+        Reuses the same names/emoji as the static `00_09_system` subfolders
+        (`paths.SYSTEM_SUBFOLDERS`), the one exception to ordinary IDs never
+        carrying an emoji.
+
+        **Key Arguments:**
+
+        - ``acNumber`` -- the category's 2-digit AC number
+        - ``categoryFolderPath`` -- the category folder's absolute path, the parent for these IDs
+        """
+        for itemNumber, (baseName, title, _description, folderEmoji) in enumerate(paths.SYSTEM_SUBFOLDERS):
+            folderName = folders.id_folder_name(self.domain, acNumber, itemNumber, title, emoji=folderEmoji)
+            folderPath = folders.make_folder(categoryFolderPath, folderName)
+            folderKey = f"{self.domain}.{acNumber}.{baseName}"
+            db.insert_system_folder(self.dbConn, folderKey, folderName, folderPath)

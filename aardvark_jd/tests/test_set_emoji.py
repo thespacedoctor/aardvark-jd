@@ -75,8 +75,8 @@ def test_set_area_emoji_cascades_to_categories_and_ids(populatedSystem):
         log=log, dbConn=dbConn, domain="areas", ref="10", newEmoji="🏥"
     ).get()
 
-    assert label == "A.10-19"
-    assert os.path.basename(newFolderPath) == "10-19 Health🏥"
+    assert label == "A10-19"
+    assert os.path.basename(newFolderPath) == "A10_19_health🏥"
     assert os.path.isdir(newFolderPath)
 
     # THE CASCADE: EVERY DESCENDANT ROW MUST NOW POINT SOMEWHERE REAL
@@ -101,7 +101,7 @@ def test_set_category_emoji_cascades_to_its_ids_only(populatedSystem):
         log=log, dbConn=dbConn, domain="areas", ref="11", newEmoji="🩻"
     ).get()
 
-    assert os.path.basename(newFolderPath) == "11 Doctors🩻"
+    assert os.path.basename(newFolderPath) == "A11_doctors🩻"
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
 
@@ -120,7 +120,7 @@ def test_set_system_folder_emoji_cascades_to_the_whole_domain(populatedSystem):
         log=log, dbConn=dbConn, domain="system", ref="root.areas", newEmoji="🎯"
     ).get()
 
-    assert os.path.basename(newFolderPath) == "03_A.REAS🎯"
+    assert os.path.basename(newFolderPath) == "03_AREAS🎯"
     # RENAMING A SECTION FOLDER MOVES EVERY AREA, CATEGORY AND ID BENEATH IT
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
@@ -180,7 +180,7 @@ def test_set_emoji_is_idempotent(populatedSystem):
 def test_set_emoji_refuses_to_clobber_an_existing_folder(populatedSystem):
     _rootPath, dbConn = populatedSystem
     area = db.get_area(dbConn, "areas", 10)
-    collidingPath = os.path.dirname(area["folder_path"]) + "/10-19 Health🏥"
+    collidingPath = os.path.dirname(area["folder_path"]) + "/A10_19_health🏥"
     os.makedirs(collidingPath)
 
     with pytest.raises(ValueError, match="refusing to overwrite"):
@@ -281,8 +281,8 @@ def test_repair_emoji_resets_drifted_system_folders(populatedSystem):
     assert "root.areas" in repairedKeys
     assert "areas.system.02_llm" in repairedKeys
 
-    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "03_A.REAS🧭"
-    assert db.get_system_folder(dbConn, "areas.system.02_llm")["folder_name"] == "02_llm🤖"
+    assert db.get_system_folder(dbConn, "root.areas")["folder_name"] == "03_AREAS🧭"
+    assert db.get_system_folder(dbConn, "areas.system.02_llm")["folder_name"] == "A02_llm🤖"
 
     for descriptor, folderPath in _all_indexed_paths(dbConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
@@ -345,7 +345,7 @@ def test_repair_emoji_handles_the_folder_holding_the_open_database(populatedSyst
     assert indexRow["folder_name"] == folders.system_folder_name("00_INDEX", expectedEmoji)
     assert os.path.isdir(indexRow["folder_path"])
     assert os.path.isfile(f"{indexRow['folder_path']}/aardvark.db")
-    assert db.get_system_folder(repairConn, "root.areas")["folder_name"] == "03_A.REAS🧭"
+    assert db.get_system_folder(repairConn, "root.areas")["folder_name"] == "03_AREAS🧭"
 
     for descriptor, folderPath in _all_indexed_paths(repairConn).items():
         assert os.path.isdir(folderPath), f"{descriptor} was left pointing at a stale path"
@@ -358,6 +358,63 @@ def test_repair_emoji_handles_the_folder_holding_the_open_database(populatedSyst
     nextConn.commit()
     assert db.get_system_folder(nextConn, "test.canary") is not None
     nextConn.close()
+
+
+def test_repair_emoji_migrates_pre_existing_areas_categories_and_ids(tmp_path, settingsFile):
+    """*repair renames folders created under the old naming convention, and backfills missing scaffolding*
+
+    Simulates a system where an area/category/id were created (and their
+    folders made on disk) before both the `<X>` naming convention and the
+    reserved system scaffolding existed - i.e. inserted directly rather
+    than via `add_area`/`add_category`/`add_id`, exactly as Dave's real
+    pre-existing system at `~/Dropbox/aardvark` looks today.
+    """
+    rootPath = initialiser(
+        log=log, systemName="Legacy", parentPath=str(tmp_path), pathToSettingsFile=settingsFile
+    ).get()
+    dbConn = db.get_connection(paths.find_db_path(rootPath))
+    areasRoot = paths.resolve(dbConn, "root.areas")
+
+    oldAreaName = "10-19 Health🏥"
+    oldAreaPath = f"{areasRoot}/{oldAreaName}"
+    os.makedirs(oldAreaPath)
+    areaId = db.insert_area(dbConn, "areas", 10, 19, "Health", "desc", "🏥", oldAreaName, oldAreaPath)
+
+    oldCategoryName = "11 Doctors🩺"
+    oldCategoryPath = f"{oldAreaPath}/{oldCategoryName}"
+    os.makedirs(oldCategoryPath)
+    categoryId = db.insert_category(
+        dbConn, areaId, "areas", 11, "Doctors", "desc", "🩺", oldCategoryName, oldCategoryPath
+    )
+
+    oldIdName = "11.01 Cardiologist"
+    oldIdPath = f"{oldCategoryPath}/{oldIdName}"
+    os.makedirs(oldIdPath)
+    db.insert_id(dbConn, categoryId, "areas", 11, 1, "Cardiologist", "desc", oldIdName, oldIdPath)
+
+    repair_emoji(log=log, dbConn=dbConn).get()
+
+    area = db.get_area(dbConn, "areas", 10)
+    assert area["folder_name"] == "A10_19_health🏥"
+    assert os.path.isdir(area["folder_path"])
+    assert not os.path.isdir(oldAreaPath)
+
+    category = db.get_category(dbConn, "areas", 11)
+    assert category["folder_name"] == "A11_doctors🩺"
+    assert os.path.isdir(category["folder_path"])
+
+    idRow = dbConn.execute("SELECT * FROM ids WHERE ac_number = 11 AND item_number = 1").fetchone()
+    assert idRow["folder_name"] == "A11.01_cardiologist"
+    assert os.path.isdir(idRow["folder_path"])
+
+    # RESERVED SCAFFOLDING DIDN'T EXIST FOR THIS PRE-MIGRATION AREA/CATEGORY -
+    # REPAIR MUST HAVE BACKFILLED IT
+    assert db.get_system_folder(dbConn, "areas.10.system") is not None
+    assert os.path.isdir(f"{area['folder_path']}/A10_system⚙️")
+    assert db.get_system_folder(dbConn, "areas.11.00_index") is not None
+    assert os.path.isdir(f"{category['folder_path']}/A11.00_index🗂️")
+
+    dbConn.close()
 
 
 def test_repair_emoji_is_idempotent(populatedSystem):

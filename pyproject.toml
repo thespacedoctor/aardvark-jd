@@ -24,7 +24,8 @@ dependencies = [
     'fundamentals',
     'docopt',
     'emoji',
-    'anthropic'
+    'anthropic',
+    'requests'
 ]
 
 [project.urls]

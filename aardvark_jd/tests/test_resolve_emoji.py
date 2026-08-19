@@ -130,7 +130,7 @@ def test_add_area_honours_the_chosen_emoji(systemDbConn, noSuggester, interactiv
         description="...", chosenEmoji="🩺",
     ).get()
 
-    assert os.path.basename(folderPath) == "10-19 Health🩺"
+    assert os.path.basename(folderPath) == "A10_19_health🩺"
     assert db.get_area(systemDbConn, "areas", 10)["emoji"] == "🩺"
 
 
@@ -142,7 +142,7 @@ def test_add_category_honours_the_chosen_emoji(systemDbConn, noSuggester, intera
         description="...", chosenEmoji="👩‍⚕️",
     ).get()
 
-    assert os.path.basename(folderPath) == "11 Doctors👩‍⚕️"
+    assert os.path.basename(folderPath) == "A11_doctors👩‍⚕️"
     assert db.get_category(systemDbConn, "areas", 11)["emoji"] == "👩‍⚕️"
 
 
@@ -153,4 +153,4 @@ def test_workers_respect_the_use_llm_setting(systemDbConn, noSuggester, nonInter
         log=log, dbConn=systemDbConn, domain="areas", title="Hospital",
         description="...", settings={"emoji": {"use_llm": False}},
     ).get()
-    assert os.path.basename(folderPath) == "10-19 Hospital🏥"
+    assert os.path.basename(folderPath) == "A10_19_hospital🏥"

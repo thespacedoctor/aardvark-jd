@@ -9,7 +9,7 @@ Author
 
 import os
 
-from aardvark_jd import db
+from aardvark_jd import codes, db, folders
 
 DB_BASENAME = "aardvark.db"
 _ROOT_INDEX_PREFIX = "00_index"
@@ -23,14 +23,16 @@ _ROOT_INDEX_PREFIX = "00_index"
 SYSTEM_SKELETON = [
     ("root.index", None, "00_INDEX", "Index", "The aardvark database and system index", "🗂️"),
     ("root.inbox", None, "01_INBOX", "Inbox", "Unsorted items awaiting filing", "📥"),
-    ("root.projects", None, "02_P.ROJECTS", "Projects", "Active and future projects", "🚀"),
-    ("root.areas", None, "03_A.REAS", "Areas", "Ongoing areas of responsibility", "🧭"),
-    ("root.resources", None, "04_R.ESOURCES", "Resources", "Reference material and resources", "📚"),
+    ("root.projects", None, "02_PROJECTS", "Projects", "Active and future projects", "🚀"),
+    ("root.areas", None, "03_AREAS", "Areas", "Ongoing areas of responsibility", "🧭"),
+    ("root.resources", None, "04_RESOURCES", "Resources", "Reference material and resources", "📚"),
     ("root.archive", None, "09_ARCHIVE", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
 
-# THE 10 SYSTEM SUBFOLDERS REPEATED UNDER PROJECTS, AREAS AND RESOURCES
-_SYSTEM_SUBFOLDERS = [
+# THE 10 SYSTEM SUBFOLDERS REPEATED UNDER PROJECTS, AREAS AND RESOURCES, AND
+# REUSED VERBATIM (NAMES/EMOJI) FOR THE 10 RESERVED SYSTEM IDS `add_category`
+# CREATES ALONGSIDE EVERY NEW CATEGORY (SEE `add_category.py`).
+SYSTEM_SUBFOLDERS = [
     ("00_index", "Index", "The index for this section", "🗂️"),
     ("01_inbox", "Inbox", "Unsorted items awaiting filing", "📥"),
     ("02_llm", "LLM", "LLM prompts, context and output", "🤖"),
@@ -43,28 +45,44 @@ _SYSTEM_SUBFOLDERS = [
     ("09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
 
-_SYSTEM_FOLDER_EMOJI = "⚙️"
+SYSTEM_FOLDER_EMOJI = "⚙️"
 
 
 def _append_system_subfolders(skeleton):
     """
     *append the `00_09_system` folder + its 10 subfolders under each of projects/areas/resources*
 
+    Under `areas`/`resources` this domain-level system folder and its
+    subfolders are rendered onto the same `<X>` naming convention as
+    Johnny Decimal areas/categories (e.g. `A00_09_system⚙️`,
+    `A00_index🗂️`), since they occupy the reserved `00-09` decade/category
+    slots exactly as if they were one. Under `projects` - which isn't
+    Johnny-Decimal coded - the plain base name is kept as-is. Folder
+    *keys* (`f"{sectionKey}.system.{baseName}"`) always use the original,
+    un-prefixed `baseName`, regardless of domain, so they stay stable
+    across this rendering change and existing `system_folders` rows keep
+    resolving.
+
     **Key Arguments:**
 
     - ``skeleton`` -- the `SYSTEM_SKELETON` list to append to
     """
     for sectionKey in ("projects", "areas", "resources"):
+        domainLetter = codes.DOMAIN_LETTER.get(sectionKey)
         systemKey = f"{sectionKey}.system"
+        systemBaseName = f"{domainLetter}00_09_system" if domainLetter else "00_09_system"
         skeleton.append(
             (
-                systemKey, f"root.{sectionKey}", "00_09_system", "System",
-                "Johnny Decimal system folder (00-09)", _SYSTEM_FOLDER_EMOJI,
+                systemKey, f"root.{sectionKey}", systemBaseName, "System",
+                "Johnny Decimal system folder (00-09)", SYSTEM_FOLDER_EMOJI,
             )
         )
-        for baseName, title, description, folderEmoji in _SYSTEM_SUBFOLDERS:
+        for acNumber, (baseName, title, description, folderEmoji) in enumerate(SYSTEM_SUBFOLDERS):
+            renderedBaseName = (
+                f"{domainLetter}{acNumber:02d}_{folders.slugify(title)}" if domainLetter else baseName
+            )
             skeleton.append(
-                (f"{sectionKey}.system.{baseName}", systemKey, baseName, title, description, folderEmoji)
+                (f"{sectionKey}.system.{baseName}", systemKey, renderedBaseName, title, description, folderEmoji)
             )
 
 

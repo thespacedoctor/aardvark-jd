@@ -29,16 +29,16 @@ def dbConn(tmp_path):
 def test_add_area_happy_path(dbConn, domain):
     code, folderPath = add_area(log=log, dbConn=dbConn, domain=domain, title="Health", description="desc").get()
     letter = "A" if domain == "areas" else "R"
-    assert code == f"{letter}.10-19"
-    assert "10-19 Health" in folderPath
+    assert code == f"{letter}10-19"
+    assert f"{letter}10_19_health" in folderPath
     assert os.path.isdir(folderPath)
 
 
 def test_add_area_domains_are_independent(dbConn):
     codeAreas, _ = add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="").get()
     codeResources, _ = add_area(log=log, dbConn=dbConn, domain="resources", title="Health", description="").get()
-    assert codeAreas == "A.10-19"
-    assert codeResources == "R.10-19"
+    assert codeAreas == "A10-19"
+    assert codeResources == "R10-19"
 
 
 def test_add_area_exhaustion_surfaces_clear_error(dbConn):
@@ -51,3 +51,14 @@ def test_add_area_exhaustion_surfaces_clear_error(dbConn):
 def test_add_area_invalid_domain(dbConn):
     with pytest.raises(ValueError):
         add_area(log=log, dbConn=dbConn, domain="projects", title="X", description="").get()
+
+
+def test_add_area_creates_its_reserved_system_folder(dbConn):
+    _code, folderPath = add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="").get()
+
+    systemFolderPath = f"{folderPath}/A10_system⚙️"
+    assert os.path.isdir(systemFolderPath)
+
+    row = db.get_system_folder(dbConn, "areas.10.system")
+    assert row["folder_name"] == "A10_system⚙️"
+    assert row["folder_path"] == systemFolderPath

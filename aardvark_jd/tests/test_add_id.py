@@ -34,9 +34,9 @@ def test_add_id_happy_path(dbConnWithCategory):
         log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="11",
         title="Cardiologist", description="Dr Smith",
     ).get()
-    assert code == "A.11.01"
+    assert code == "A11.10"
     folderName = os.path.basename(folderPath)
-    assert folderName == "11.01 Cardiologist"
+    assert folderName == "A11.10_cardiologist"
     for character in folderName:
         assert ord(character) < 0x1F000
     assert os.path.isdir(folderPath)
@@ -51,7 +51,9 @@ def test_add_id_unknown_category_raises_clear_error(dbConnWithCategory):
 
 
 def test_add_id_exhaustion_surfaces_clear_error(dbConnWithCategory):
-    for _ in range(99):
+    # ITEM NUMBERS 00-09 ARE RESERVED FOR THE CATEGORY'S SYSTEM IDS, SO ONLY
+    # 90 USER-CREATED IDS (10..99) FIT BEFORE EXHAUSTION
+    for _ in range(90):
         add_id(
             log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="11",
             title="X", description="",

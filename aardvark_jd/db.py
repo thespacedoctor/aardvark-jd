@@ -81,6 +81,35 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
     updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
 );
+
+CREATE TABLE IF NOT EXISTS craft_links (
+    entity_type        TEXT NOT NULL,
+    entity_key         TEXT NOT NULL,
+    craft_folder_id     TEXT,
+    craft_document_id   TEXT,
+    craft_block_id       TEXT,
+    craft_url           TEXT,
+    synced_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+    PRIMARY KEY (entity_type, entity_key)
+);
+"""
+
+# `CREATE TRIGGER IF NOT EXISTS` NEVER UPDATES AN EXISTING TRIGGER'S BODY, SO
+# AN EXISTING DATABASE WOULD SILENTLY KEEP THE OLD CODE-STRING FORMAT FOREVER
+# UNLESS EVERY TRIGGER IS EXPLICITLY DROPPED FIRST ON EACH SCHEMA INIT.
+_DROP_SEARCH_TRIGGERS = """
+DROP TRIGGER IF EXISTS areas_ai;
+DROP TRIGGER IF EXISTS areas_au;
+DROP TRIGGER IF EXISTS areas_ad;
+DROP TRIGGER IF EXISTS categories_ai;
+DROP TRIGGER IF EXISTS categories_au;
+DROP TRIGGER IF EXISTS categories_ad;
+DROP TRIGGER IF EXISTS ids_ai;
+DROP TRIGGER IF EXISTS ids_au;
+DROP TRIGGER IF EXISTS ids_ad;
+DROP TRIGGER IF EXISTS projects_ai;
+DROP TRIGGER IF EXISTS projects_au;
+DROP TRIGGER IF EXISTS projects_ad;
 """
 
 _SEARCH_TRIGGERS = """
@@ -88,7 +117,7 @@ CREATE TRIGGER IF NOT EXISTS areas_ai AFTER INSERT ON areas BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         100000000000 + NEW.area_id, 'area',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
             printf('%02d', NEW.decade_start) || '-' || printf('%02d', NEW.decade_start + 9),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -98,7 +127,7 @@ CREATE TRIGGER IF NOT EXISTS areas_au AFTER UPDATE ON areas BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         100000000000 + NEW.area_id, 'area',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
             printf('%02d', NEW.decade_start) || '-' || printf('%02d', NEW.decade_start + 9),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -112,7 +141,7 @@ CREATE TRIGGER IF NOT EXISTS categories_ai AFTER INSERT ON categories BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         200000000000 + NEW.category_id, 'category',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' || printf('%02d', NEW.ac_number),
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || printf('%02d', NEW.ac_number),
         NEW.title, NEW.description, NEW.folder_path
     );
 END;
@@ -121,7 +150,7 @@ CREATE TRIGGER IF NOT EXISTS categories_au AFTER UPDATE ON categories BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         200000000000 + NEW.category_id, 'category',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' || printf('%02d', NEW.ac_number),
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || printf('%02d', NEW.ac_number),
         NEW.title, NEW.description, NEW.folder_path
     );
 END;
@@ -134,7 +163,7 @@ CREATE TRIGGER IF NOT EXISTS ids_ai AFTER INSERT ON ids BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         300000000000 + NEW.id_id, 'id',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
             printf('%02d', NEW.ac_number) || '.' || printf('%02d', NEW.item_number),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -144,7 +173,7 @@ CREATE TRIGGER IF NOT EXISTS ids_au AFTER UPDATE ON ids BEGIN
     INSERT OR REPLACE INTO search_index(rowid, entity_type, code, title, description, path)
     VALUES (
         300000000000 + NEW.id_id, 'id',
-        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) || '.' ||
+        (CASE NEW.domain WHEN 'areas' THEN 'A' ELSE 'R' END) ||
             printf('%02d', NEW.ac_number) || '.' || printf('%02d', NEW.item_number),
         NEW.title, NEW.description, NEW.folder_path
     );
@@ -217,7 +246,10 @@ def initialise_schema(dbConn):
 
     Probes for FTS5 support once, falling back to a plain indexed table
     for `search_index` if the SQLite build lacks the FTS5 module, and
-    records the outcome in `meta['fts5_enabled']`.
+    records the outcome in `meta['fts5_enabled']`. The search triggers are
+    dropped and recreated on every call, since `CREATE TRIGGER IF NOT
+    EXISTS` would otherwise leave an existing database's older trigger
+    bodies in place forever.
 
     **Key Arguments:**
 
@@ -239,6 +271,7 @@ def initialise_schema(dbConn):
     else:
         dbConn.executescript(_FALLBACK_SEARCH_INDEX)
 
+    dbConn.executescript(_DROP_SEARCH_TRIGGERS)
     dbConn.executescript(_SEARCH_TRIGGERS)
     dbConn.commit()
 
@@ -602,6 +635,27 @@ def update_category_emoji(dbConn, categoryId, emoji, folderName, folderPath):
     )
 
 
+def update_id_name(dbConn, idId, folderName, folderPath):
+    """
+    *update an ID's folder name and folder path (without committing)*
+
+    IDs carry no `emoji` column, unlike areas/categories/projects, so
+    there's nothing to pass alongside the name/path.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``idId`` -- the ID's primary key
+    - ``folderName`` -- the ID's new on-disk folder name
+    - ``folderPath`` -- the ID's new absolute folder path
+    """
+    dbConn.execute(
+        "UPDATE ids SET folder_name = ?, folder_path = ?, "
+        "updated_at = strftime('%Y-%m-%d %H:%M:%S','now') WHERE id_id = ?",
+        (folderName, folderPath, idId),
+    )
+
+
 def update_project_emoji(dbConn, projectId, emoji, folderName, folderPath):
     """
     *update a project's emoji, folder name and folder path (without committing)*
@@ -696,3 +750,73 @@ def insert_project(dbConn, title, description, emoji, folderName, folderPath, te
     )
     dbConn.commit()
     return cursor.lastrowid
+
+
+def list_projects(dbConn):
+    """
+    *list every project, ordered by title*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+
+    **Return:**
+
+    - ``rows`` -- the `projects` rows
+    """
+    return dbConn.execute("SELECT * FROM projects ORDER BY title").fetchall()
+
+
+def upsert_craft_link(
+    dbConn, entityType, entityKey, craftFolderId=None, craftDocumentId=None, craftBlockId=None, craftUrl=None,
+):
+    """
+    *record or refresh an entity's linked Craft folder/document/block*
+
+    Fields left as `None` keep whatever was already stored, rather than
+    being wiped - an index document's `craftBlockId` is only known after a
+    later `add_block` call, so it's set in a second upsert that must not
+    clobber the `craftDocumentId` written by the first.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'`, `'id'` or `'project'`
+    - ``entityKey`` -- the entity's key: a `system_folders.folder_key`, or an
+      `area_id`/`category_id`/`id_id`/`project_id` cast to text
+    - ``craftFolderId`` -- the linked Craft folder's id, if any. Default `None`.
+    - ``craftDocumentId`` -- the linked Craft document's id, if any. Default `None`.
+    - ``craftBlockId`` -- the linked Craft block's id, if any. Default `None`.
+    - ``craftUrl`` -- the linked Craft folder/document's shareable URL, if any. Default `None`.
+    """
+    dbConn.execute(
+        "INSERT INTO craft_links(entity_type, entity_key, craft_folder_id, craft_document_id, craft_block_id, craft_url) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(entity_type, entity_key) DO UPDATE SET "
+        "craft_folder_id = COALESCE(excluded.craft_folder_id, craft_links.craft_folder_id), "
+        "craft_document_id = COALESCE(excluded.craft_document_id, craft_links.craft_document_id), "
+        "craft_block_id = COALESCE(excluded.craft_block_id, craft_links.craft_block_id), "
+        "craft_url = COALESCE(excluded.craft_url, craft_links.craft_url), "
+        "synced_at = strftime('%Y-%m-%d %H:%M:%S','now')",
+        (entityType, entityKey, craftFolderId, craftDocumentId, craftBlockId, craftUrl),
+    )
+    dbConn.commit()
+
+
+def get_craft_link(dbConn, entityType, entityKey):
+    """
+    *look up an entity's linked Craft folder/document, if any*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- `'system_folder'`, `'area'`, `'category'`, `'id'` or `'project'`
+    - ``entityKey`` -- the entity's key, as passed to `upsert_craft_link`
+
+    **Return:**
+
+    - ``row`` -- the `craft_links` row, or `None` if not yet synced
+    """
+    return dbConn.execute(
+        "SELECT * FROM craft_links WHERE entity_type = ? AND entity_key = ?", (entityType, entityKey)
+    ).fetchone()

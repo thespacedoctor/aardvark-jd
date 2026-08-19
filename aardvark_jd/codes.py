@@ -12,8 +12,8 @@ import re
 DOMAINS = ("areas", "resources")
 DOMAIN_LETTER = {"areas": "A", "resources": "R"}
 
-_AREA_REF_RE = re.compile(r"^(?:[AR]\.)?(\d{2})(?:-(\d{2}))?$")
-_CATEGORY_REF_RE = re.compile(r"^(?:[AR]\.)?(\d{2})$")
+_AREA_REF_RE = re.compile(r"^(?:[AR]\.?)?(\d{2})(?:-(\d{2}))?$")
+_CATEGORY_REF_RE = re.compile(r"^(?:[AR]\.?)?(\d{2})$")
 
 
 def validate_domain(domain):
@@ -55,7 +55,8 @@ def parse_area_ref(text):
     """
     *parse a user-supplied area reference into its decade-start number*
 
-    Accepts `"10"`, `"10-19"`, `"A.10"` or `"A.10-19"` style input.
+    Accepts `"10"`, `"10-19"`, `"A10"` or `"A10-19"` style input (the older
+    `"A.10"`/`"A.10-19"` form with the period still parses too).
 
     **Key Arguments:**
 
@@ -123,7 +124,8 @@ def parse_category_ref(text):
     """
     *parse a user-supplied category reference into its AC number*
 
-    Accepts `"11"` or `"A.11"` style input.
+    Accepts `"11"` or `"A11"` style input (the older `"A.11"` form with the
+    period still parses too).
 
     **Key Arguments:**
 
@@ -144,7 +146,7 @@ def parse_category_ref(text):
 
 def format_area_code(domain, decadeStart, decadeEnd):
     """
-    *format the display code for a Johnny Decimal area, e.g. `A.10-19`*
+    *format the display code for a Johnny Decimal area, e.g. `A10-19`*
 
     **Key Arguments:**
 
@@ -156,12 +158,12 @@ def format_area_code(domain, decadeStart, decadeEnd):
 
     - ``code`` -- the formatted area code
     """
-    return f"{domain_letter(domain)}.{decadeStart:02d}-{decadeEnd:02d}"
+    return f"{domain_letter(domain)}{decadeStart:02d}-{decadeEnd:02d}"
 
 
 def format_category_code(domain, acNumber):
     """
-    *format the display code for a Johnny Decimal category, e.g. `A.11`*
+    *format the display code for a Johnny Decimal category, e.g. `A11`*
 
     **Key Arguments:**
 
@@ -172,12 +174,12 @@ def format_category_code(domain, acNumber):
 
     - ``code`` -- the formatted category code
     """
-    return f"{domain_letter(domain)}.{acNumber:02d}"
+    return f"{domain_letter(domain)}{acNumber:02d}"
 
 
 def format_id_code(domain, acNumber, itemNumber):
     """
-    *format the display code for a Johnny Decimal ID, e.g. `A.11.01`*
+    *format the display code for a Johnny Decimal ID, e.g. `A11.01`*
 
     **Key Arguments:**
 
@@ -189,4 +191,4 @@ def format_id_code(domain, acNumber, itemNumber):
 
     - ``code`` -- the formatted ID code
     """
-    return f"{domain_letter(domain)}.{acNumber:02d}.{itemNumber:02d}"
+    return f"{domain_letter(domain)}{acNumber:02d}.{itemNumber:02d}"
