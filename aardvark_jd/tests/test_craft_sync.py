@@ -16,7 +16,15 @@ log.addHandler(logging.NullHandler())
 
 
 class FakeCraftClient(object):
-    """*records every folder/document/block created or updated, without any HTTP calls*"""
+    """*records every folder/document/block created or deleted, without any HTTP calls*
+
+    Models the real API's read-delete-insert index refresh: `add_block`
+    appends to a per-document content list (each call its own block id,
+    same as a real multi-line `POST /blocks` splitting into siblings would
+    look from the caller's side), `get_block` reads that list back, and
+    `delete_blocks` removes matching ids from it - mirroring the empirical
+    probe against a real space.
+    """
 
     def __init__(self, apiUrl, apiToken):
         self.apiUrl = apiUrl
@@ -25,7 +33,8 @@ class FakeCraftClient(object):
         self.folders = []
         self.documents = []
         self.blocksAdded = []
-        self.blocksUpdated = []
+        self.blocksDeleted = []
+        self._documentContent = {}
         self.listFolderCalls = 0
 
     def _next_id(self, prefix):
@@ -55,20 +64,28 @@ class FakeCraftClient(object):
     def create_document(self, title, folderId=None):
         documentId = self._next_id("doc")
         self.documents.append((documentId, title, folderId))
+        self._documentContent[documentId] = []
         return documentId, f"https://craft.example/doc/{documentId}"
 
     def add_block(self, documentId, markdown, position="end"):
         blockId = self._next_id("block")
         self.blocksAdded.append((documentId, markdown, blockId))
+        self._documentContent.setdefault(documentId, []).append((blockId, markdown))
         return blockId
 
-    def update_block(self, blockId, markdown):
-        self.blocksUpdated.append((blockId, markdown))
+    def get_block(self, blockId):
+        content = self._documentContent.get(blockId, [])
+        return {"id": blockId, "content": [{"id": bId, "markdown": md} for bId, md in content]}
+
+    def delete_blocks(self, blockIds):
+        self.blocksDeleted.extend(blockIds)
+        blockIdSet = set(blockIds)
+        for documentId, items in self._documentContent.items():
+            self._documentContent[documentId] = [(bId, md) for bId, md in items if bId not in blockIdSet]
 
     def index_bodies(self):
-        """*every index markdown body ever written, in write order*"""
-        return [markdown for _documentId, markdown, _blockId in self.blocksAdded] + \
-            [markdown for _blockId, markdown in self.blocksUpdated]
+        """*every index markdown body ever added, in write order - includes content later replaced*"""
+        return [markdown for _documentId, markdown, _blockId in self.blocksAdded]
 
 
 @pytest.fixture
@@ -149,6 +166,49 @@ def test_craft_sync_mirrors_area_category_id_nesting(dbConn, craftSettings, fake
     assert any("A11.10 cardiologist" in body and "d3" in body for body in fakeClient.index_bodies())
 
 
+def test_craft_sync_mirrors_the_three_level_system_scaffolding(dbConn, craftSettings, fakeClient):
+    """*domain- and area-level system folders, and their reserved subfolders, mirror three levels deep*"""
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="d2").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    byName = {name: (folderId, parent) for folderId, name, parent in fakeClient.folders}
+    documentTitles = {title for _id, title, _folder in fakeClient.documents}
+
+    # the domain's own system folder nests under the domain root, alongside its areas
+    areasRootId, _ = byName["03 AREAS🧭"]
+    domainSystemFolderId, domainSystemParent = byName["A00-09 system⚙️"]
+    assert domainSystemParent == areasRootId
+
+    # the area's own system folder nests under the area, alongside its categories
+    areaFolderId = next(fid for name, (fid, _p) in byName.items() if name.startswith("A10-19 health"))
+    areaSystemFolderId, areaSystemParent = byName["A10 system⚙️"]
+    assert areaSystemParent == areaFolderId
+
+    # a folder-kind reserved subfolder mirrors as a Craft folder, nested inside the system folder
+    _inboxFolderId, inboxParent = byName["A10.01 inbox📥"]
+    assert inboxParent == areaSystemFolderId
+
+    # a document-kind reserved subfolder mirrors as a Craft document, not a folder
+    assert "A10.02 llm🤖" not in byName
+    assert any(title.startswith("A10.02 llm") for title in documentTitles)
+
+    # the area's reserved `.00_index` document is now ITS index, listing the area's
+    # categories - there's no more free-standing "00 Index" document at area level
+    assert any("A11 doctors" in body and "d2" in body for body in fakeClient.index_bodies())
+
+    # a category has no system folder of its own - its reserved subfolders sit directly
+    # inside the category folder, alongside its user-created ids
+    categoryFolderId = next(fid for name, (fid, _p) in byName.items() if name.startswith("A11 doctors"))
+    _catInboxId, catInboxParent = byName["A11.01 inbox📥"]
+    assert catInboxParent == categoryFolderId
+
+    # the domain-root system folder's own index lists this domain's areas - also no
+    # longer a free-standing "00 Index" document directly under the domain root
+    assert any("A10-19 health" in body and "d1" in body for body in fakeClient.index_bodies())
+
+
 def test_craft_sync_nests_areas_under_their_domain_root(dbConn, craftSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
 
@@ -165,8 +225,14 @@ def test_craft_sync_adopts_folders_already_in_the_space(dbConn, craftSettings, f
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
     foldersAfterFirst = list(fakeClient.folders)
 
-    # craft re-keys every folder id behind our back, exactly as the live API does
-    fakeClient.folders = [(f"rekeyed-{folderId}", name, parent) for folderId, name, parent in foldersAfterFirst]
+    # craft re-keys every folder id behind our back, exactly as the live API does - the
+    # nesting itself is untouched, so parent references are rekeyed the same way
+    def rekey(folderId):
+        return f"rekeyed-{folderId}" if folderId is not None else None
+
+    fakeClient.folders = [
+        (rekey(folderId), name, rekey(parent)) for folderId, name, parent in foldersAfterFirst
+    ]
 
     summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 
@@ -192,12 +258,14 @@ def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
 
     assert len(fakeClient.folders) == foldersAfterFirst
     assert len(fakeClient.documents) == documentsAfterFirst
-    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst
     assert summary["folders_created"] == 0
     assert summary["documents_created"] == 0
     assert summary["indexes_refreshed"] > 0
-    # every index refresh on the second run updates its existing block in place
-    assert len(fakeClient.blocksUpdated) == summary["indexes_refreshed"]
+    # every index refresh on the second run deletes its whole prior content and re-inserts
+    # fresh content, rather than updating a single block in place (there's no single block
+    # to address - see `_refresh_index`)
+    assert len(fakeClient.blocksDeleted) == blocksAddedAfterFirst
+    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst + summary["indexes_refreshed"]
 
 
 def test_craft_sync_mirrors_projects_as_flat_documents(dbConn, craftSettings, fakeClient):

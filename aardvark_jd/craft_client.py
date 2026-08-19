@@ -16,6 +16,19 @@ creation) are still a best-effort match, unconfirmed against a real
 response - see `docs/source/quickstart.md`'s "Connecting to craft.do"
 section.
 
+`GET`/`POST`/`DELETE /blocks` were probed empirically against a scratch
+document in a real space on 2026-08-19, confirming: `POST /blocks` given
+multi-line markdown splits it into one sibling block *per line*, each
+returned as its own item - the reason `_refresh_index` in `craft_sync.py`
+cannot update a single tracked block id and instead reads the document's
+whole `content` array and replaces it wholesale; `GET /blocks?id=<id>`
+works against a document id too (a document's id doubles as its
+top-level "page" block id) and returns that block with its children in
+`content`; `DELETE /blocks` takes `{"blockIds": [...]}` and returns
+`{"items": [{"id": ...}, ...]}`. `PUT /blocks` (`update_block`) is no
+longer used or exposed here, since replacing a document's content
+wholesale on every refresh makes editing a single block moot.
+
 Author
 : David Young
 """
@@ -222,10 +235,14 @@ class CraftClient(object):
 
     def add_block(self, documentId, markdown, position="end"):
         """
-        *insert a new markdown block into a document, returning its block id*
+        *insert markdown content into a document, returning its first resulting block's id*
 
-        Used once per "00 Index" document, the first time it's created; use
-        `update_block` on every later refresh instead of inserting again.
+        Multi-line markdown is not kept as one block - Craft splits it into
+        one sibling block per line, each with its own id (confirmed against
+        a real space). Callers that only need the content to appear (every
+        caller in `craft_sync.py`) can ignore the return value; nothing here
+        can address "the" block afterwards, because there usually isn't
+        just one.
 
         **Key Arguments:**
 
@@ -235,7 +252,7 @@ class CraftClient(object):
 
         **Return:**
 
-        - ``blockId`` -- the new block's id
+        - ``blockId`` -- the first resulting block's id
         """
         body = {
             "blocks": [{"type": "text", "markdown": markdown}],
@@ -244,13 +261,32 @@ class CraftClient(object):
         item = self._first(self._request("POST", "/blocks", json=body))
         return item["id"]
 
-    def update_block(self, blockId, markdown):
+    def get_block(self, blockId):
         """
-        *overwrite an existing block's markdown content*
+        *fetch a block together with its nested child blocks*
+
+        A document's id doubles as its top-level "page" block's id, so this
+        also fetches a whole document's content in one call - the read half
+        of `_refresh_index`'s read-delete-insert replace.
 
         **Key Arguments:**
 
-        - ``blockId`` -- the block's id, as returned by `add_block`
-        - ``markdown`` -- the block's new content, as markdown
+        - ``blockId`` -- the block's id, or a document's id
+
+        **Return:**
+
+        - ``block`` -- the block, with a ``content`` list of its immediate children
         """
-        self._request("PUT", "/blocks", json={"blocks": [{"id": blockId, "markdown": markdown}]})
+        return self._request("GET", "/blocks", params={"id": blockId})
+
+    def delete_blocks(self, blockIds):
+        """
+        *delete one or more blocks by id*
+
+        **Key Arguments:**
+
+        - ``blockIds`` -- the block ids to delete
+        """
+        if not blockIds:
+            return
+        self._request("DELETE", "/blocks", json={"blockIds": blockIds})

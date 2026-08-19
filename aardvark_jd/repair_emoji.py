@@ -201,7 +201,7 @@ class repair_emoji(object):
 
     def _backfill_area_system_folder(self, domain, area):
         """
-        *create an area's reserved `<X>.<D0>_system` folder if it doesn't already exist*
+        *create an area's reserved `<X>.<D0>_system` folder, and its own ten reserved IDs, if missing*
 
         **Key Arguments:**
 
@@ -209,11 +209,17 @@ class repair_emoji(object):
         - ``area`` -- the `areas` row
         """
         folderKey = f"{domain}.{area['decade_start']}.system"
-        if db.get_system_folder(self.dbConn, folderKey) is not None:
-            return
-        folderName = folders.category_folder_name(domain, area["decade_start"], "system", paths.SYSTEM_FOLDER_EMOJI)
-        folderPath = folders.make_folder(area["folder_path"], folderName)
-        db.insert_system_folder(self.dbConn, folderKey, folderName, folderPath)
+        row = db.get_system_folder(self.dbConn, folderKey)
+        if row is None:
+            folderName = folders.category_folder_name(
+                domain, area["decade_start"], "system", paths.SYSTEM_FOLDER_EMOJI
+            )
+            folderPath = folders.make_folder(area["folder_path"], folderName)
+            db.insert_system_folder(self.dbConn, folderKey, folderName, folderPath)
+        else:
+            folderPath = row["folder_path"]
+
+        folders.create_reserved_system_ids(self.dbConn, domain, area["decade_start"], folderPath)
 
     def _backfill_category_reserved_ids(self, domain, category):
         """
@@ -224,10 +230,4 @@ class repair_emoji(object):
         - ``domain`` -- `areas` or `resources`
         - ``category`` -- the `categories` row
         """
-        for itemNumber, (baseName, title, _description, folderEmoji) in enumerate(paths.SYSTEM_SUBFOLDERS):
-            folderKey = f"{domain}.{category['ac_number']}.{baseName}"
-            if db.get_system_folder(self.dbConn, folderKey) is not None:
-                continue
-            folderName = folders.id_folder_name(domain, category["ac_number"], itemNumber, title, emoji=folderEmoji)
-            folderPath = folders.make_folder(category["folder_path"], folderName)
-            db.insert_system_folder(self.dbConn, folderKey, folderName, folderPath)
+        folders.create_reserved_system_ids(self.dbConn, domain, category["ac_number"], category["folder_path"])

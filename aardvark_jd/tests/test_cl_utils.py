@@ -136,7 +136,11 @@ _CRAFT_API_URL = "https://connect.craft.do/links/abc123/api/v1"
 
 
 class FakeCraftClient(object):
-    """*records every folder/document/block created or updated, without any HTTP calls*"""
+    """*records every folder/document/block created or deleted, without any HTTP calls*
+
+    Models the real API's read-delete-insert index refresh - see the
+    identical fake in `test_craft_sync.py` for the full rationale.
+    """
 
     def __init__(self, apiUrl, apiToken):
         self.apiUrl = apiUrl
@@ -145,7 +149,8 @@ class FakeCraftClient(object):
         self.folders = []
         self.documents = []
         self.blocksAdded = []
-        self.blocksUpdated = []
+        self.blocksDeleted = []
+        self._documentContent = {}
 
     def _next_id(self, prefix):
         self._counter += 1
@@ -173,20 +178,28 @@ class FakeCraftClient(object):
     def create_document(self, title, folderId=None):
         documentId = self._next_id("doc")
         self.documents.append((documentId, title, folderId))
+        self._documentContent[documentId] = []
         return documentId, f"https://craft.example/doc/{documentId}"
 
     def add_block(self, documentId, markdown, position="end"):
         blockId = self._next_id("block")
         self.blocksAdded.append((documentId, markdown, blockId))
+        self._documentContent.setdefault(documentId, []).append((blockId, markdown))
         return blockId
 
-    def update_block(self, blockId, markdown):
-        self.blocksUpdated.append((blockId, markdown))
+    def get_block(self, blockId):
+        content = self._documentContent.get(blockId, [])
+        return {"id": blockId, "content": [{"id": bId, "markdown": md} for bId, md in content]}
+
+    def delete_blocks(self, blockIds):
+        self.blocksDeleted.extend(blockIds)
+        blockIdSet = set(blockIds)
+        for documentId, items in self._documentContent.items():
+            self._documentContent[documentId] = [(bId, md) for bId, md in items if bId not in blockIdSet]
 
     def index_bodies(self):
-        """*every index block's markdown body, as added or later updated*"""
-        return [markdown for _documentId, markdown, _blockId in self.blocksAdded] + \
-            [markdown for _blockId, markdown in self.blocksUpdated]
+        """*every index markdown body ever added, in write order - includes content later replaced*"""
+        return [markdown for _documentId, markdown, _blockId in self.blocksAdded]
 
 
 @pytest.fixture
@@ -299,8 +312,8 @@ def test_repair_emoji_auto_pushes_to_craft_once_connected(isolatedHome, monkeypa
     cl_utils.main(docopt(doc, ["set_emoji", "areas", "10", "Y"]))
     capsys.readouterr()
 
-    blocksUpdatedBefore = len(fakeCraftClient.blocksUpdated)
+    blocksDeletedBefore = len(fakeCraftClient.blocksDeleted)
     cl_utils.main(docopt(doc, ["repair_emoji"]))
     capsys.readouterr()
-    assert len(fakeCraftClient.blocksUpdated) > blocksUpdatedBefore
+    assert len(fakeCraftClient.blocksDeleted) > blocksDeletedBefore
     assert any("A10-19 healthY" in body for body in fakeCraftClient.index_bodies())

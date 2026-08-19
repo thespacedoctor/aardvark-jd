@@ -62,3 +62,20 @@ def test_add_area_creates_its_reserved_system_folder(dbConn):
     row = db.get_system_folder(dbConn, "areas.10.system")
     assert row["folder_name"] == "A10_system⚙️"
     assert row["folder_path"] == systemFolderPath
+
+
+def test_add_area_creates_its_own_ten_reserved_ids(dbConn):
+    """*the area's reserved system folder (occupying the X0 slot) gets its own .00-.09 IDs too*"""
+    _code, folderPath = add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="").get()
+    systemFolderPath = f"{folderPath}/A10_system⚙️"
+
+    expectedNames = [
+        "A10.00_index🗂️", "A10.01_inbox📥", "A10.02_llm🤖", "A10.03_checklists☑️",
+        "A10.04_templates📐", "A10.05_links🔗", "A10.06_bin📜", "A10.07_settings🎛️",
+        "A10.08_someday💭", "A10.09_archive🗄️",
+    ]
+    for name in expectedNames:
+        assert os.path.isdir(f"{systemFolderPath}/{name}")
+
+    row = db.get_system_folder(dbConn, "areas.10.02_llm")
+    assert row["folder_name"] == "A10.02_llm🤖"

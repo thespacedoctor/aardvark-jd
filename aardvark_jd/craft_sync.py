@@ -5,10 +5,20 @@
 
 The top-level PARA folders become top-level Craft folders (Craft spaces
 cannot be created via API), areas and categories nest as folders below
-them, and IDs become Craft documents named with their `X.AC.ID` code. A
-"00 Index" document at each level lists the level directly below it, one
-level deep, with each child's code+title linking to its Craft folder or
-document.
+them, and IDs become Craft documents named with their `X.AC.ID` code.
+
+Every domain root and every area also gets its own `<X>_system` folder
+mirrored alongside its areas/categories, with the ten reserved subfolders
+(`.00_index`-`.09_archive`) mirrored inside it as Craft folders or
+documents per `paths.SYSTEM_SUBFOLDERS`'s declared kind; a category has no
+system folder of its own, so its ten reserved subfolders sit directly
+inside the category folder instead. The reserved `.00_index` document at
+each of these levels lists the level directly below it, one level deep,
+with each child's code+title linking to its Craft folder or document -
+this replaces the free-standing "00 Index" document that used to sit at
+area/category level. The space-root index and the flat projects listing
+are unaffected - there is no system folder above the PARA roots, and
+`projects` isn't Johnny-Decimal coded.
 
 Author
 : David Young
@@ -78,7 +88,7 @@ class craft_sync(object):
         rootFolderIds = self._ensure_root_folders()
 
         for domain, rootKey in _DOMAIN_ROOT_KEY.items():
-            self._sync_domain(domain, rootKey, rootFolderIds[rootKey])
+            self._sync_domain(domain, rootFolderIds[rootKey])
 
         self._sync_projects(rootFolderIds["root.projects"])
         self._refresh_space_index(rootFolderIds)
@@ -126,14 +136,13 @@ class craft_sync(object):
             rootFolderIds[folderKey] = folderId
         return rootFolderIds
 
-    def _sync_domain(self, domain, domainRootKey, domainRootFolderId):
+    def _sync_domain(self, domain, domainRootFolderId):
         """
         *sync one Johnny Decimal domain's areas, categories and ids into Craft*
 
         **Key Arguments:**
 
         - ``domain`` -- `areas` or `resources`
-        - ``domainRootKey`` -- the domain's root system-folder key, e.g. `"root.areas"`
         - ``domainRootFolderId`` -- the domain's root Craft folder id
         """
         areaChildren = []
@@ -160,11 +169,17 @@ class craft_sync(object):
                     )
                     idChildren.append((None, idName, idRow["description"], idUrl))
 
-                self._refresh_index("category", str(category["category_id"]), categoryFolderId, idChildren)
+                # A CATEGORY HAS NO SEPARATE `<X>_system` FOLDER OF ITS OWN - ITS TEN
+                # RESERVED SUBFOLDERS (INCLUDING `.00_index`, THE CATEGORY'S INDEX) SIT
+                # DIRECTLY INSIDE THE CATEGORY FOLDER, ALONGSIDE ITS USER-CREATED IDS.
+                self._sync_reserved_subfolders(f"{domain}.{category['ac_number']}", categoryFolderId, idChildren)
 
-            self._refresh_index("area", str(area["area_id"]), areaFolderId, categoryChildren)
+            self._sync_system_folder(
+                f"{domain}.{area['decade_start']}.system", f"{domain}.{area['decade_start']}",
+                areaFolderId, categoryChildren,
+            )
 
-        self._refresh_index("system_folder", domainRootKey, domainRootFolderId, areaChildren)
+        self._sync_system_folder(f"{domain}.system", f"{domain}.system", domainRootFolderId, areaChildren)
 
     def _sync_projects(self, projectsRootFolderId):
         """
@@ -264,23 +279,41 @@ class craft_sync(object):
 
     def _refresh_index(self, entityType, entityKey, folderId, children):
         """
-        *(re)write a "00 Index" document listing one level of children*
+        *ensure a generic "00 Index" document exists, then (re)write its content*
 
-        The index document itself is created once (linked under
-        `f"{entityType}:index"`/`entityKey`), and its single content block is
-        added once and thereafter updated in place, so this stays idempotent
-        across repeated syncs.
+        Used only where there is no reserved `.00_index` scaffolding
+        document to reuse instead - the space-root index and the projects
+        domain (see `_sync_reserved_subfolders` for everywhere else).
 
         **Key Arguments:**
 
-        - ``entityType`` -- the parent entity's type, e.g. `"area"`
+        - ``entityType`` -- the parent entity's type, e.g. `"system_folder"`
         - ``entityKey`` -- the parent entity's key
         - ``folderId`` -- the parent folder's Craft id; the index document is filed inside it
         - ``children`` -- a list of `(codeOrNone, title, description, url)` tuples, one per child
         """
         indexEntityType = f"{entityType}:index"
         documentId, _url = self._ensure_document(indexEntityType, entityKey, _INDEX_DOC_TITLE, folderId)
+        self._write_index_content(documentId, children)
 
+    def _write_index_content(self, documentId, children):
+        """
+        *replace an index document's whole content with a fresh listing of the given children*
+
+        Craft has no atomic "replace page content" call, and `POST /blocks`
+        splits multi-line markdown into one sibling block per line rather
+        than one block for the whole thing (confirmed empirically against a
+        real space), so there is no single block id to update in place.
+        Instead this reads the document's current top-level content,
+        deletes all of it, and inserts the fresh markdown - read, delete,
+        insert in place of an update. `craft_block_id` is no longer written
+        or read anywhere; the column stays in `craft_links` but unused.
+
+        **Key Arguments:**
+
+        - ``documentId`` -- the index document's Craft id
+        - ``children`` -- a list of `(codeOrNone, title, description, url)` tuples, one per child
+        """
         lines = []
         for codeOrTitle, title, description, url in children:
             linkText = f"{codeOrTitle} {title}" if codeOrTitle else title
@@ -290,11 +323,68 @@ class craft_sync(object):
                 lines.append(f"- {linkText} — {description}")
         markdown = "\n".join(lines) if lines else "*(nothing here yet)*"
 
-        link = db.get_craft_link(self.dbConn, indexEntityType, entityKey)
-        if link and link["craft_block_id"]:
-            self.client.update_block(link["craft_block_id"], markdown)
-        else:
-            blockId = self.client.add_block(documentId, markdown)
-            db.upsert_craft_link(self.dbConn, indexEntityType, entityKey, craftBlockId=blockId)
+        existingBlock = self.client.get_block(documentId)
+        existingContentIds = [item["id"] for item in (existingBlock.get("content") or [])]
+        self.client.delete_blocks(existingContentIds)
+        self.client.add_block(documentId, markdown)
 
         self.indexesRefreshed += 1
+
+    def _sync_system_folder(self, systemFolderKey, reservedKeyPrefix, parentFolderId, indexChildren):
+        """
+        *sync a `<X>_system` folder and its ten reserved subfolders into Craft*
+
+        Used at the domain level (`f"{domain}.system"`, nested under the
+        domain root, alongside its areas) and at the area level
+        (`f"{domain}.{decadeStart}.system"`, nested under the area, alongside
+        its categories). Does nothing if the system folder hasn't been
+        created on disk yet (a legacy system not yet `repair_emoji`'d) -
+        this sync just skips it rather than failing.
+
+        **Key Arguments:**
+
+        - ``systemFolderKey`` -- the system folder's own `system_folders.folder_key`
+        - ``reservedKeyPrefix`` -- the key prefix its ten reserved subfolders are stored under (see `folders.create_reserved_system_ids`)
+        - ``parentFolderId`` -- the Craft folder to nest the system folder inside
+        - ``indexChildren`` -- children for the reserved `.00_index` document inside it
+        """
+        row = db.get_system_folder(self.dbConn, systemFolderKey)
+        if row is None:
+            return
+        name = folders.display_name(row["folder_name"])
+        systemFolderId, _url = self._ensure_folder(
+            "system_folder", systemFolderKey, name, parentFolderId=parentFolderId,
+        )
+        self._sync_reserved_subfolders(reservedKeyPrefix, systemFolderId, indexChildren)
+
+    def _sync_reserved_subfolders(self, keyPrefix, containingFolderId, indexChildren):
+        """
+        *sync the ten static reserved subfolders (`.00_index`-`.09_archive`) inside a system or category folder*
+
+        Each mirrors as a Craft folder or document per its declared
+        `paths.SYSTEM_SUBFOLDERS` kind, except `.00_index`, which is always
+        a document and becomes the index for `indexChildren` - replacing
+        the old free-standing "00 Index" document at this level. Skips any
+        reserved subfolder not yet created on disk, same as
+        `_sync_system_folder`.
+
+        **Key Arguments:**
+
+        - ``keyPrefix`` -- the `system_folders.folder_key` prefix the ten reserved subfolders share, e.g. `"areas.11"`
+        - ``containingFolderId`` -- the Craft folder the reserved subfolders are filed inside
+        - ``indexChildren`` -- children for the reserved `.00_index` document
+        """
+        for baseName, _title, _description, _folderEmoji, craftKind in paths.SYSTEM_SUBFOLDERS:
+            folderKey = f"{keyPrefix}.{baseName}"
+            row = db.get_system_folder(self.dbConn, folderKey)
+            if row is None:
+                continue
+            name = folders.display_name(row["folder_name"])
+
+            if baseName == "00_index":
+                documentId, _url = self._ensure_document("system_folder", folderKey, name, containingFolderId)
+                self._write_index_content(documentId, indexChildren)
+            elif craftKind == paths.SYSTEM_SUBFOLDER_KIND_FOLDER:
+                self._ensure_folder("system_folder", folderKey, name, parentFolderId=containingFolderId)
+            else:
+                self._ensure_document("system_folder", folderKey, name, containingFolderId)

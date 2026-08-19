@@ -76,7 +76,7 @@ class add_area(object):
 
     def _create_area_system_folder(self, decadeStart, areaFolderPath):
         """
-        *create the area's reserved `<X>.<D0>_system` folder, occupying the reserved X0 category slot*
+        *create the area's reserved `<X>.<D0>_system` folder (with its own ten reserved IDs), occupying the reserved X0 category slot*
 
         **Key Arguments:**
 
@@ -90,3 +90,4 @@ class add_area(object):
         db.insert_system_folder(
             self.dbConn, f"{self.domain}.{decadeStart}.system", systemFolderName, systemFolderPath
         )
+        folders.create_reserved_system_ids(self.dbConn, self.domain, decadeStart, systemFolderPath)

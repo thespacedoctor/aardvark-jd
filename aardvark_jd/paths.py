@@ -29,20 +29,29 @@ SYSTEM_SKELETON = [
     ("root.archive", None, "09_ARCHIVE", "Archive", "Inactive material kept for reference", "🗄️"),
 ]
 
+# THE CRAFT "KIND" A SYSTEM SUBFOLDER MIRRORS AS - CRAFT HAS NO NOTION OF
+# "FOLDER OF LOOSE FILES" VS "SINGLE NOTE", SO THIS IS A CALL ABOUT WHAT
+# EACH ONE IS FOR: SOMEWHERE TO FILE THINGS (FOLDER) VS SOMEWHERE TO WRITE
+# CONTENT DIRECTLY (DOCUMENT). ONLY USED BY `craft_sync.py`'S MIRROR - THE
+# ON-DISK FOLDER IS CREATED THE SAME WAY EITHER WAY.
+SYSTEM_SUBFOLDER_KIND_DOCUMENT = "document"
+SYSTEM_SUBFOLDER_KIND_FOLDER = "folder"
+
 # THE 10 SYSTEM SUBFOLDERS REPEATED UNDER PROJECTS, AREAS AND RESOURCES, AND
 # REUSED VERBATIM (NAMES/EMOJI) FOR THE 10 RESERVED SYSTEM IDS `add_category`
 # CREATES ALONGSIDE EVERY NEW CATEGORY (SEE `add_category.py`).
+# EACH ENTRY: (baseName, title, description, emoji, craftKind)
 SYSTEM_SUBFOLDERS = [
-    ("00_index", "Index", "The index for this section", "🗂️"),
-    ("01_inbox", "Inbox", "Unsorted items awaiting filing", "📥"),
-    ("02_llm", "LLM", "LLM prompts, context and output", "🤖"),
-    ("03_checklists", "Checklists", "Checklists", "☑️"),
-    ("04_templates", "Templates", "Templates", "📐"),
-    ("05_links", "Links", "Links", "🔗"),
-    ("06_bin", "Bin", "Scripts and executables for this section", "📜"),
-    ("07_settings", "Settings", "Settings", "🎛️"),
-    ("08_someday", "Someday", "Someday / maybe items", "💭"),
-    ("09_archive", "Archive", "Inactive material kept for reference", "🗄️"),
+    ("00_index", "Index", "The index for this section", "🗂️", SYSTEM_SUBFOLDER_KIND_DOCUMENT),
+    ("01_inbox", "Inbox", "Unsorted items awaiting filing", "📥", SYSTEM_SUBFOLDER_KIND_FOLDER),
+    ("02_llm", "LLM", "LLM prompts, context and output", "🤖", SYSTEM_SUBFOLDER_KIND_DOCUMENT),
+    ("03_checklists", "Checklists", "Checklists", "☑️", SYSTEM_SUBFOLDER_KIND_FOLDER),
+    ("04_templates", "Templates", "Templates", "📐", SYSTEM_SUBFOLDER_KIND_FOLDER),
+    ("05_links", "Links", "Links", "🔗", SYSTEM_SUBFOLDER_KIND_DOCUMENT),
+    ("06_bin", "Bin", "Scripts and executables for this section", "📜", SYSTEM_SUBFOLDER_KIND_DOCUMENT),
+    ("07_settings", "Settings", "Settings", "🎛️", SYSTEM_SUBFOLDER_KIND_DOCUMENT),
+    ("08_someday", "Someday", "Someday / maybe items", "💭", SYSTEM_SUBFOLDER_KIND_FOLDER),
+    ("09_archive", "Archive", "Inactive material kept for reference", "🗄️", SYSTEM_SUBFOLDER_KIND_FOLDER),
 ]
 
 SYSTEM_FOLDER_EMOJI = "⚙️"
@@ -77,7 +86,7 @@ def _append_system_subfolders(skeleton):
                 "Johnny Decimal system folder (00-09)", SYSTEM_FOLDER_EMOJI,
             )
         )
-        for acNumber, (baseName, title, description, folderEmoji) in enumerate(SYSTEM_SUBFOLDERS):
+        for acNumber, (baseName, title, description, folderEmoji, _craftKind) in enumerate(SYSTEM_SUBFOLDERS):
             renderedBaseName = (
                 f"{domainLetter}{acNumber:02d}_{folders.slugify(title)}" if domainLetter else baseName
             )

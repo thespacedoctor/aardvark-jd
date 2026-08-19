@@ -179,22 +179,75 @@ def test_add_block_posts_to_document_and_returns_block_id(monkeypatch):
     }
 
 
-def test_update_block_puts_markdown(monkeypatch):
+def test_add_block_splits_multiline_markdown_into_sibling_blocks(monkeypatch):
+    """*confirmed empirically against a real space: one sibling block per line, not one block*"""
+
+    def fakeRequest(self, method, url, **kwargs):
+        return FakeResponse(json_body={"items": [
+            {"id": "block-1", "markdown": "- line one"},
+            {"id": "block-2", "markdown": "- line two"},
+        ]})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    blockId = CraftClient(apiUrl=_API_URL, apiToken="tok").add_block("doc-1", "- line one\n- line two")
+
+    # only the first resulting sibling's id is returned - callers cannot
+    # address "the" block afterwards, because there usually isn't just one
+    assert blockId == "block-1"
+
+
+def test_get_block_fetches_by_id(monkeypatch):
+    captured = {}
+
+    def fakeRequest(self, method, url, **kwargs):
+        captured["method"] = method
+        captured["url"] = url
+        captured["params"] = kwargs.get("params")
+        return FakeResponse(json_body={
+            "id": "doc-1", "type": "page", "content": [{"id": "block-1", "markdown": "- item"}],
+        })
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    block = CraftClient(apiUrl=_API_URL, apiToken="tok").get_block("doc-1")
+
+    assert captured["method"] == "GET"
+    assert captured["url"] == f"{_API_URL}/blocks"
+    assert captured["params"] == {"id": "doc-1"}
+    assert block["content"] == [{"id": "block-1", "markdown": "- item"}]
+
+
+def test_delete_blocks_sends_block_ids(monkeypatch):
     captured = {}
 
     def fakeRequest(self, method, url, **kwargs):
         captured["method"] = method
         captured["url"] = url
         captured["json"] = kwargs.get("json")
+        return FakeResponse(json_body={"items": [{"id": "block-1"}, {"id": "block-2"}]})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    CraftClient(apiUrl=_API_URL, apiToken="tok").delete_blocks(["block-1", "block-2"])
+
+    assert captured["method"] == "DELETE"
+    assert captured["url"] == f"{_API_URL}/blocks"
+    assert captured["json"] == {"blockIds": ["block-1", "block-2"]}
+
+
+def test_delete_blocks_is_a_noop_for_an_empty_list(monkeypatch):
+    calls = []
+
+    def fakeRequest(self, method, url, **kwargs):
+        calls.append((method, url))
         return FakeResponse(status_code=204)
 
     monkeypatch.setattr(requests.Session, "request", fakeRequest)
 
-    CraftClient(apiUrl=_API_URL, apiToken="tok").update_block("block-1", "- item")
+    CraftClient(apiUrl=_API_URL, apiToken="tok").delete_blocks([])
 
-    assert captured["method"] == "PUT"
-    assert captured["url"] == f"{_API_URL}/blocks"
-    assert captured["json"] == {"blocks": [{"id": "block-1", "markdown": "- item"}]}
+    assert calls == []
 
 
 def test_request_failure_raises_craft_api_error(monkeypatch):

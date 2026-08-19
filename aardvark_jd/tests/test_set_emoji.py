@@ -414,6 +414,11 @@ def test_repair_emoji_migrates_pre_existing_areas_categories_and_ids(tmp_path, s
     assert db.get_system_folder(dbConn, "areas.11.00_index") is not None
     assert os.path.isdir(f"{category['folder_path']}/A11.00_index🗂️")
 
+    # THE AREA'S OWN RESERVED SYSTEM FOLDER MUST HAVE ITS TEN RESERVED IDS
+    # BACKFILLED TOO, NOT JUST THE FOLDER ITSELF
+    assert db.get_system_folder(dbConn, "areas.10.02_llm") is not None
+    assert os.path.isdir(f"{area['folder_path']}/A10_system⚙️/A10.02_llm🤖")
+
     dbConn.close()
 
 

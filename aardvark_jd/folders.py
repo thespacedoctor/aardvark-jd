@@ -273,3 +273,33 @@ def make_folder(parentPath, folderName):
     folderPath = f"{parentPath}/{folderName}"
     os.makedirs(folderPath, exist_ok=True)
     return folderPath
+
+
+def create_reserved_system_ids(dbConn, domain, acNumber, containingFolderPath):
+    """
+    *create any of the ten reserved system IDs (`.00`-`.09`) missing inside a category or area-system folder*
+
+    Reuses the same names/emoji as the static `00_09_system` subfolders
+    (`paths.SYSTEM_SUBFOLDERS`) - the one exception to ordinary IDs never
+    carrying an emoji. Shared by `add_category` (a user category),
+    `add_area` (the area's own reserved system folder, whose `acNumber`
+    is its decade-start) and `repair_emoji`'s backfill for both - skipping
+    any id already recorded makes it safe to call both right after
+    creation and again later as a backfill.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``domain`` -- `areas` or `resources`
+    - ``acNumber`` -- the containing category's 2-digit AC number, or an area's decade-start
+    - ``containingFolderPath`` -- the containing folder's absolute path
+    """
+    from aardvark_jd import paths
+
+    for itemNumber, (baseName, title, _description, folderEmoji, _craftKind) in enumerate(paths.SYSTEM_SUBFOLDERS):
+        folderKey = f"{domain}.{acNumber}.{baseName}"
+        if db.get_system_folder(dbConn, folderKey) is not None:
+            continue
+        folderName = id_folder_name(domain, acNumber, itemNumber, title, emoji=folderEmoji)
+        folderPath = make_folder(containingFolderPath, folderName)
+        db.insert_system_folder(dbConn, folderKey, folderName, folderPath)
