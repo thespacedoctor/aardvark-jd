@@ -3,16 +3,17 @@
 """
 *Build the "open this folder elsewhere" link row appended to synced Craft documents*
 
-A single inline markdown line - `[Finder link](file://...)  ·  [Dropbox
-link](https://...)` - written just below a document's title by
+A single inline markdown line - `[Finder link](hook://file/...)  ·
+[Dropbox link](https://...)` - written just below a document's title by
 `craft_sync._write_link_row`. Either link is dropped when it isn't
-available (no Finder link off Darwin, no Dropbox link when the system
+available (no Hookmark link off Darwin, no Dropbox link when the system
 root isn't inside a Dropbox-synced folder).
 
 Author
 : David Young
 """
 
+import base64
 import os
 import sys
 from urllib.parse import quote
@@ -20,14 +21,26 @@ from urllib.parse import quote
 FINDER_LABEL = "📁 Finder"
 DROPBOX_LABEL = "🔗 Dropbox"
 
+# ANY STRING WORKS HERE - HOOKMARK ONLY USES THE ID TO LOOK UP TRACKING DATA
+# IN ITS OWN LOCAL DATABASE, WHICH AN AARDVARK-BUILT LINK NEVER APPEARS IN.
+# ON A MISS IT FALLS BACK TO DECODING `p=`/`n=` AND LOCATING THE FILE VIA
+# SPOTLIGHT - EXACTLY THE PATH EVERY AARDVARK-GENERATED LINK TAKES. KEEPING
+# IT FIXED (RATHER THAN RANDOM) MATTERS FOR `craft_sync`'S IDEMPOTENCY CHECK:
+# THE SAME FOLDER PATH MUST ALWAYS PRODUCE THE SAME URL.
+_HOOKMARK_PLACEHOLDER_ID = "aardvark"
 
-def finder_url(folderPath):
+
+def hookmark_url(folderPath):
     """
-    *build a `file://` URL for a folder, or `None` off Darwin*
+    *build a Hookmark `hook://file/...` URL for a folder, or `None` off Darwin*
 
-    A `file://` URL is only meaningful on the machine that generated it,
-    so this deliberately only fires on macOS - the platform aardvark
-    itself only ever runs on today.
+    Craft doesn't open `file://` links when clicked, so the folder link
+    goes through Hookmark instead - Hookmark's own docs describe this
+    exact fallback for a hand-built/shared link: when the id isn't found
+    in its local database, it decodes the base64 `p=`/`n=` parameters and
+    resolves the file via Spotlight. Hookmark itself is Mac-only, so this
+    deliberately only fires on macOS, same as the `file://` link it
+    replaces.
 
     **Key Arguments:**
 
@@ -35,20 +48,26 @@ def finder_url(folderPath):
 
     **Return:**
 
-    - ``url`` -- the folder's `file://` URL, or `None` if not on Darwin
+    - ``url`` -- the folder's `hook://file/...` URL, or `None` if not on Darwin
     """
     if sys.platform != "darwin":
         return None
-    return "file://" + quote(os.path.realpath(os.path.expanduser(folderPath)))
+    absPath = os.path.realpath(os.path.expanduser(folderPath))
+    parentPath, name = os.path.split(absPath)
+    # `quote`'s default `safe='/'` would leave a base64 `/` unescaped - wrong
+    # here, since it's not a path separator but a base64 alphabet character.
+    parentB64 = quote(base64.b64encode(parentPath.encode("utf-8")), safe="")
+    nameB64 = quote(base64.b64encode(name.encode("utf-8")), safe="")
+    return f"hook://file/{_HOOKMARK_PLACEHOLDER_ID}?p={parentB64}&n={nameB64}"
 
 
-def link_row_markdown(finderUrl, dropboxUrl):
+def link_row_markdown(hookmarkUrl, dropboxUrl):
     """
     *render the Finder/Dropbox link row as a single markdown line*
 
     **Key Arguments:**
 
-    - ``finderUrl`` -- the folder's `file://` URL, or `None` to omit it
+    - ``hookmarkUrl`` -- the folder's Hookmark `hook://file/...` URL, or `None` to omit it
     - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None` to omit it
 
     **Return:**
@@ -56,8 +75,8 @@ def link_row_markdown(finderUrl, dropboxUrl):
     - ``markdown`` -- the link row's markdown, or `None` if both URLs are `None`
     """
     links = []
-    if finderUrl:
-        links.append(f"[{FINDER_LABEL}]({finderUrl})")
+    if hookmarkUrl:
+        links.append(f"[{FINDER_LABEL}]({hookmarkUrl})")
     if dropboxUrl:
         links.append(f"[{DROPBOX_LABEL}]({dropboxUrl})")
     if not links:

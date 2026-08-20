@@ -417,9 +417,9 @@ class craft_sync(object):
         - ``folderPath`` -- the entity's own absolute folder path, linked to from the row
         - ``forceRewrite`` -- skip the unchanged-markdown fast path, because the document's whole body (and so the row's prior block) was just wiped by `_write_index_content`. Default `False`.
         """
-        finderUrl = doc_links.finder_url(folderPath)
+        hookmarkUrl = doc_links.hookmark_url(folderPath)
         dropboxUrl = self._dropbox_url_for(folderPath)
-        markdown = doc_links.link_row_markdown(finderUrl, dropboxUrl)
+        markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl)
         if markdown is None:
             return
 
