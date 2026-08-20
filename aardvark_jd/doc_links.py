@@ -16,7 +16,6 @@ Author
 import base64
 import os
 import sys
-from urllib.parse import quote
 
 FINDER_LABEL = "📁 Finder"
 DROPBOX_LABEL = "🔗 Dropbox"
@@ -54,10 +53,13 @@ def hookmark_url(folderPath):
         return None
     absPath = os.path.realpath(os.path.expanduser(folderPath))
     parentPath, name = os.path.split(absPath)
-    # `quote`'s default `safe='/'` would leave a base64 `/` unescaped - wrong
-    # here, since it's not a path separator but a base64 alphabet character.
-    parentB64 = quote(base64.b64encode(parentPath.encode("utf-8")), safe="")
-    nameB64 = quote(base64.b64encode(name.encode("utf-8")), safe="")
+    # EMBEDDED RAW, NOT PERCENT-ENCODED - MATCHING HOOKMARK'S OWN DOCUMENTED
+    # EXAMPLE (`p=Lw==`) EXACTLY. PERCENT-ENCODING THE `=` PADDING TRIPPED
+    # HOOKMARK'S OWN `hook://` HANDLER INTO REJECTING THE URL OUTRIGHT
+    # ("THE URL IS INVALID") RATHER THAN JUST FAILING TO LOCATE THE FILE -
+    # ITS PARSER EVIDENTLY EXPECTS THE LITERAL BASE64 TEXT, UNESCAPED.
+    parentB64 = base64.b64encode(parentPath.encode("utf-8")).decode("ascii")
+    nameB64 = base64.b64encode(name.encode("utf-8")).decode("ascii")
     return f"hook://file/{_HOOKMARK_PLACEHOLDER_ID}?p={parentB64}&n={nameB64}"
 
 

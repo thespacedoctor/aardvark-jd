@@ -8,13 +8,14 @@ from aardvark_jd import doc_links
 def _decode(url):
     """*decode a `hook://file/...` URL's `p=`/`n=` back to a (parentPath, name) pair*
 
-    `parse_qs` already percent-decodes each value while splitting the
-    query string, so what's left in `query["p"][0]`/`query["n"][0]` is the
-    raw base64 text `hookmark_url` produced before its own `quote()` call.
+    `hookmark_url` embeds raw, unescaped base64 - matching Hookmark's own
+    documented example exactly - so this decodes it the same way: pull
+    `p=`/`n=` off the raw query string rather than through a percent-decoding
+    parser, since there is nothing percent-encoded to undo.
     """
-    query = parse_qs(urlparse(url).query)
-    parentPath = base64.b64decode(query["p"][0]).decode("utf-8")
-    name = base64.b64decode(query["n"][0]).decode("utf-8")
+    query = dict(pair.split("=", 1) for pair in urlparse(url).query.split("&"))
+    parentPath = base64.b64decode(query["p"]).decode("utf-8")
+    name = base64.b64decode(query["n"]).decode("utf-8")
     return parentPath, name
 
 
@@ -25,6 +26,18 @@ def test_hookmark_url_on_darwin(monkeypatch):
     parentPath, name = _decode(url)
     assert parentPath == "/Users/dave/Dropbox"
     assert name == "aardvark"
+
+
+def test_hookmark_url_embeds_raw_base64_not_percent_encoded(monkeypatch):
+    # regression test: percent-encoding the base64 padding (`=` -> `%3D`)
+    # made Hookmark itself reject the URL as invalid, even though the
+    # scheme handoff from Craft worked - matching Hookmark's own
+    # documented example (`p=Lw==`) means the padding must stay literal.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    url = doc_links.hookmark_url("/Users/dave/Dropbox/aardvark")
+    assert "%3D" not in url
+    assert "%2F" not in url
+    assert "==" in url
 
 
 def test_hookmark_url_is_none_off_darwin(monkeypatch):
