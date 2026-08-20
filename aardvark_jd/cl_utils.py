@@ -14,6 +14,8 @@ Usage:
     aardvark search <term>... [-s <pathToSettingsFile>]
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
     aardvark craft_sync [-s <pathToSettingsFile>]
+    aardvark connect_dropbox <appKey> <appSecret> [-s <pathToSettingsFile>]
+    aardvark open [<path>] [-s <pathToSettingsFile>]
 
 Commands:
     init                                   create a new PARA + Johnny Decimal root and index
@@ -26,6 +28,8 @@ Commands:
     search                                 search the index by keyword or phrase
     connect_craft                          connect a craft.do space and run the initial full mirror
     craft_sync                             re-run the craft.do mirror on demand, to backfill or repair drift
+    connect_dropbox                        connect a Dropbox app and start adding Dropbox share links to synced documents
+    open                                   open the Craft folder/document that mirrors a filesystem path (default: the current directory)
 
 Arguments:
     systemName                             the name of the new system, e.g. "My Life"
@@ -42,6 +46,9 @@ Arguments:
     term                                   a search word or phrase
     apiUrl                                 a craft.do API connection's unique base URL
     apiToken                               a craft.do API connection token
+    appKey                                 a Dropbox app's key, from the App Console
+    appSecret                              a Dropbox app's secret, from the App Console
+    path                                   a filesystem path to resolve to its Craft document/folder (default: the current directory)
 
 Options:
     -h, --help                             show this help message
@@ -59,9 +66,11 @@ from aardvark_jd import db, folders, paths, settings_writer
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
+from aardvark_jd.connect_dropbox import connect_dropbox
 from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.initialiser import initialiser
 from aardvark_jd.new_project import new_project
+from aardvark_jd.open_craft import open_craft
 from aardvark_jd.repair_emoji import repair_emoji
 from aardvark_jd.search import search, format_result
 from aardvark_jd.set_emoji import set_emoji
@@ -136,14 +145,27 @@ def main(arguments=None):
                     print(
                         f"craft connected - folders created: {summary['folders_created']}, "
                         f"documents created: {summary['documents_created']}, "
-                        f"indexes refreshed: {summary['indexes_refreshed']}"
+                        f"indexes refreshed: {summary['indexes_refreshed']}, "
+                        f"link rows written: {summary['link_rows_written']}"
                     )
                 elif a["craft_sync"]:
                     summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
                     print(
                         f"craft synced - folders created: {summary['folders_created']}, "
                         f"documents created: {summary['documents_created']}, "
-                        f"indexes refreshed: {summary['indexes_refreshed']}"
+                        f"indexes refreshed: {summary['indexes_refreshed']}, "
+                        f"link rows written: {summary['link_rows_written']}"
+                    )
+                elif a["connect_dropbox"]:
+                    pathToSettingsFile = arguments.get("--settings") or su.configSettingsPath
+                    connect_dropbox(
+                        log=log, appKey=a["appKey"], appSecret=a["appSecret"],
+                        pathToSettingsFile=pathToSettingsFile,
+                    ).get()
+                    settings = settings_writer.read_settings(pathToSettingsFile)
+                    summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+                    print(
+                        f"dropbox connected - link rows written: {summary['link_rows_written']}"
                     )
                 else:
                     _dispatch(a, log, indexDbConn, settings)
@@ -251,6 +273,10 @@ def _dispatch(a, log, indexDbConn, settings):
             print("no matches found")
         for row in results:
             print(format_result(row))
+
+    elif a["open"]:
+        label, craftUrl = open_craft(log=log, dbConn=indexDbConn, path=a["path"], settings=settings).get()
+        print(f"opened {label}  {craftUrl}")
 
 
 if __name__ == "__main__":

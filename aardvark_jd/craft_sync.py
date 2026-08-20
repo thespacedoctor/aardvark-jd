@@ -23,8 +23,9 @@ Author
 : David Young
 """
 
-from aardvark_jd import db, folders, paths
+from aardvark_jd import db, doc_links, dropbox_client, folders, paths
 from aardvark_jd.craft_client import CraftClient
+from aardvark_jd.dropbox_client import DropboxApiError, DropboxClient
 
 _ROOT_FOLDER_KEYS = ("root.inbox", "root.projects", "root.areas", "root.resources", "root.archive")
 _DOMAIN_ROOT_KEY = {"projects": "root.projects", "areas": "root.areas", "resources": "root.resources"}
@@ -71,7 +72,22 @@ class craft_sync(object):
         self.foldersCreated = 0
         self.documentsCreated = 0
         self.indexesRefreshed = 0
+        self.linkRowsWritten = 0
         self.folderIndex = {}
+
+        self.rootPath = (settings.get("system") or {}).get("root_path")
+        self.dropboxClient = None
+        self.dropboxRoot = None
+        dropboxSettings = (settings or {}).get("dropbox") or {}
+        if dropboxSettings.get("enabled") and self.rootPath:
+            self.dropboxClient = DropboxClient(
+                appKey=dropboxSettings.get("app_key"),
+                appSecret=dropboxSettings.get("app_secret"),
+                refreshToken=dropboxSettings.get("refresh_token"),
+            )
+            self.dropboxRoot = dropbox_client.find_containing_root(
+                self.rootPath, dropbox_client.local_dropbox_roots(),
+            )
 
     def get(self):
         """
@@ -79,7 +95,7 @@ class craft_sync(object):
 
         **Return:**
 
-        - ``summary`` -- a dict of counts: `folders_created`, `documents_created`, `indexes_refreshed`
+        - ``summary`` -- a dict of counts: `folders_created`, `documents_created`, `indexes_refreshed`, `link_rows_written`
         """
         self.log.debug("starting the ``get`` method")
 
@@ -96,6 +112,7 @@ class craft_sync(object):
             "folders_created": self.foldersCreated,
             "documents_created": self.documentsCreated,
             "indexes_refreshed": self.indexesRefreshed,
+            "link_rows_written": self.linkRowsWritten,
         }
 
     def _load_folder_index(self):
@@ -162,9 +179,10 @@ class craft_sync(object):
                 idChildren = []
                 for idRow in db.list_ids(self.dbConn, domain, category["category_id"]):
                     idName = folders.display_name(idRow["folder_name"])
-                    _documentId, idUrl = self._ensure_document(
+                    documentId, idUrl = self._ensure_document(
                         "id", str(idRow["id_id"]), idName, categoryFolderId,
                     )
+                    self._write_link_row("id", str(idRow["id_id"]), documentId, idRow["folder_path"])
                     idChildren.append((None, idName, idRow["description"], idUrl))
 
                 # A CATEGORY HAS NO SEPARATE `<X>_system` FOLDER OF ITS OWN - ITS TEN
@@ -275,6 +293,8 @@ class craft_sync(object):
         indexEntityType = f"{entityType}:index"
         documentId, _url = self._ensure_document(indexEntityType, entityKey, _INDEX_DOC_TITLE, folderId)
         self._write_index_content(documentId, children)
+        if self.rootPath:
+            self._write_link_row(indexEntityType, entityKey, documentId, self.rootPath, forceRewrite=True)
 
     def _write_index_content(self, documentId, children):
         """
@@ -364,7 +384,89 @@ class craft_sync(object):
             if baseName == "00_index":
                 documentId, _url = self._ensure_document("system_folder", folderKey, name, containingFolderId)
                 self._write_index_content(documentId, indexChildren)
+                self._write_link_row("system_folder", folderKey, documentId, row["folder_path"], forceRewrite=True)
             elif craftKind == paths.SYSTEM_SUBFOLDER_KIND_FOLDER:
                 self._ensure_folder("system_folder", folderKey, name, parentFolderId=containingFolderId)
             else:
-                self._ensure_document("system_folder", folderKey, name, containingFolderId)
+                documentId, _url = self._ensure_document("system_folder", folderKey, name, containingFolderId)
+                self._write_link_row("system_folder", folderKey, documentId, row["folder_path"])
+
+    # ------------------------------------------------------------------ #
+    # Finder/Dropbox link row - see `doc_links.py`
+    # ------------------------------------------------------------------ #
+
+    def _write_link_row(self, entityType, entityKey, documentId, folderPath, forceRewrite=False):
+        """
+        *(re)write a document's Finder/Dropbox link row, skipping the API round-trip when nothing changed*
+
+        Called after a document's own content has been written, never
+        before. For an ID document (whose body `craft_sync` never
+        touches) this is a genuine idempotency check - an unchanged row
+        costs zero API calls. For a `.00_index` document, `forceRewrite`
+        must be set: `_write_index_content` deletes the document's entire
+        content wholesale immediately before this runs, which silently
+        invalidates the link row's previously recorded block id even when
+        the row's markdown text would otherwise be unchanged - the "skip
+        if unchanged" fast path can't be trusted there.
+
+        **Key Arguments:**
+
+        - ``entityType`` -- the entity's `craft_links` type
+        - ``entityKey`` -- the entity's `craft_links` key
+        - ``documentId`` -- the entity's Craft document id
+        - ``folderPath`` -- the entity's own absolute folder path, linked to from the row
+        - ``forceRewrite`` -- skip the unchanged-markdown fast path, because the document's whole body (and so the row's prior block) was just wiped by `_write_index_content`. Default `False`.
+        """
+        finderUrl = doc_links.finder_url(folderPath)
+        dropboxUrl = self._dropbox_url_for(folderPath)
+        markdown = doc_links.link_row_markdown(finderUrl, dropboxUrl)
+        if markdown is None:
+            return
+
+        link = db.get_craft_link(self.dbConn, entityType, entityKey)
+        existingBlockId = None if forceRewrite else (link["craft_block_id"] if link else None)
+        if not forceRewrite and link and link["links_markdown"] == markdown and existingBlockId:
+            return
+
+        if existingBlockId:
+            self.client.delete_blocks([existingBlockId])
+
+        blockId = self.client.add_block(documentId, markdown, position="start")
+        db.upsert_craft_link(self.dbConn, entityType, entityKey, craftBlockId=blockId, linksMarkdown=markdown)
+        self.linkRowsWritten += 1
+
+    def _dropbox_url_for(self, folderPath):
+        """
+        *resolve (and cache) a folder's Dropbox share URL, or `None` if Dropbox isn't connected/applicable*
+
+        A Dropbox API failure degrades to a Finder-only link row and a
+        logged warning rather than aborting the sync - the filesystem +
+        Craft state is already correct by the time this runs.
+
+        **Key Arguments:**
+
+        - ``folderPath`` -- the folder's absolute path
+
+        **Return:**
+
+        - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None`
+        """
+        if not self.dropboxClient or not self.dropboxRoot:
+            return None
+
+        cached = db.get_dropbox_link(self.dbConn, folderPath)
+        if cached:
+            return cached["dropbox_url"]
+
+        dropboxPath = dropbox_client.to_dropbox_path(folderPath, self.dropboxRoot)
+        if not dropboxPath:
+            return None
+
+        try:
+            url = self.dropboxClient.shared_link(dropboxPath)
+        except DropboxApiError as error:
+            self.log.warning(f"dropbox share link failed for '{folderPath}': {error}")
+            return None
+
+        db.upsert_dropbox_link(self.dbConn, folderPath, url)
+        return url

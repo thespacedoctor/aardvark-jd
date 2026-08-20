@@ -117,6 +117,27 @@ aardvark craft_sync
 
 Inbox and Archive are mirrored as empty top-level folders only - they aren't tracked as structured entries in the SQLite index today, so there's nothing to list inside them yet. Projects aren't Johnny-Decimal coded, so each mirrors as a flat document under the Projects folder rather than a nested folder tree.
 
+## Opening a folder in Craft
+
+Once connected, `open` resolves a filesystem path back to the Craft folder/document that mirrors it, and opens it:
+
+```bash
+cd ~/aardvark/03_AREAS/A11_doctors/A11.10_cardiologist
+aardvark open
+```
+
+It defaults to the current directory, or takes a path directly: `aardvark open <path>`. Every command is also available under the shorter `av` alias - `av open` does the same thing.
+
+## Adding Dropbox links
+
+If your aardvark system root sits inside a Dropbox-synced folder, every document `craft_sync` writes to also gets a Dropbox share link alongside its Finder link, at the top of the page. Create an app in the [Dropbox App Console](https://www.dropbox.com/developers/apps) (with the `sharing.write`, `sharing.read` and `files.metadata.read` scopes), then connect it:
+
+```bash
+aardvark connect_dropbox <your-app-key> <your-app-secret>
+```
+
+This opens a browser to authorise the app, prompts you to paste back the code Dropbox shows you, and stores a long-lived refresh token in your settings file - Dropbox access tokens themselves only last 4 hours, so aardvark re-exchanges the refresh token on every sync rather than needing you to reconnect. `craft_sync` mints each folder's share link once and caches it, so re-running doesn't re-request one that already exists.
+
 ## Command-Line Usage
 
 :::{include} usage.md

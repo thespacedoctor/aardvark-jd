@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pytest
 import yaml
@@ -102,8 +103,16 @@ def dbConn(tmp_path):
 
 
 @pytest.fixture
-def craftSettings():
-    return {"craft": {"enabled": True, "api_url": "https://connect.craft.do/links/abc123/api/v1", "api_token": "fake-token"}}
+def craftSettings(dbConn):
+    # `system.root_path` is always populated by the time real code ever
+    # constructs `craft_sync` - `cl_utils.main` refuses to proceed without
+    # it - so this fixture derives the real root from `dbConn` rather than
+    # leaving it unset, matching what every caller actually sees.
+    rootPath = os.path.dirname(db.get_system_folder(dbConn, "root.index")["folder_path"])
+    return {
+        "craft": {"enabled": True, "api_url": "https://connect.craft.do/links/abc123/api/v1", "api_token": "fake-token"},
+        "system": {"root_path": rootPath},
+    }
 
 
 @pytest.fixture
@@ -137,8 +146,9 @@ def test_craft_sync_mirrors_root_folders(dbConn, craftSettings, fakeClient):
     assert summary["folders_created"] >= 5
 
     # the space-root index should link out to all five, and only those five -
-    # it's written last, so it's the final block added
-    spaceIndexBody = fakeClient.blocksAdded[-1][1]
+    # it's written last, immediately followed by its own Finder/Dropbox link
+    # row (see `_refresh_index`), so it's the second-to-last block added
+    spaceIndexBody = fakeClient.blocksAdded[-2][1]
     for title in ("01 INBOX📥", "02 PROJECTS🚀", "03 AREAS🧭", "04 RESOURCES📚", "09 ARCHIVE🗄️"):
         assert title in spaceIndexBody
 
@@ -263,9 +273,14 @@ def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     assert summary["indexes_refreshed"] > 0
     # every index refresh on the second run deletes its whole prior content and re-inserts
     # fresh content, rather than updating a single block in place (there's no single block
-    # to address - see `_refresh_index`)
-    assert len(fakeClient.blocksDeleted) == blocksAddedAfterFirst
-    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst + summary["indexes_refreshed"]
+    # to address - see `_refresh_index`) - and since the link row lives in the same
+    # document, it's wiped and force-rewritten alongside the index content every time,
+    # so each refreshed index document contributes two deletes and two adds (content +
+    # link row), not one. The id documents' own link rows are untouched on this run -
+    # their folder paths are unchanged, so `_write_link_row` skips them entirely.
+    assert len(fakeClient.blocksDeleted) == 2 * summary["indexes_refreshed"]
+    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst + 2 * summary["indexes_refreshed"]
+    assert summary["link_rows_written"] == summary["indexes_refreshed"]
 
 
 def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn, craftSettings, fakeClient):

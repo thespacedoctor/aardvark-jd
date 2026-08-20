@@ -18,6 +18,17 @@ craft:
     api_url: null
     api_token: null
 
+dropbox:
+    # add a Dropbox share link alongside the Finder link on every synced
+    # Craft document, when the aardvark system root sits inside a
+    # Dropbox-synced folder. set up with `aardvark connect_dropbox <appKey>
+    # <appSecret>`, both copied from a Dropbox app in the App Console - the
+    # one-time browser flow stores a long-lived refresh token here.
+    enabled: false
+    app_key: null
+    app_secret: null
+    refresh_token: null
+
 logging settings:
     formatters:
         file_style:

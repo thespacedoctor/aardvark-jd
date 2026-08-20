@@ -76,8 +76,15 @@ CREATE TABLE IF NOT EXISTS craft_links (
     craft_document_id   TEXT,
     craft_block_id       TEXT,
     craft_url           TEXT,
+    links_markdown       TEXT,
     synced_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
     PRIMARY KEY (entity_type, entity_key)
+);
+
+CREATE TABLE IF NOT EXISTS dropbox_links (
+    folder_path  TEXT PRIMARY KEY,
+    dropbox_url  TEXT NOT NULL,
+    synced_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
 );
 """
 
@@ -194,12 +201,12 @@ CREATE INDEX IF NOT EXISTS idx_search_index_title ON search_index(title);
 # BUMP WHEN `_BASE_SCHEMA` CHANGES IN A WAY THAT AN ALREADY-INITIALISED
 # DATABASE CAN'T PICK UP VIA THE `IF NOT EXISTS` DDL ALONE (E.G. A WIDENED
 # `CHECK` CONSTRAINT), AND ADD THE ONE-OFF REBUILD TO `_migrate_schema`.
-_SCHEMA_VERSION = "2"
+_SCHEMA_VERSION = "3"
 
 
 def _migrate_schema(dbConn):
     """
-    *rebuild `areas`/`categories`/`ids` onto the current schema and drop the legacy flat `projects` table*
+    *rebuild `areas`/`categories`/`ids` onto the current schema, drop the legacy flat `projects` table, and add the `craft_links.links_markdown` column*
 
     SQLite cannot alter a `CHECK` constraint in place, so an
     already-initialised database - whose `areas`/`categories`/`ids` tables
@@ -208,8 +215,11 @@ def _migrate_schema(dbConn):
     are renamed aside, recreated via `_BASE_SCHEMA` (which now carries the
     widened `('areas','resources','projects')` constraint), their rows
     copied across, then the renamed-aside tables and the legacy `projects`
-    table are dropped. Gated on `meta['schema_version']` so it only runs
-    once. A brand-new database (created directly against the current
+    table are dropped. `craft_links.links_markdown` (added for the Finder/
+    Dropbox link row - see `craft_sync._write_link_row`) is a plain `ALTER
+    TABLE ADD COLUMN`, since it isn't `CHECK`-constrained and needs no
+    rebuild. Both steps are gated on `meta['schema_version']` so they only
+    run once. A brand-new database (created directly against the current
     `_BASE_SCHEMA`, so already current) just stamps the version.
 
     **Key Arguments:**
@@ -239,6 +249,11 @@ def _migrate_schema(dbConn):
     dbConn.execute("DROP TABLE ids_old")
     dbConn.execute("DROP TABLE IF EXISTS projects")
     dbConn.execute("PRAGMA foreign_keys = ON")
+
+    craftLinksColumns = {row["name"] for row in dbConn.execute("PRAGMA table_info(craft_links)")}
+    if craftLinksColumns and "links_markdown" not in craftLinksColumns:
+        dbConn.execute("ALTER TABLE craft_links ADD COLUMN links_markdown TEXT")
+
     dbConn.commit()
     set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
 
@@ -717,6 +732,7 @@ def list_system_folders(dbConn):
 
 def upsert_craft_link(
     dbConn, entityType, entityKey, craftFolderId=None, craftDocumentId=None, craftBlockId=None, craftUrl=None,
+    linksMarkdown=None, clearBlockId=False,
 ):
     """
     *record or refresh an entity's linked Craft folder/document/block*
@@ -724,7 +740,13 @@ def upsert_craft_link(
     Fields left as `None` keep whatever was already stored, rather than
     being wiped - an index document's `craftBlockId` is only known after a
     later `add_block` call, so it's set in a second upsert that must not
-    clobber the `craftDocumentId` written by the first.
+    clobber the `craftDocumentId` written by the first. `craftBlockId` and
+    `linksMarkdown` track the Finder/Dropbox link row `craft_sync` writes
+    into each entity's document - see `craft_sync._write_link_row`.
+    `clearBlockId` bypasses the usual keep-if-`None` behaviour to actually
+    null out `craft_block_id`, for the one case that needs it: the row's
+    old block was deleted (e.g. a `.00_index` content rewrite) and no
+    replacement has been inserted yet.
 
     **Key Arguments:**
 
@@ -734,19 +756,27 @@ def upsert_craft_link(
       `area_id`/`category_id`/`id_id`/`project_id` cast to text
     - ``craftFolderId`` -- the linked Craft folder's id, if any. Default `None`.
     - ``craftDocumentId`` -- the linked Craft document's id, if any. Default `None`.
-    - ``craftBlockId`` -- the linked Craft block's id, if any. Default `None`.
+    - ``craftBlockId`` -- the linked Craft link-row block's id, if any. Default `None`.
     - ``craftUrl`` -- the linked Craft folder/document's shareable URL, if any. Default `None`.
+    - ``linksMarkdown`` -- the link row's last-written markdown, if any. Default `None`.
+    - ``clearBlockId`` -- if `True`, null out `craft_block_id` regardless of the `craftBlockId` argument. Default `False`.
     """
+    # `excluded.craft_block_id` ALREADY CARRIES `blockIdValue` VIA THE INSERT
+    # ROW BELOW - NO SEPARATE BINDING IS NEEDED FOR THE UPDATE CLAUSE.
+    blockIdValue = None if clearBlockId else craftBlockId
+    blockIdSql = "excluded.craft_block_id" if clearBlockId else "COALESCE(excluded.craft_block_id, craft_links.craft_block_id)"
+
     dbConn.execute(
-        "INSERT INTO craft_links(entity_type, entity_key, craft_folder_id, craft_document_id, craft_block_id, craft_url) "
-        "VALUES (?, ?, ?, ?, ?, ?) "
+        "INSERT INTO craft_links(entity_type, entity_key, craft_folder_id, craft_document_id, craft_block_id, craft_url, links_markdown) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(entity_type, entity_key) DO UPDATE SET "
         "craft_folder_id = COALESCE(excluded.craft_folder_id, craft_links.craft_folder_id), "
         "craft_document_id = COALESCE(excluded.craft_document_id, craft_links.craft_document_id), "
-        "craft_block_id = COALESCE(excluded.craft_block_id, craft_links.craft_block_id), "
+        f"craft_block_id = {blockIdSql}, "
         "craft_url = COALESCE(excluded.craft_url, craft_links.craft_url), "
+        "links_markdown = COALESCE(excluded.links_markdown, craft_links.links_markdown), "
         "synced_at = strftime('%Y-%m-%d %H:%M:%S','now')",
-        (entityType, entityKey, craftFolderId, craftDocumentId, craftBlockId, craftUrl),
+        (entityType, entityKey, craftFolderId, craftDocumentId, blockIdValue, craftUrl, linksMarkdown),
     )
     dbConn.commit()
 
@@ -768,3 +798,80 @@ def get_craft_link(dbConn, entityType, entityKey):
     return dbConn.execute(
         "SELECT * FROM craft_links WHERE entity_type = ? AND entity_key = ?", (entityType, entityKey)
     ).fetchone()
+
+
+# THE `(entityType, folderPathColumn, keyColumn)` EVERY `locate.entity_for_path`
+# CANDIDATE TABLE IS QUERIED WITH - KEYS MUST MATCH THE `entityType`/`entityKey`
+# SHAPE `craft_sync.py` WRITES INTO `craft_links` FOR THAT TABLE.
+_LOCATABLE_TABLES = (
+    ("id", "ids", "id_id"),
+    ("category", "categories", "category_id"),
+    ("area", "areas", "area_id"),
+    ("system_folder", "system_folders", "folder_key"),
+)
+
+
+def entity_rows_for_path_prefix(dbConn):
+    """
+    *fetch every `(entityType, entityKey, folderPath)` candidate for a path-prefix match*
+
+    One flat list across `ids`, `categories`, `areas` and `system_folders`,
+    for `locate.entity_for_path` to compare against a normalised input path
+    and pick the longest matching prefix. Read as one pass per call rather
+    than four separate queries per lookup, since `entity_for_path` needs
+    the whole set anyway to find the deepest match.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+
+    **Return:**
+
+    - ``rows`` -- a list of `(entityType, entityKey, folderPath)` tuples
+    """
+    rows = []
+    for entityType, tableName, keyColumn in _LOCATABLE_TABLES:
+        for row in dbConn.execute(f"SELECT {keyColumn} AS key, folder_path FROM {tableName}"):
+            rows.append((entityType, str(row["key"]), row["folder_path"]))
+    return rows
+
+
+def get_dropbox_link(dbConn, folderPath):
+    """
+    *look up a folder's cached Dropbox share link, if any*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``folderPath`` -- the folder's absolute path, as passed to `upsert_dropbox_link`
+
+    **Return:**
+
+    - ``row`` -- the `dropbox_links` row, or `None` if not yet minted
+    """
+    return dbConn.execute(
+        "SELECT * FROM dropbox_links WHERE folder_path = ?", (folderPath,)
+    ).fetchone()
+
+
+def upsert_dropbox_link(dbConn, folderPath, dropboxUrl):
+    """
+    *record or refresh a folder's cached Dropbox share link*
+
+    Sharing a folder that already has a link just returns the existing
+    one (see `DropboxClient.shared_link`), so this is safe to call every
+    sync without minting duplicates.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``folderPath`` -- the folder's absolute path
+    - ``dropboxUrl`` -- the folder's Dropbox share URL
+    """
+    dbConn.execute(
+        "INSERT INTO dropbox_links(folder_path, dropbox_url) VALUES (?, ?) "
+        "ON CONFLICT(folder_path) DO UPDATE SET dropbox_url = excluded.dropbox_url, "
+        "synced_at = strftime('%Y-%m-%d %H:%M:%S','now')",
+        (folderPath, dropboxUrl),
+    )
+    dbConn.commit()

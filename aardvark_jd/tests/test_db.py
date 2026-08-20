@@ -182,3 +182,53 @@ def test_system_folders_round_trip(dbConn):
     assert row["folder_name"] == "A.REAS 🌟"
     count = dbConn.execute("SELECT COUNT(*) AS c FROM system_folders").fetchone()["c"]
     assert count == 1
+
+
+def test_craft_link_links_markdown_round_trip(dbConn):
+    db.upsert_craft_link(dbConn, "id", "1", craftDocumentId="doc-1", craftBlockId="block-1", linksMarkdown="[a](b)")
+    row = db.get_craft_link(dbConn, "id", "1")
+    assert row["links_markdown"] == "[a](b)"
+
+    # an upsert that only touches craft_document_id must not clobber links_markdown
+    db.upsert_craft_link(dbConn, "id", "1", craftDocumentId="doc-1-renamed")
+    row = db.get_craft_link(dbConn, "id", "1")
+    assert row["links_markdown"] == "[a](b)"
+    assert row["craft_block_id"] == "block-1"
+
+
+def test_craft_link_clear_block_id(dbConn):
+    db.upsert_craft_link(dbConn, "id", "1", craftDocumentId="doc-1", craftBlockId="block-1")
+    db.upsert_craft_link(dbConn, "id", "1", clearBlockId=True)
+    row = db.get_craft_link(dbConn, "id", "1")
+    assert row["craft_block_id"] is None
+    # the document id, set earlier and untouched by this call, survives
+    assert row["craft_document_id"] == "doc-1"
+
+
+def test_entity_rows_for_path_prefix(dbConn):
+    db.insert_system_folder(dbConn, "root.areas", "03_AREAS", "/root/03_AREAS")
+    areaId = db.insert_area(dbConn, "areas", 10, 19, "Health", "", "🏥", "A10_19_health🏥", "/root/03_AREAS/A10_19_health")
+    categoryId = db.insert_category(dbConn, areaId, "areas", 11, "Doctors", "", "📁", "A11_doctors", "/root/03_AREAS/A10_19_health/A11_doctors")
+    db.insert_id(dbConn, categoryId, "areas", 11, 10, "Cardiologist", "", "A11.10_cardiologist", "/root/03_AREAS/A10_19_health/A11_doctors/A11.10_cardiologist")
+
+    rows = db.entity_rows_for_path_prefix(dbConn)
+    rowsByType = {(entityType, entityKey): folderPath for entityType, entityKey, folderPath in rows}
+    assert rowsByType[("system_folder", "root.areas")] == "/root/03_AREAS"
+    assert rowsByType[("area", str(areaId))] == "/root/03_AREAS/A10_19_health"
+    assert rowsByType[("category", str(categoryId))] == "/root/03_AREAS/A10_19_health/A11_doctors"
+    assert any(entityType == "id" for entityType, _key in rowsByType)
+
+
+def test_dropbox_link_round_trip(dbConn):
+    assert db.get_dropbox_link(dbConn, "/root/03_AREAS") is None
+
+    db.upsert_dropbox_link(dbConn, "/root/03_AREAS", "https://dropbox.example/a")
+    row = db.get_dropbox_link(dbConn, "/root/03_AREAS")
+    assert row["dropbox_url"] == "https://dropbox.example/a"
+
+    # re-upserting the same path updates rather than duplicates
+    db.upsert_dropbox_link(dbConn, "/root/03_AREAS", "https://dropbox.example/a-renamed")
+    row = db.get_dropbox_link(dbConn, "/root/03_AREAS")
+    assert row["dropbox_url"] == "https://dropbox.example/a-renamed"
+    count = dbConn.execute("SELECT COUNT(*) AS c FROM dropbox_links").fetchone()["c"]
+    assert count == 1

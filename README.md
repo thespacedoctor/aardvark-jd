@@ -29,6 +29,9 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 * `search` the index by keyword or phrase
 * every non-ID folder is suffixed with a relevant emoji, suggested by Claude and confirmable at the prompt (or set outright with `--emoji`)
 * `set_emoji` / `repair_emoji` to change an emoji after the fact, moving the folder and repointing the index together
+* `connect_craft` / `craft_sync` to mirror the whole index into a craft.do space, with a Finder link (and, once `connect_dropbox` is set up, a Dropbox share link) on every synced document
+* `open [<path>]` to jump straight from a filesystem path back to its mirrored Craft folder/document (defaults to the current directory)
+* every command is also available under the shorter `av` alias, e.g. `av open`, `av search cardio`
 
 
 
