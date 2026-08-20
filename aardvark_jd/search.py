@@ -9,7 +9,7 @@ Author
 
 import sqlite3
 
-from aardvark_jd import db
+from aardvark_jd import codes, db
 
 # FTS5 COLUMN ORDER: entity_type, code, title, description, path - WEIGHT
 # TITLE MATCHES ABOVE DESCRIPTION MATCHES, IGNORE THE UNINDEXED COLUMNS
@@ -124,3 +124,190 @@ def format_result(row):
     """
     code = row["code"] or ""
     return f"{code}  {row['title']}  {row['path']}"
+
+
+class tree(object):
+    """
+    *render the whole index, or one Johnny Decimal subtree, as an indented tree*
+
+    Backs a bare `aardvark search` (the whole index) and `aardvark search
+    <ref>` (the subtree under a domain letter, area or category). An ID ref
+    has no subtree, so the caller prints its path line instead.
+
+    The reserved `.00`-`.09` system IDs never appear: they live in
+    `system_folders`, not `ids`, so walking the index tables excludes them
+    for free.
+
+    **Key Arguments:**
+
+    - ``log`` -- logger
+    - ``dbConn`` -- an open SQLite connection
+    - ``ref`` -- a domain letter, area ref or category ref to scope the tree to. Default *None*, meaning the whole index.
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd.search import tree
+    for line in tree(log=log, dbConn=dbConn, ref="A10-19").get():
+        print(line)
+    ```
+    """
+
+    def __init__(self, log, dbConn, ref=None):
+        self.log = log
+        self.dbConn = dbConn
+        self.ref = ref
+
+    def get(self):
+        """
+        *build the tree's display lines*
+
+        **Return:**
+
+        - ``lines`` -- a list of ready-to-print strings
+        """
+        self.log.debug("starting the ``get`` method")
+
+        nodes = self._nodes()
+        lines = format_tree(nodes)
+
+        self.log.debug("completed the ``get`` method")
+        return lines
+
+    def _nodes(self):
+        """
+        *walk the index into a nested list of display nodes*
+
+        **Return:**
+
+        - ``nodes`` -- a list of dicts with keys `label`, `path` and `children`
+        """
+        if self.ref is None:
+            return [
+                node
+                for domain in codes.DOMAINS
+                for node in self._domain_nodes(domain)
+            ]
+
+        domain = codes.domain_from_ref(self.ref) if codes.is_jd_ref(self.ref) else None
+        if domain is None:
+            domain = codes.domain_from_letter(self.ref)
+
+        # A BARE DOMAIN LETTER HAS NO NUMBERS IN IT, SO IT SCOPES TO THE WHOLE DOMAIN.
+        if len(self.ref.strip(".")) == 1:
+            return self._domain_nodes(domain)
+
+        if codes.parse_area_ref_is_area(self.ref):
+            decadeStart = codes.parse_area_ref(self.ref)
+            area = db.get_area(self.dbConn, domain, decadeStart)
+            if not area:
+                raise ValueError(f"no area '{self.ref}' in the index")
+            return [self._area_node(domain, area)]
+
+        acNumber = codes.parse_category_ref(self.ref)
+        category = db.get_category(self.dbConn, domain, acNumber)
+        if not category:
+            raise ValueError(f"no category '{self.ref}' in the index")
+        return [self._category_node(domain, category)]
+
+    def _domain_nodes(self, domain):
+        """
+        *the areas of one domain, as display nodes*
+
+        **Key Arguments:**
+
+        - ``domain`` -- `areas`, `resources` or `projects`
+
+        **Return:**
+
+        - ``nodes`` -- a single-element list holding the domain's node
+        """
+        children = [self._area_node(domain, area) for area in db.list_areas(self.dbConn, domain)]
+        return [{
+            "label": f"{codes.DOMAIN_LETTER[domain]}  {domain}",
+            "path": None,
+            "children": children,
+        }]
+
+    def _area_node(self, domain, area):
+        """
+        *one area and its categories, as a display node*
+
+        **Key Arguments:**
+
+        - ``domain`` -- the area's domain
+        - ``area`` -- the `areas` row
+
+        **Return:**
+
+        - ``node`` -- the display node
+        """
+        code = codes.format_area_code(domain, area["decade_start"], area["decade_end"])
+        children = [
+            self._category_node(domain, category)
+            for category in db.list_categories(self.dbConn, domain, areaId=area["area_id"])
+        ]
+        return {"label": f"{code}  {area['title']}", "path": area["folder_path"], "children": children}
+
+    def _category_node(self, domain, category):
+        """
+        *one category and its IDs, as a display node*
+
+        **Key Arguments:**
+
+        - ``domain`` -- the category's domain
+        - ``category`` -- the `categories` row
+
+        **Return:**
+
+        - ``node`` -- the display node
+        """
+        code = codes.format_category_code(domain, category["ac_number"])
+        children = [
+            {
+                "label": f"{codes.format_id_code(domain, row['ac_number'], row['item_number'])}  {row['title']}",
+                "path": row["folder_path"],
+                "children": [],
+            }
+            for row in db.list_ids(self.dbConn, domain, category["category_id"])
+        ]
+        return {
+            "label": f"{code}  {category['title']}",
+            "path": category["folder_path"],
+            "children": children,
+        }
+
+
+def format_tree(nodes, prefix=""):
+    """
+    *render nested display nodes as box-drawing tree lines*
+
+    **Key Arguments:**
+
+    - ``nodes`` -- a list of dicts with keys `label`, `path` and `children`
+    - ``prefix`` -- the indent carried down from the parent level. Default *""*.
+
+    **Return:**
+
+    - ``lines`` -- a list of ready-to-print strings
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd.search import format_tree
+    lines = format_tree(nodes)
+    ```
+    """
+    lines = []
+    for index, node in enumerate(nodes):
+        isLast = index == len(nodes) - 1
+        if prefix == "" and node["path"] is None:
+            # A DOMAIN HEADING SITS FLUSH LEFT WITH NO CONNECTOR ABOVE IT
+            lines.append(node["label"])
+            lines.extend(format_tree(node["children"], ""))
+            continue
+        connector = "└── " if isLast else "├── "
+        lines.append(f"{prefix}{connector}{node['label']}")
+        childPrefix = prefix + ("    " if isLast else "│   ")
+        lines.extend(format_tree(node["children"], childPrefix))
+    return lines

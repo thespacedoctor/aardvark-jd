@@ -38,7 +38,7 @@ aardvark_jd.emoji_picker
 aardvark_jd.folders
 aardvark_jd.initialiser
 aardvark_jd.locate
-aardvark_jd.new_project
+aardvark_jd.add_project
 aardvark_jd.open_craft
 aardvark_jd.paths
 aardvark_jd.repair_emoji

@@ -57,45 +57,9 @@ def rename_folder_and_reindex(dbConn, oldFolderPath, newFolderName, updateRow):
     ```
     """
     parentPath = os.path.dirname(oldFolderPath.rstrip("/"))
-    newFolderPath = f"{parentPath}/{newFolderName}"
-
-    if newFolderPath == oldFolderPath:
-        return newFolderPath
-
-    # ON A CASE-INSENSITIVE FILESYSTEM (THE macOS DEFAULT), A RENAME THAT
-    # ONLY CHANGES CASE - e.g. "01_inbox" -> "01_INBOX" - MAKES
-    # `os.path.exists(newFolderPath)` TRUE, BECAUSE IT RESOLVES TO THE SAME
-    # ENTRY AS `oldFolderPath`. `os.path.samefile` TELLS THAT APART FROM A
-    # GENUINE COLLISION WITH SOME OTHER, UNRELATED FOLDER.
-    if os.path.exists(newFolderPath):
-        try:
-            isTheSameFolder = os.path.samefile(newFolderPath, oldFolderPath)
-        except OSError:
-            isTheSameFolder = False
-        if not isTheSameFolder:
-            raise ValueError(f"'{newFolderPath}' already exists - refusing to overwrite it")
-    if not os.path.isdir(oldFolderPath):
-        raise ValueError(f"'{oldFolderPath}' is not on disk - the index is out of step with the filesystem")
-
-    oldFolderName = os.path.basename(oldFolderPath.rstrip("/"))
-
-    try:
-        updateRow(newFolderName, newFolderPath)
-        db.rewrite_folder_path_prefix(dbConn, oldFolderPath, newFolderPath)
-        dbConn.commit()
-    except Exception:
-        dbConn.rollback()
-        raise
-
-    try:
-        os.rename(oldFolderPath, newFolderPath)
-    except Exception:
-        updateRow(oldFolderName, oldFolderPath)
-        db.rewrite_folder_path_prefix(dbConn, newFolderPath, oldFolderPath)
-        dbConn.commit()
-        raise
-
-    return newFolderPath
+    return folders.move_folder_and_reindex(
+        dbConn, oldFolderPath, f"{parentPath}/{newFolderName}", updateRow,
+    )
 
 
 class set_emoji(object):

@@ -111,3 +111,41 @@ def test_is_jd_ref_separates_codes_from_system_folder_keys():
 ])
 def test_parse_area_ref_is_area(text, expected):
     assert codes.parse_area_ref_is_area(text) is expected
+
+
+# ---------------------------------------------------------------------- #
+# ID references
+# ---------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("ref", ["A11.10", "A.11.10", "R99.99", "P11.10"])
+def test_is_id_ref_accepts_id_codes(ref):
+    assert codes.is_id_ref(ref) is True
+
+
+@pytest.mark.parametrize("ref", ["A11", "A10-19", "A", "root.areas", "11.10", ""])
+def test_is_id_ref_rejects_everything_else(ref):
+    assert codes.is_id_ref(ref) is False
+
+
+def test_is_jd_ref_still_rejects_id_codes():
+    """is_jd_ref answers 'area or category?', which is why is_id_ref exists"""
+    assert codes.is_jd_ref("A11.10") is False
+
+
+def test_split_id_ref_returns_its_three_parts():
+    assert codes.split_id_ref("A11.10") == ("areas", 11, 10)
+    assert codes.split_id_ref("P11.10") == ("projects", 11, 10)
+
+
+def test_split_id_ref_accepts_the_legacy_dotted_form():
+    assert codes.split_id_ref("A.11.10") == ("areas", 11, 10)
+
+
+def test_split_id_ref_rejects_a_non_id_ref():
+    with pytest.raises(ValueError):
+        codes.split_id_ref("A11")
+
+
+def test_split_id_ref_rejects_a_contradicting_domain():
+    with pytest.raises(ValueError):
+        codes.split_id_ref("A11.10", domain="projects")

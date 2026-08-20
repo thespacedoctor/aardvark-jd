@@ -331,11 +331,11 @@ def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
 
 
 def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn, craftSettings, fakeClient):
-    from aardvark_jd.new_project import new_project
+    from aardvark_jd.add_project import add_project
 
     add_area(log=log, dbConn=dbConn, domain="projects", title="Launches", description="d1").get()
     add_category(log=log, dbConn=dbConn, domain="projects", areaRef="P10", title="Website", description="d2").get()
-    new_project(log=log, dbConn=dbConn, categoryRef="P11", templateName="blank", projectTitle="Relaunch").get()
+    add_project(log=log, dbConn=dbConn, categoryRef="P11", templateName="blank", projectTitle="Relaunch").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 

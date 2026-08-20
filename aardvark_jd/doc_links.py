@@ -25,6 +25,7 @@ from pathlib import PurePosixPath
 FINDER_LABEL = "📁 Finder"
 DROPBOX_LABEL = "🔗 Dropbox"
 TODOIST_LABEL = "✅ Todoist"
+DRIVE_LABEL = "📁 Drive"
 CRAFT_LABEL = "🗒️ Craft"
 
 # HOOKMARK REJECTS `hook://file/...` URLS OUTRIGHT ("THE URL IS INVALID")
@@ -144,7 +145,7 @@ def links_row(labelledUrls):
     return "  ·  ".join(links)
 
 
-def link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl=None):
+def link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl=None, driveUrl=None):
     """
     *render the Finder/Dropbox/Todoist link row as a single markdown line*
 
@@ -161,11 +162,12 @@ def link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl=None):
     return links_row([
         (FINDER_LABEL, hookmarkUrl),
         (DROPBOX_LABEL, dropboxUrl),
+        (DRIVE_LABEL, driveUrl),
         (TODOIST_LABEL, todoistUrl),
     ])
 
 
-def todoist_description_markdown(hookmarkUrl, dropboxUrl, craftUrl):
+def todoist_description_markdown(hookmarkUrl, dropboxUrl, craftUrl, driveUrl=None):
     """
     *render the Finder/Dropbox/Craft description set on a mirrored Todoist project*
 
@@ -182,5 +184,6 @@ def todoist_description_markdown(hookmarkUrl, dropboxUrl, craftUrl):
     return links_row([
         (FINDER_LABEL, hookmarkUrl),
         (DROPBOX_LABEL, dropboxUrl),
+        (DRIVE_LABEL, driveUrl),
         (CRAFT_LABEL, craftUrl),
     ])

@@ -96,6 +96,48 @@ CREATE TABLE IF NOT EXISTS todoist_links (
     synced_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
     PRIMARY KEY (entity_type, entity_key)
 );
+
+CREATE TABLE IF NOT EXISTS gdrive_links (
+    entity_type      TEXT NOT NULL,
+    entity_key       TEXT NOT NULL,
+    gdrive_folder_id TEXT,
+    gdrive_url       TEXT,
+    synced_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+    PRIMARY KEY (entity_type, entity_key)
+);
+
+-- AN ARCHIVED AREA/CATEGORY/ID LEAVES `areas`/`categories`/`ids` ENTIRELY AND
+-- LANDS HERE. THAT IS WHAT FREES ITS JOHNNY DECIMAL NUMBER FOR REUSE - THE
+-- LIVE TABLES CARRY `UNIQUE (domain, ac_number[, item_number])`, SO THE ROW
+-- CANNOT BOTH STAY PUT AND SURRENDER ITS NUMBER. KEEPING ARCHIVED ROWS OUT
+-- OF THE LIVE TABLES ALSO MEANS EVERY EXISTING WALK (`list_areas`,
+-- `list_categories`, `list_ids`, AND THE THREE SYNC ENGINES BUILT ON THEM)
+-- SKIPS THEM WITHOUT NEEDING AN `archived` FILTER ADDED - AND SINCE ALL
+-- THREE SYNCS ADOPT-OR-CREATE *BY NAME*, A SINGLE MISSED FILTER WOULD HAVE
+-- SILENTLY RECREATED ARCHIVED STRUCTURE ON THE NEXT SYNC.
+CREATE TABLE IF NOT EXISTS archived_entities (
+    archive_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type   TEXT NOT NULL CHECK (entity_type IN ('area','category','id')),
+    entity_key    TEXT NOT NULL,
+    domain        TEXT NOT NULL CHECK (domain IN ('areas','resources','projects')),
+    code          TEXT NOT NULL,
+    decade_start  INTEGER,
+    ac_number     INTEGER,
+    item_number   INTEGER,
+    title         TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    emoji         TEXT NOT NULL DEFAULT '',
+    folder_name   TEXT NOT NULL,
+    original_path TEXT NOT NULL,
+    archived_path TEXT NOT NULL,
+    craft_url     TEXT,
+    todoist_url   TEXT,
+    gdrive_url    TEXT,
+    dropbox_url   TEXT,
+    archived_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_archived_entities_path ON archived_entities(archived_path);
+CREATE INDEX IF NOT EXISTS idx_archived_entities_code ON archived_entities(domain, code);
 """
 
 # `CREATE TRIGGER IF NOT EXISTS` NEVER UPDATES AN EXISTING TRIGGER'S BODY, SO
@@ -211,7 +253,7 @@ CREATE INDEX IF NOT EXISTS idx_search_index_title ON search_index(title);
 # BUMP WHEN `_BASE_SCHEMA` CHANGES IN A WAY THAT AN ALREADY-INITIALISED
 # DATABASE CAN'T PICK UP VIA THE `IF NOT EXISTS` DDL ALONE (E.G. A WIDENED
 # `CHECK` CONSTRAINT), AND ADD THE ONE-OFF REBUILD TO `_migrate_schema`.
-_SCHEMA_VERSION = "4"
+_SCHEMA_VERSION = "5"
 
 
 def _migrate_schema(dbConn):
@@ -240,11 +282,16 @@ def _migrate_schema(dbConn):
         set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
         return
 
-    if priorVersion != "3" and priorVersion != "4":
-        _migrate_to_v3(dbConn)
-
-    if priorVersion != "4":
-        _migrate_to_v4(dbConn)
+    # WALK THE LADDER FROM WHEREVER THIS DATABASE IS UP TO CURRENT. A
+    # DATABASE WITH NO RECORDED VERSION PREDATES THE `meta` STAMP AND SO
+    # NEEDS EVERY STEP.
+    startedAt = (
+        _MIGRATION_VERSIONS.index(priorVersion) + 1
+        if priorVersion in _MIGRATION_VERSIONS
+        else 0
+    )
+    for _version, migration in _MIGRATIONS[startedAt:]:
+        migration(dbConn)
 
     dbConn.commit()
     set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
@@ -308,6 +355,35 @@ def _migrate_to_v4(dbConn):
     - ``dbConn`` -- an open SQLite connection
     """
     dbConn.execute("DELETE FROM craft_links WHERE entity_type = 'id'")
+
+
+def _migrate_to_v5(dbConn):
+    """
+    *pick up the `gdrive_links` and `archived_entities` tables*
+
+    Both are additive, and both are declared in `_BASE_SCHEMA` with
+    `CREATE TABLE IF NOT EXISTS`, which `initialise_schema` runs on every
+    call - so an existing database has already grown them by the time this
+    step is reached. Nothing to do here but exist, so the version ladder
+    has a rung to step onto and the bump is recorded deliberately rather
+    than by omission.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    """
+    pass
+
+
+# ORDERED LADDER OF ONE-OFF MIGRATIONS. A DATABASE STAMPED WITH VERSION `N`
+# RUNS EVERY ENTRY AFTER `N`, IN ORDER. ADD NEW STEPS TO THE END AND BUMP
+# `_SCHEMA_VERSION` TO MATCH.
+_MIGRATIONS = (
+    ("3", _migrate_to_v3),
+    ("4", _migrate_to_v4),
+    ("5", _migrate_to_v5),
+)
+_MIGRATION_VERSIONS = [version for version, _migration in _MIGRATIONS]
 
 
 def get_connection(pathToDb):
@@ -977,3 +1053,273 @@ def upsert_dropbox_link(dbConn, folderPath, dropboxUrl):
         (folderPath, dropboxUrl),
     )
     dbConn.commit()
+
+
+def get_id(dbConn, domain, acNumber, itemNumber):
+    """
+    *look up a single ID row by its Johnny Decimal numbers*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``domain`` -- `areas`, `resources` or `projects`
+    - ``acNumber`` -- the containing category's AC number
+    - ``itemNumber`` -- the ID's item number
+
+    **Return:**
+
+    - ``row`` -- the `ids` row, or `None` if there is no such ID
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import db
+    row = db.get_id(dbConn, "areas", 11, 10)
+    ```
+    """
+    return dbConn.execute(
+        "SELECT * FROM ids WHERE domain = ? AND ac_number = ? AND item_number = ?",
+        (domain, acNumber, itemNumber),
+    ).fetchone()
+
+
+def get_gdrive_link(dbConn, entityType, entityKey):
+    """
+    *look up an entity's mirrored Google Drive folder*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- the entity's type, e.g. `"area"`
+    - ``entityKey`` -- the entity's key, unique within its type
+
+    **Return:**
+
+    - ``row`` -- the `gdrive_links` row, or `None` if the entity has never been mirrored
+    """
+    return dbConn.execute(
+        "SELECT * FROM gdrive_links WHERE entity_type = ? AND entity_key = ?",
+        (entityType, entityKey),
+    ).fetchone()
+
+
+def upsert_gdrive_link(dbConn, entityType, entityKey, gdriveFolderId=None, gdriveUrl=None):
+    """
+    *record (or refresh) an entity's mirrored Google Drive folder*
+
+    A `None` argument leaves any already-stored value alone, matching
+    `upsert_craft_link`'s COALESCE behaviour.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- the entity's type, e.g. `"area"`
+    - ``entityKey`` -- the entity's key, unique within its type
+    - ``gdriveFolderId`` -- the Drive folder id. Default *None*.
+    - ``gdriveUrl`` -- the Drive folder's web URL. Default *None*.
+    """
+    dbConn.execute(
+        """
+        INSERT INTO gdrive_links (entity_type, entity_key, gdrive_folder_id, gdrive_url)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (entity_type, entity_key) DO UPDATE SET
+            gdrive_folder_id = COALESCE(excluded.gdrive_folder_id, gdrive_links.gdrive_folder_id),
+            gdrive_url       = COALESCE(excluded.gdrive_url, gdrive_links.gdrive_url),
+            synced_at        = strftime('%Y-%m-%d %H:%M:%S','now')
+        """,
+        (entityType, entityKey, gdriveFolderId, gdriveUrl),
+    )
+    dbConn.commit()
+
+
+def insert_archived_entity(
+    dbConn, entityType, entityKey, domain, code, title, folderName, originalPath, archivedPath,
+    decadeStart=None, acNumber=None, itemNumber=None, description="", emoji="",
+    craftUrl=None, todoistUrl=None, gdriveUrl=None, dropboxUrl=None,
+):
+    """
+    *record an area, category or ID as archived, preserving everything needed to find it again*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- `"area"`, `"category"` or `"id"`
+    - ``entityKey`` -- the original `area_id`/`category_id`/`id_id`, as text
+    - ``domain`` -- `areas`, `resources` or `projects`
+    - ``code`` -- the entity's Johnny Decimal code at the time of archiving, e.g. `"A11.10"`
+    - ``title`` -- the entity's title
+    - ``folderName`` -- the entity's on-disk folder name before the move
+    - ``originalPath`` -- where the folder lived before archiving
+    - ``archivedPath`` -- where the folder lives now
+    - ``decadeStart`` -- the area's decade start, for an area. Default *None*.
+    - ``acNumber`` -- the AC number, for a category or ID. Default *None*.
+    - ``itemNumber`` -- the item number, for an ID. Default *None*.
+    - ``description`` -- the entity's description. Default *""*.
+    - ``emoji`` -- the entity's emoji. Default *""*.
+    - ``craftUrl`` -- its last known Craft URL. Default *None*.
+    - ``todoistUrl`` -- its last known Todoist URL. Default *None*.
+    - ``gdriveUrl`` -- its last known Google Drive URL. Default *None*.
+    - ``dropboxUrl`` -- its last known Dropbox URL. Default *None*.
+
+    **Return:**
+
+    - ``archiveId`` -- the new `archived_entities` row's id
+    """
+    cursor = dbConn.execute(
+        """
+        INSERT INTO archived_entities (
+            entity_type, entity_key, domain, code, decade_start, ac_number, item_number,
+            title, description, emoji, folder_name, original_path, archived_path,
+            craft_url, todoist_url, gdrive_url, dropbox_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            entityType, str(entityKey), domain, code, decadeStart, acNumber, itemNumber,
+            title, description or "", emoji or "", folderName, originalPath, archivedPath,
+            craftUrl, todoistUrl, gdriveUrl, dropboxUrl,
+        ),
+    )
+    return cursor.lastrowid
+
+
+def list_archived_entities(dbConn, domain=None):
+    """
+    *every archived entity, most recently archived first*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``domain`` -- restrict to one domain. Default *None*, meaning all three.
+
+    **Return:**
+
+    - ``rows`` -- the matching `archived_entities` rows
+    """
+    if domain:
+        return dbConn.execute(
+            "SELECT * FROM archived_entities WHERE domain = ? ORDER BY archived_at DESC, archive_id DESC",
+            (domain,),
+        ).fetchall()
+    return dbConn.execute(
+        "SELECT * FROM archived_entities ORDER BY archived_at DESC, archive_id DESC"
+    ).fetchall()
+
+
+def delete_area(dbConn, areaId):
+    """
+    *remove an area from the live index, cascading to its categories and IDs*
+
+    Does not commit - the caller owns the transaction, since archiving has
+    to write the `archived_entities` rows in the same one.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``areaId`` -- the area's id
+    """
+    dbConn.execute("DELETE FROM areas WHERE area_id = ?", (areaId,))
+
+
+def delete_category(dbConn, categoryId):
+    """
+    *remove a category from the live index, cascading to its IDs*
+
+    Does not commit - see `delete_area`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``categoryId`` -- the category's id
+    """
+    dbConn.execute("DELETE FROM categories WHERE category_id = ?", (categoryId,))
+
+
+def delete_id(dbConn, idId):
+    """
+    *remove an ID from the live index*
+
+    Does not commit - see `delete_area`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``idId`` -- the ID's id
+    """
+    dbConn.execute("DELETE FROM ids WHERE id_id = ?", (idId,))
+
+
+def delete_system_folders_with_prefix(dbConn, keyPrefix):
+    """
+    *forget every `system_folders` row whose key starts with `keyPrefix`*
+
+    Archiving a category or area takes its reserved `.00`-`.09` scaffolding
+    with it physically, but those rows must not survive: `folders.create_reserved_system_ids`
+    early-returns on an already-recorded key, so a future category handed
+    the same AC number would silently get no scaffolding of its own and
+    inherit paths pointing inside the archive.
+
+    Does not commit - see `delete_area`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``keyPrefix`` -- the folder-key prefix, e.g. `"areas.11."`
+
+    **Return:**
+
+    - ``deleted`` -- how many rows were removed
+    """
+    cursor = dbConn.execute(
+        "DELETE FROM system_folders WHERE folder_key LIKE ? || '%'", (keyPrefix,)
+    )
+    return cursor.rowcount
+
+
+def delete_entity_links(dbConn, entityType, entityKey):
+    """
+    *forget an entity's Craft, Todoist and Google Drive links*
+
+    Called on archive so the next sync neither refreshes nor re-links the
+    entity. Craft link rows are keyed by several entity types for the one
+    entity (`id` for its folder, `id:index` for its index document), so the
+    `:index` variant is cleared alongside.
+
+    Does not commit - see `delete_area`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- the entity's type, e.g. `"id"`
+    - ``entityKey`` -- the entity's key, unique within its type
+    """
+    for table in ("craft_links", "todoist_links", "gdrive_links"):
+        dbConn.execute(
+            f"DELETE FROM {table} WHERE entity_type IN (?, ?) AND entity_key = ?",
+            (entityType, f"{entityType}:index", str(entityKey)),
+        )
+
+
+def delete_dropbox_links_with_prefix(dbConn, pathPrefix):
+    """
+    *forget every cached Dropbox share link at or below a folder path*
+
+    The folder has moved, so its old share links no longer describe it -
+    dropping them means fresh ones are minted at the new path on the next
+    sync.
+
+    Does not commit - see `delete_area`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``pathPrefix`` -- the old absolute folder path
+
+    **Return:**
+
+    - ``deleted`` -- how many rows were removed
+    """
+    cursor = dbConn.execute(
+        "DELETE FROM dropbox_links WHERE folder_path = ? OR folder_path LIKE ? || '/%'",
+        (pathPrefix, pathPrefix),
+    )
+    return cursor.rowcount

@@ -18,7 +18,7 @@ from aardvark_jd import codes, db, folders, paths
 BLANK_CHOICE = "blank"
 
 
-class new_project(object):
+class add_project(object):
     """
     *create a new project ID within a `projects` category, either from that category's own `04_templates` zip or a blank scaffold*
 
@@ -40,8 +40,8 @@ class new_project(object):
     **Usage:**
 
     ```python
-    from aardvark_jd.new_project import new_project
-    code, title, folderPath, templateUsed = new_project(
+    from aardvark_jd.add_project import add_project
+    code, title, folderPath, templateUsed = add_project(
         log=log, dbConn=dbConn, categoryRef="P11", projectTitle="My Project",
     ).get()
     ```
@@ -79,7 +79,7 @@ class new_project(object):
         except KeyError:
             # NO RESERVED `04_templates` SYSTEM ID YET (A CATEGORY CREATED BEFORE
             # THAT SCAFFOLDING EXISTED, NOT YET `repair_emoji`'D) - TREAT AS "NO
-            # TEMPLATES" RATHER THAN FAILING new_project OUTRIGHT.
+            # TEMPLATES" RATHER THAN FAILING add_project OUTRIGHT.
             templateZips = []
 
         templateChoice = self._resolve_template_choice(templateZips)

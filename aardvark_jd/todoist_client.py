@@ -156,3 +156,27 @@ class TodoistClient(object):
         - ``url`` -- the project's `todoist://project?id=...` URL
         """
         return f"todoist://project?id={projectId}"
+
+    def archive_project(self, projectId):
+        """
+        *archive a Todoist project, hiding it without destroying its tasks*
+
+        Archived rather than deleted deliberately: a mirrored project may
+        have accumulated real tasks of its own, and `DELETE /projects/{id}`
+        would take them with it irreversibly.
+
+        Follows the published v1 reference; like the rest of this module's
+        endpoints it has not been confirmed against a live account, so
+        callers should treat a failure as a warning rather than an abort.
+
+        **Key Arguments:**
+
+        - ``projectId`` -- the project's Todoist id
+
+        **Usage:**
+
+        ```python
+        client.archive_project("2203306141")
+        ```
+        """
+        self._request("POST", f"/projects/{projectId}/archive")

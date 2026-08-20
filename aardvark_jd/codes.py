@@ -18,6 +18,7 @@ LETTER_DOMAIN = {letter: domain for domain, letter in DOMAIN_LETTER.items()}
 # SEPARATE DOMAIN ARGUMENT. THE PERIOD AFTER IT IS THE LEGACY `A.11` FORM,
 # STILL ACCEPTED BUT NO LONGER WRITTEN.
 _AREA_REF_RE = re.compile(r"^([APR])\.?(\d{2})(?:-(\d{2}))?$", re.IGNORECASE)
+_ID_REF_RE = re.compile(r"^([APR])\.?(\d{2})\.(\d{2})$")
 _CATEGORY_REF_RE = re.compile(r"^([APR])\.?(\d{2})$", re.IGNORECASE)
 
 LETTER_HINT = "'A' (areas), 'R' (resources) or 'P' (projects)"
@@ -115,6 +116,67 @@ def is_jd_ref(text):
     ```
     """
     return _AREA_REF_RE.match(str(text).strip()) is not None
+
+
+def is_id_ref(text):
+    """
+    *decide whether a reference points at an individual Johnny Decimal ID*
+
+    An ID reference carries a second period, before its item number
+    (`"A11.10"`); an area or category reference never does, which is why
+    `is_jd_ref` - written to tell an area/category code from a system
+    folder key - deliberately does not match one.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference supplied on the command-line
+
+    **Return:**
+
+    - ``isIdRef`` -- `True` if the reference is a Johnny Decimal ID code
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    isIdRef = codes.is_id_ref("A11.10")
+    ```
+    """
+    return _ID_REF_RE.match(str(text).strip()) is not None
+
+
+def split_id_ref(text, domain=None):
+    """
+    *split an ID reference into its domain, category number and item number*
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference, e.g. `"A11.10"` (the legacy `"A.11.10"` also parses)
+    - ``domain`` -- the domain the caller expects, to check the letter against. Default *None*.
+
+    **Return:**
+
+    - ``domain``, ``acNumber``, ``itemNumber`` -- the reference's three parts
+
+    **Raises:**
+
+    - ``ValueError`` -- if the reference is not an ID code, or its letter contradicts `domain`
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    domain, acNumber, itemNumber = codes.split_id_ref("A11.10")
+    ```
+    """
+    match = _ID_REF_RE.match(str(text).strip())
+    if not match:
+        raise ValueError(
+            f"'{text}' is not a Johnny Decimal ID reference - expected something like 'A11.10'"
+        )
+    letter, acNumber, itemNumber = match.group(1), int(match.group(2)), int(match.group(3))
+    _check_domain_matches(text, letter, domain)
+    return LETTER_DOMAIN[letter], acNumber, itemNumber
 
 
 def domain_from_ref(text):

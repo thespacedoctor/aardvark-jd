@@ -163,7 +163,7 @@ def test_migrate_schema_clears_stale_id_craft_links(tmp_path):
     area = db.get_craft_link(conn, "area", "1")
     assert area is not None
     assert area["craft_folder_id"] == "folder-1"
-    assert db.get_meta(conn, "schema_version") == "4"
+    assert db.get_meta(conn, "schema_version") == db._SCHEMA_VERSION
     conn.close()
 
 

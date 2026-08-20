@@ -229,7 +229,11 @@ class todoist_sync(object):
         )
         craftLink = db.get_craft_link(self.dbConn, entityType, entityKey)
         craftUrl = craftLink["craft_url"] if craftLink else None
-        description = doc_links.todoist_description_markdown(hookmarkUrl, dropboxUrl, craftUrl)
+        gdriveLink = db.get_gdrive_link(self.dbConn, entityType, entityKey)
+        gdriveUrl = gdriveLink["gdrive_url"] if gdriveLink else None
+        description = doc_links.todoist_description_markdown(
+            hookmarkUrl, dropboxUrl, craftUrl, driveUrl=gdriveUrl,
+        )
 
         existing = db.get_todoist_link(self.dbConn, entityType, entityKey)
         todoistUrl = self.client.project_url(projectId)

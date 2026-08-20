@@ -10,7 +10,7 @@ from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
 from aardvark_jd.initialiser import initialiser
-from aardvark_jd.new_project import new_project
+from aardvark_jd.add_project import add_project
 from aardvark_jd.todoist_sync import todoist_sync
 
 log = logging.getLogger("test_todoist_sync")
@@ -111,7 +111,7 @@ def test_todoist_sync_mirrors_areas_and_categories_under_the_system_root(dbConn,
 def test_todoist_sync_mirrors_project_ids_flat_under_the_projects_root(dbConn, todoistSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="projects", title="Launches", description="d1").get()
     add_category(log=log, dbConn=dbConn, domain="projects", areaRef="P10", title="Website", description="d2").get()
-    new_project(log=log, dbConn=dbConn, categoryRef="P11", projectTitle="Relaunch").get()
+    add_project(log=log, dbConn=dbConn, categoryRef="P11", projectTitle="Relaunch").get()
 
     todoist_sync(log=log, dbConn=dbConn, settings=todoistSettings).get()
 

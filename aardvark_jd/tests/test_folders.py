@@ -108,3 +108,31 @@ def test_make_folder_is_idempotent(tmp_path):
     path2 = folders.make_folder(parent, "10-19 Health 🏥")
     assert path1 == path2
     assert os.path.isdir(path1)
+
+
+# ---------------------------------------------------------------------- #
+# lowest-free slot allocation
+# ---------------------------------------------------------------------- #
+
+def test_lowest_free_starts_at_the_beginning_of_an_empty_range():
+    assert folders._lowest_free([], 10, 99) == 10
+
+
+def test_lowest_free_fills_a_gap_left_by_an_archived_entity():
+    assert folders._lowest_free([10, 12, 13], 10, 99) == 11
+
+
+def test_lowest_free_continues_past_a_contiguous_run():
+    assert folders._lowest_free([10, 11, 12], 10, 99) == 13
+
+
+def test_lowest_free_returns_none_when_the_range_is_exhausted():
+    assert folders._lowest_free(list(range(10, 100)), 10, 99) is None
+
+
+def test_lowest_free_honours_a_step():
+    assert folders._lowest_free([10, 30], 10, 90, step=10) == 20
+
+
+def test_lowest_free_ignores_numbers_outside_the_range():
+    assert folders._lowest_free([1, 2, 3], 10, 99) == 10

@@ -11,8 +11,8 @@ doc = cl_utils.__doc__
 
 @pytest.mark.parametrize("command,expectedKey", [
     ("init TestSystem /tmp/somewhere", "init"),
-    ("new_project P11 Title", "new_project"),
-    ("new_project P11 Title -t website", "new_project"),
+    ("add_project P11 Title", "add_project"),
+    ("add_project P11 Title -t website", "add_project"),
     ("add_area A Health desc", "add_area"),
     ("add_category A10-19 Doctors desc", "add_category"),
     ("add_id A11 Cardiologist desc", "add_id"),
@@ -23,6 +23,13 @@ doc = cl_utils.__doc__
     ("craft_sync", "craft_sync"),
     ("connect_todoist my-token", "connect_todoist"),
     ("todoist_sync", "todoist_sync"),
+    ("connect_gdrive my-client-id my-client-secret", "connect_gdrive"),
+    ("gdrive_sync", "gdrive_sync"),
+    ("archive A11.10", "archive"),
+    ("archive A11.10 -y", "archive"),
+    ("search", "search"),
+    ("open", "open"),
+    ("completion zsh", "completion"),
 ])
 def test_docopt_parses_each_subcommand(command, expectedKey):
     args = docopt(doc, command.split(" "))
@@ -74,7 +81,7 @@ def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["add_category", "P10-19", "Website", "desc"]))
     assert "P11" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["new_project", "P11", "Relaunch"]))
+    cl_utils.main(docopt(doc, ["add_project", "P11", "Relaunch"]))
     assert "P11.10" in capsys.readouterr().out
 
     cl_utils.main(docopt(doc, ["search", "cardiologist"]))

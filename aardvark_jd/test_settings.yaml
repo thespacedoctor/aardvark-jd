@@ -4,6 +4,25 @@ system:
     name: null
     root_path: null
 
+gdrive:
+    # mirror the folder tree (folders only - no documents) into one folder
+    # at the Google Drive root, named after this system. 00_INDEX is never
+    # mirrored (it holds aardvark.db), and of each system folder's ten
+    # reserved 00-09 subfolders only 01_inbox, 04_templates and 09_archive
+    # are created. set up with
+    # `aardvark connect_gdrive <clientId> <clientSecret>`, using an OAuth
+    # client of type "Desktop app" from a Google Cloud project.
+    enabled: false
+    client_id: null
+    client_secret: null
+    refresh_token: null
+    # full `drive` scope is the default because a narrower `drive.file`
+    # only ever shows an app the files it created itself - which would make
+    # it impossible to adopt a folder you made by hand, rather than
+    # duplicating it. narrow it here if you would rather accept that.
+    scope: https://www.googleapis.com/auth/drive
+    root_folder_id: null
+
 logging settings:
     formatters:
         file_style:

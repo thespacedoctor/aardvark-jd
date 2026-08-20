@@ -76,6 +76,35 @@ class IdExhaustedError(Exception):
     pass
 
 
+def _lowest_free(existing, start, stop, step=1):
+    """
+    *the lowest unused slot in `range(start, stop + 1, step)`, or `None` if every slot is taken*
+
+    Allocation used to be a high-water mark (`max(existing) + step`), which
+    was indistinguishable from this while nothing could ever be removed
+    from the index. `archive` changes that: retiring an entity is supposed
+    to hand its Johnny Decimal number back, and a high-water mark would
+    step straight over the gap it leaves. Scanning for the lowest free slot
+    is what actually makes the number reusable.
+
+    **Key Arguments:**
+
+    - ``existing`` -- the numbers already in use
+    - ``start`` -- the first allocatable number
+    - ``stop`` -- the last allocatable number, inclusive
+    - ``step`` -- the gap between allocatable numbers. Default *1*.
+
+    **Return:**
+
+    - ``candidate`` -- the lowest free number, or `None` if the range is exhausted
+    """
+    taken = set(existing)
+    for candidate in range(start, stop + 1, step):
+        if candidate not in taken:
+            return candidate
+    return None
+
+
 def next_area_decade(dbConn, domain):
     """
     *work out the next available decade-start number for a new area*
@@ -93,8 +122,8 @@ def next_area_decade(dbConn, domain):
     - ``decadeStart``, ``decadeEnd`` -- the next available decade's bounds
     """
     existing = [row["decade_start"] for row in db.list_areas(dbConn, domain)]
-    candidate = 10 if not existing else max(existing) + 10
-    if candidate > MAX_DECADE_START:
+    candidate = _lowest_free(existing, 10, MAX_DECADE_START, step=10)
+    if candidate is None:
         raise DomainExhaustedError(
             f"no more decades available for '{domain}' "
             f"(00-09 reserved for system; max 9 areas: 10-19..90-99)"
@@ -122,8 +151,8 @@ def next_category_number(dbConn, domain, area):
     ]
     # THE X0 NUMBER IN EACH DECADE IS RESERVED (MIRRORS 00-09 BEING RESERVED
     # FOR THE SYSTEM FOLDER AT THE AREA LEVEL), SO CATEGORIES RUN X1..X9
-    candidate = area["decade_start"] + 1 if not existing else max(existing) + 1
-    if candidate > area["decade_end"]:
+    candidate = _lowest_free(existing, area["decade_start"] + 1, area["decade_end"])
+    if candidate is None:
         raise CategoryExhaustedError(
             f"no more category numbers available in area "
             f"{area['decade_start']}-{area['decade_end']} (max 9 categories per area)"
@@ -153,8 +182,8 @@ def next_id_number(dbConn, domain, category):
         row["item_number"]
         for row in db.list_ids(dbConn, domain, category["category_id"])
     ]
-    candidate = MIN_ITEM_NUMBER if not existing else max(existing) + 1
-    if candidate > MAX_ITEM_NUMBER:
+    candidate = _lowest_free(existing, MIN_ITEM_NUMBER, MAX_ITEM_NUMBER)
+    if candidate is None:
         raise IdExhaustedError(
             f"no more ID numbers available in category {category['ac_number']:02d} "
             f"(max {MAX_ITEM_NUMBER} items per category)"
@@ -287,3 +316,91 @@ def create_reserved_system_ids(dbConn, domain, acNumber, containingFolderPath):
         folderName = id_folder_name(domain, acNumber, itemNumber, title, emoji=folderEmoji)
         folderPath = make_folder(containingFolderPath, folderName)
         db.insert_system_folder(dbConn, folderKey, folderName, folderPath)
+
+
+def move_folder_and_reindex(dbConn, oldFolderPath, newFolderPath, updateRows):
+    """
+    *move a folder anywhere on disk and repoint the index at it, atomically*
+
+    The general form of `set_emoji.rename_folder_and_reindex`, which can
+    only rename a folder in place. Archiving has to move a folder to a
+    different parent entirely, so the destination is given outright here
+    rather than derived from the source's parent.
+
+    The database write is committed **before** the move, for the reason
+    `set_emoji.rename_folder_and_reindex` documents at length: `00_INDEX`
+    holds the open SQLite file, and committing after a rename that has
+    already moved that directory away fails to unlink the rollback
+    journal. If the move then fails, the old values are written back and
+    committed again before re-raising, so the index and the filesystem
+    never disagree for longer than the compensating write takes.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``oldFolderPath`` -- the folder's current absolute path
+    - ``newFolderPath`` -- the folder's new absolute path, parent included
+    - ``updateRows`` -- a callable taking `(newFolderName, newFolderPath)` that writes the target row(s), without committing
+
+    **Return:**
+
+    - ``newFolderPath`` -- the folder's new absolute path
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd.folders import move_folder_and_reindex
+    newPath = move_folder_and_reindex(
+        dbConn, oldPath, f"{archiveFolder}/A11.10_cardiologist__archived_20260820",
+        lambda name, path: db.update_id_name(dbConn, idId, name, path),
+    )
+    ```
+    """
+    import errno
+    import shutil
+
+    oldFolderPath = oldFolderPath.rstrip("/")
+    newFolderPath = newFolderPath.rstrip("/")
+    if newFolderPath == oldFolderPath:
+        return newFolderPath
+
+    # ON A CASE-INSENSITIVE FILESYSTEM A PURELY COSMETIC RENAME MAKES
+    # `os.path.exists` TRUE AGAINST THE SOURCE ITSELF - `samefile` TELLS
+    # THAT APART FROM A GENUINE COLLISION. SEE `rename_folder_and_reindex`.
+    if os.path.exists(newFolderPath):
+        try:
+            isTheSameFolder = os.path.samefile(newFolderPath, oldFolderPath)
+        except OSError:
+            isTheSameFolder = False
+        if not isTheSameFolder:
+            raise ValueError(f"'{newFolderPath}' already exists - refusing to overwrite it")
+    if not os.path.isdir(oldFolderPath):
+        raise ValueError(f"'{oldFolderPath}' is not on disk - the index is out of step with the filesystem")
+
+    oldFolderName = os.path.basename(oldFolderPath)
+    newFolderName = os.path.basename(newFolderPath)
+    os.makedirs(os.path.dirname(newFolderPath), exist_ok=True)
+
+    try:
+        updateRows(newFolderName, newFolderPath)
+        db.rewrite_folder_path_prefix(dbConn, oldFolderPath, newFolderPath)
+        dbConn.commit()
+    except Exception:
+        dbConn.rollback()
+        raise
+
+    try:
+        try:
+            os.rename(oldFolderPath, newFolderPath)
+        except OSError as error:
+            # A MOVE ACROSS FILESYSTEMS CANNOT BE A RENAME - COPY IT INSTEAD.
+            if error.errno != errno.EXDEV:
+                raise
+            shutil.move(oldFolderPath, newFolderPath)
+    except Exception:
+        updateRows(oldFolderName, oldFolderPath)
+        db.rewrite_folder_path_prefix(dbConn, newFolderPath, oldFolderPath)
+        dbConn.commit()
+        raise
+
+    return newFolderPath

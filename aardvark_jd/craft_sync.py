@@ -430,7 +430,11 @@ class craft_sync(object):
         if todoistEntityType:
             todoistLink = db.get_todoist_link(self.dbConn, todoistEntityType, entityKey)
             todoistUrl = todoistLink["todoist_url"] if todoistLink else None
-        markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl)
+        # THE DRIVE LINK IS KEYED BY THE ENTITY'S OWN TYPE, NOT THE `:index`
+        # VARIANT `craft_links` USES FOR AN ID'S INDEX DOCUMENT.
+        gdriveLink = db.get_gdrive_link(self.dbConn, entityType.split(":")[0], entityKey)
+        gdriveUrl = gdriveLink["gdrive_url"] if gdriveLink else None
+        markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl, driveUrl=gdriveUrl)
         if markdown is None:
             return
 

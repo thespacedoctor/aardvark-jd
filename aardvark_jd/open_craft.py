@@ -12,7 +12,7 @@ import subprocess
 import sys
 import webbrowser
 
-from aardvark_jd import db, locate
+from aardvark_jd import db, doc_links, locate
 
 # ONLY THESE ENTITY TYPES ARE EVER MIRRORED TO TODOIST (SEE `todoist_sync.py`) -
 # A `system_folder` OR `space:index` MATCH NEVER HAS A `todoist_links` ROW TO FIND.
@@ -51,12 +51,11 @@ class open_craft(object):
         **Return:**
 
         - ``label`` -- the matched entity's title/name
-        - ``craftUrl`` -- the Craft URL that was opened, or `None` if the entity isn't synced to Craft
-        - ``todoistUrl`` -- the Todoist URL that was opened, or `None` if the entity isn't mirrored to Todoist
+        - ``openedUrls`` -- an ordered list of `(serviceLabel, url)` pairs that were opened
 
         **Raises:**
 
-        - ``ValueError`` -- if the entity is synced to neither Craft nor Todoist
+        - ``ValueError`` -- if the entity is synced to no mirror at all
         """
         self.log.debug("starting the ``get`` method")
 
@@ -71,19 +70,30 @@ class open_craft(object):
             todoistLink = db.get_todoist_link(self.dbConn, entityType, entityKey)
             todoistUrl = todoistLink["todoist_url"] if todoistLink else None
 
-        if not craftUrl and not todoistUrl:
+        gdriveLink = db.get_gdrive_link(self.dbConn, entityType, entityKey)
+        gdriveUrl = gdriveLink["gdrive_url"] if gdriveLink else None
+
+        openedUrls = [
+            (serviceLabel, url)
+            for serviceLabel, url in (
+                (doc_links.CRAFT_LABEL, craftUrl),
+                (doc_links.TODOIST_LABEL, todoistUrl),
+                (doc_links.DRIVE_LABEL, gdriveUrl),
+            )
+            if url
+        ]
+
+        if not openedUrls:
             raise ValueError(
-                f"'{label}' has not been synced to craft or todoist yet - "
-                f"run `aardvark craft_sync` and/or `aardvark todoist_sync` first"
+                f"'{label}' has not been synced to craft, todoist or google drive yet - "
+                f"run `aardvark craft_sync`, `aardvark todoist_sync` and/or `aardvark gdrive_sync` first"
             )
 
-        if craftUrl:
-            self._open(craftUrl)
-        if todoistUrl:
-            self._open(todoistUrl)
+        for _serviceLabel, url in openedUrls:
+            self._open(url)
 
         self.log.debug("completed the ``get`` method")
-        return label, craftUrl, todoistUrl
+        return label, openedUrls
 
     def _open(self, url):
         """
@@ -91,7 +101,7 @@ class open_craft(object):
 
         **Key Arguments:**
 
-        - ``url`` -- the Craft deep link or Todoist URL to open
+        - ``url`` -- the Craft deep link, Todoist URL or Google Drive URL to open
         """
         if sys.platform == "darwin":
             subprocess.run(["open", url], check=False)

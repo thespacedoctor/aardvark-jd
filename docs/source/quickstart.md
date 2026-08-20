@@ -88,10 +88,10 @@ A project is a Johnny Decimal ID in the `projects` domain, so it needs an existi
 ```bash
 aardvark add_area P "Launches" "Things I'm shipping"
 aardvark add_category P10-19 "Website" "The site rebuild"
-aardvark new_project P11 "Relaunch"
+aardvark add_project P11 "Relaunch"
 ```
 
-Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder plus "New blank project" (`README.md`, `input/`, `output/`) as the default, and creates the chosen project inside category `P11` as `P11.10_Relaunch`, with no emoji - matching every other Johnny Decimal ID. Templates are scoped to their own category - drop a zip into `P11.04_templates/` and it's only offered for projects created under `P11`. Pass `-t <templateName>` to skip the picker (`aardvark new_project P11 "Relaunch" -t website`), or `-t blank` to force the blank scaffold non-interactively.
+Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder plus "New blank project" (`README.md`, `input/`, `output/`) as the default, and creates the chosen project inside category `P11` as `P11.10_Relaunch`, with no emoji - matching every other Johnny Decimal ID. Templates are scoped to their own category - drop a zip into `P11.04_templates/` and it's only offered for projects created under `P11`. Pass `-t <templateName>` to skip the picker (`aardvark add_project P11 "Relaunch" -t website`), or `-t blank` to force the blank scaffold non-interactively.
 
 ## Searching the index
 
@@ -109,7 +109,7 @@ Create an API Connection from inside your Craft space (Connections tab in the si
 aardvark connect_craft <your-api-url> <your-api-token>
 ```
 
-The API URL is unique to that one connection (there's no shared global endpoint), so it has to come from Craft itself rather than being something aardvark can guess. This saves both values to your settings file and runs the first full mirror. From then on, `add_area`, `add_category`, `add_id`, `set_emoji` and `new_project` all push their changes to Craft automatically - if a push fails, the command still succeeds locally and prints a warning rather than aborting, since the filesystem and SQLite index are always the source of truth.
+The API URL is unique to that one connection (there's no shared global endpoint), so it has to come from Craft itself rather than being something aardvark can guess. This saves both values to your settings file and runs the first full mirror. From then on, `add_area`, `add_category`, `add_id`, `set_emoji` and `add_project` all push their changes to Craft automatically - if a push fails, the command still succeeds locally and prints a warning rather than aborting, since the filesystem and SQLite index are always the source of truth.
 
 To backfill an existing system, or repair drift after a failed auto-push:
 

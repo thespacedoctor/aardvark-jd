@@ -5,7 +5,7 @@ import sys
 import pytest
 import yaml
 
-from aardvark_jd import db, locate, paths
+from aardvark_jd import db, doc_links, locate, paths
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -14,6 +14,11 @@ from aardvark_jd.open_craft import open_craft
 
 log = logging.getLogger("test_open_craft")
 log.addHandler(logging.NullHandler())
+
+
+def _url_for(openedUrls, serviceLabel):
+    """*pull one service's URL back out of `open_craft`'s `(label, url)` list, or None*"""
+    return next((url for label, url in openedUrls if label == serviceLabel), None)
 
 
 @pytest.fixture
@@ -49,7 +54,9 @@ def test_open_craft_opens_the_linked_url_on_darwin(seeded, monkeypatch):
     captured = {}
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: captured.setdefault("args", args))
 
-    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
 
     assert label == "Cardiologist"
     assert craftUrl == "craftdocs://open?blockId=doc-1"
@@ -80,7 +87,9 @@ def test_open_craft_defaults_to_the_current_directory(seeded, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: None)
 
-    label, _craftUrl, _todoistUrl = open_craft(log=log, dbConn=dbConn).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn).get()
+    _craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    _todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
     assert label == "Cardiologist"
 
 
@@ -93,7 +102,9 @@ def test_open_craft_resolves_the_bare_system_root(seeded, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: captured.setdefault("args", args))
 
     settings = {"system": {"root_path": rootPath}}
-    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=rootPath, settings=settings).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn, path=rootPath, settings=settings).get()
+    craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
 
     assert label == "Index"
     assert craftUrl == "craftdocs://open?blockId=doc-root"
@@ -109,7 +120,9 @@ def test_open_craft_without_settings_still_resolves_a_normal_entity(seeded, monk
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: None)
 
-    label, _craftUrl, _todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    _craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    _todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
     assert label == "Cardiologist"
 
 
@@ -123,7 +136,9 @@ def test_open_craft_opens_todoist_link_alongside_craft(seeded, monkeypatch):
     opened = []
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: opened.append(args[1]))
 
-    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
 
     assert label == "Cardiologist"
     assert craftUrl == "craftdocs://open?blockId=doc-1"
@@ -140,7 +155,9 @@ def test_open_craft_opens_todoist_only_when_craft_not_synced(seeded, monkeypatch
     opened = []
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: opened.append(args[1]))
 
-    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, openedUrls = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    craftUrl = _url_for(openedUrls, doc_links.CRAFT_LABEL)
+    todoistUrl = _url_for(openedUrls, doc_links.TODOIST_LABEL)
 
     assert label == "Cardiologist"
     assert craftUrl is None
