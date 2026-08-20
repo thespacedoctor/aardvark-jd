@@ -91,3 +91,39 @@ def test_link_row_markdown_with_only_dropbox():
 
 def test_link_row_markdown_with_neither_is_none():
     assert doc_links.link_row_markdown(None, None) is None
+
+
+def test_link_row_markdown_with_all_three_links():
+    markdown = doc_links.link_row_markdown(
+        "hook://file/abc?p=Lw==&n=YQ==", "https://dropbox.example/b", "https://app.todoist.com/app/project/1",
+    )
+    assert markdown == (
+        "[📁 Finder](hook://file/abc?p=Lw==&n=YQ==)  ·  "
+        "[🔗 Dropbox](https://dropbox.example/b)  ·  "
+        "[✅ Todoist](https://app.todoist.com/app/project/1)"
+    )
+
+
+def test_link_row_markdown_with_only_todoist():
+    markdown = doc_links.link_row_markdown(None, None, "https://app.todoist.com/app/project/1")
+    assert markdown == "[✅ Todoist](https://app.todoist.com/app/project/1)"
+
+
+def test_todoist_description_markdown_with_all_three_links():
+    markdown = doc_links.todoist_description_markdown(
+        "hook://file/abc?p=Lw==&n=YQ==", "https://dropbox.example/b", "craftdocs://open?blockId=doc-1",
+    )
+    assert markdown == (
+        "[📁 Finder](hook://file/abc?p=Lw==&n=YQ==)  ·  "
+        "[🔗 Dropbox](https://dropbox.example/b)  ·  "
+        "[🗒️ Craft](craftdocs://open?blockId=doc-1)"
+    )
+
+
+def test_todoist_description_markdown_with_only_craft():
+    markdown = doc_links.todoist_description_markdown(None, None, "craftdocs://open?blockId=doc-1")
+    assert markdown == "[🗒️ Craft](craftdocs://open?blockId=doc-1)"
+
+
+def test_todoist_description_markdown_with_none_is_none():
+    assert doc_links.todoist_description_markdown(None, None, None) is None

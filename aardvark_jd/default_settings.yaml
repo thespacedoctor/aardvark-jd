@@ -29,6 +29,15 @@ dropbox:
     app_secret: null
     refresh_token: null
 
+todoist:
+    # mirror areas/categories (under 03 AREAS) and project ids (flat,
+    # under 02 PROJECTS) into Todoist as nested projects, each carrying a
+    # Finder/Dropbox/Craft link back to its sibling objects. set up with
+    # `aardvark connect_todoist <apiToken>`, a personal API token from
+    # Todoist's Settings -> Integrations -> Developer tab.
+    enabled: false
+    api_token: null
+
 logging settings:
     formatters:
         file_style:

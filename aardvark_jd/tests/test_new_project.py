@@ -26,7 +26,7 @@ def dbConnWithProjectCategory(tmp_path):
     conn = db.get_connection(paths.find_db_path(rootPath))
     add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
     add_category(log=log, dbConn=conn, domain="projects", areaRef="P10", title="Website", description="").get()
-    templatesFolder = paths.resolve(conn, "projects.system.04_templates")
+    templatesFolder = paths.resolve(conn, "projects.11.04_templates")
     yield conn, templatesFolder
     conn.close()
 
@@ -89,18 +89,35 @@ def test_unknown_category_raises_clear_error(dbConnWithProjectCategory):
         new_project(log=log, dbConn=conn, categoryRef="P99", templateName="blank", projectTitle="X").get()
 
 
-def test_non_interactive_without_title_raises(dbConnWithProjectCategory, monkeypatch):
-    conn, _ = dbConnWithProjectCategory
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-    with pytest.raises(ValueError):
-        new_project(log=log, dbConn=conn, categoryRef="P11", templateName="blank", projectTitle=None).get()
-
-
 def test_non_tty_with_no_template_defaults_to_blank(dbConnWithProjectCategory, monkeypatch):
     conn, _ = dbConnWithProjectCategory
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     _code, _title, folderPath, templateUsed = new_project(
         log=log, dbConn=conn, categoryRef="P11", templateName=None, projectTitle="Headless Project"
+    ).get()
+    assert templateUsed == "blank"
+    assert os.path.isfile(f"{folderPath}/README.md")
+
+
+def test_templates_are_scoped_to_their_own_category(dbConnWithProjectCategory):
+    conn, templatesFolder = dbConnWithProjectCategory
+    with zipfile.ZipFile(f"{templatesFolder}/custom.zip", "w") as zipHandle:
+        zipHandle.writestr("NOTES.md", "hello")
+
+    add_category(log=log, dbConn=conn, domain="projects", areaRef="P10", title="Marketing", description="").get()
+
+    with pytest.raises(ValueError):
+        new_project(log=log, dbConn=conn, categoryRef="P12", templateName="custom", projectTitle="X").get()
+
+
+def test_category_without_templates_scaffolding_defaults_to_blank(dbConnWithProjectCategory, monkeypatch):
+    conn, _ = dbConnWithProjectCategory
+    conn.execute("DELETE FROM system_folders WHERE folder_key = ?", ("projects.11.04_templates",))
+    conn.commit()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    _code, _title, folderPath, templateUsed = new_project(
+        log=log, dbConn=conn, categoryRef="P11", templateName=None, projectTitle="No Scaffold Project"
     ).get()
     assert templateUsed == "blank"
     assert os.path.isfile(f"{folderPath}/README.md")

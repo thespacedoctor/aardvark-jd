@@ -88,10 +88,10 @@ A project is a Johnny Decimal ID in the `projects` domain, so it needs an existi
 ```bash
 aardvark add_area P "Launches" "Things I'm shipping"
 aardvark add_category P10-19 "Website" "The site rebuild"
-aardvark new_project P11
+aardvark new_project P11 "Relaunch"
 ```
 
-Lists any zip templates found in `02_PROJECTS/00_09_system/04_templates/` plus a blank option (`README.md`, `input/`, `output/`), and creates the chosen project inside category `P11` as `P11.10_<title>`, with no emoji - matching every other Johnny Decimal ID.
+Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder plus "New blank project" (`README.md`, `input/`, `output/`) as the default, and creates the chosen project inside category `P11` as `P11.10_Relaunch`, with no emoji - matching every other Johnny Decimal ID. Templates are scoped to their own category - drop a zip into `P11.04_templates/` and it's only offered for projects created under `P11`. Pass `-t <templateName>` to skip the picker (`aardvark new_project P11 "Relaunch" -t website`), or `-t blank` to force the blank scaffold non-interactively.
 
 ## Searching the index
 
@@ -101,7 +101,7 @@ aardvark search cardio
 
 ## Connecting to craft.do
 
-Aardvark can mirror its folder tree into a [craft.do](https://craft.do) space, so the same PARA + Johnny Decimal index is browsable there too. Craft spaces can't be created via API, so the mirror lives inside your existing space as top-level folders rather than as separate spaces: `01_INBOX`, `02_PROJECTS`, `03_AREAS`, `04_RESOURCES` and `09_ARCHIVE` become top-level Craft folders, areas and categories nest as folders below them, and IDs become Craft documents named with their `X.AC.ID` code. Every folder holds a `00 Index` document listing the level directly below it, one level deep, with each child's code and title linking straight to its Craft folder or document.
+Aardvark can mirror its folder tree into a [craft.do](https://craft.do) space, so the same PARA + Johnny Decimal index is browsable there too. Craft spaces can't be created via API, so the mirror lives inside your existing space as top-level folders rather than as separate spaces: `01_INBOX`, `02_PROJECTS`, `03_AREAS`, `04_RESOURCES` and `09_ARCHIVE` become top-level Craft folders, and areas, categories and IDs all nest as folders below them - an ID's folder carries a single `00 Index` document inside it. Every folder holds a `00 Index` document listing the level directly below it, one level deep, with each child's code and title linking straight to its Craft folder or document.
 
 Create an API Connection from inside your Craft space (Connections tab in the sidebar) and copy both values it shows you - the connection's unique API URL and its token, then connect them:
 
@@ -117,11 +117,29 @@ To backfill an existing system, or repair drift after a failed auto-push:
 aardvark craft_sync
 ```
 
-Inbox and Archive are mirrored as empty top-level folders only - they aren't tracked as structured entries in the SQLite index today, so there's nothing to list inside them yet. Projects aren't Johnny-Decimal coded, so each mirrors as a flat document under the Projects folder rather than a nested folder tree.
+Inbox and Archive are mirrored as empty top-level folders only - they aren't tracked as structured entries in the SQLite index today, so there's nothing to list inside them yet.
 
-## Opening a folder in Craft
+## Connecting to Todoist
 
-Once connected, `open` resolves a filesystem path back to the Craft folder/document that mirrors it, and opens it:
+Aardvark can also mirror into Todoist, for the actionable side reference material in Craft doesn't cover. Since a personal Todoist plan has no Workspaces, everything lives under one top-level project named after your aardvark system, with `03 AREAS` and `02 PROJECTS` nested inside it: `03 AREAS` mirrors areas and their categories, two deep, while `02 PROJECTS` mirrors every project ID as a flat list directly underneath it, skipping the project areas/categories above it. `01 INBOX`, `04 RESOURCES`, `09 ARCHIVE` and every `00-09` system folder are never mirrored.
+
+Grab a personal API token from Todoist (Settings -> Integrations -> Developer), then connect it:
+
+```bash
+aardvark connect_todoist <your-api-token>
+```
+
+This validates the token, saves it to your settings file, and runs the first full mirror. From then on, every mutating command pushes to Todoist automatically, always before it pushes to Craft, so each mirrored project's Craft link is already in place by the time Craft's own link row is written. To backfill or repair drift on demand:
+
+```bash
+aardvark todoist_sync
+```
+
+Each mirrored project's description carries a Finder/Dropbox/Craft link row back to its sibling objects, matching the Finder/Dropbox/Todoist row Craft documents carry.
+
+## Opening a folder in Craft and Todoist
+
+Once connected, `open` resolves a filesystem path back to whichever of the Craft folder/document and Todoist project mirror it, and opens every one that's synced:
 
 ```bash
 cd ~/aardvark/03_AREAS/A11_doctors/A11.10_cardiologist
@@ -132,7 +150,7 @@ It defaults to the current directory, or takes a path directly: `aardvark open <
 
 ## Adding Dropbox links
 
-If your aardvark system root sits inside a Dropbox-synced folder, every document `craft_sync` writes to also gets a Dropbox share link alongside its Finder link, at the top of the page. Create an app in the [Dropbox App Console](https://www.dropbox.com/developers/apps) (with the `sharing.write`, `sharing.read` and `files.metadata.read` scopes), then connect it:
+If your aardvark system root sits inside a Dropbox-synced folder, every document `craft_sync` writes to (and every project `todoist_sync` writes to) also gets a Dropbox share link alongside its Finder link. Create an app in the [Dropbox App Console](https://www.dropbox.com/developers/apps) (with the `sharing.write`, `sharing.read` and `files.metadata.read` scopes), then connect it:
 
 ```bash
 aardvark connect_dropbox <your-app-key> <your-app-secret>

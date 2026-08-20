@@ -4,10 +4,12 @@
 *Build the "open this folder elsewhere" link row appended to synced Craft documents*
 
 A single inline markdown line - `[Finder link](hook://file/...)  ·
-[Dropbox link](https://...)` - written just below a document's title by
-`craft_sync._write_link_row`. Either link is dropped when it isn't
-available (no Hookmark link off Darwin, no Dropbox link when the system
-root isn't inside a Dropbox-synced folder).
+[Dropbox link](https://...)  ·  [Todoist link](https://...)` - written
+just below a document's title by `craft_sync._write_link_row`. Any of
+the three is dropped when it isn't available (no Hookmark link off
+Darwin, no Dropbox link when the system root isn't inside a
+Dropbox-synced folder, no Todoist link when Todoist isn't connected or
+the entity isn't one `todoist_sync` mirrors).
 
 Author
 : David Young
@@ -22,6 +24,8 @@ from pathlib import PurePosixPath
 
 FINDER_LABEL = "📁 Finder"
 DROPBOX_LABEL = "🔗 Dropbox"
+TODOIST_LABEL = "✅ Todoist"
+CRAFT_LABEL = "🗒️ Craft"
 
 # HOOKMARK REJECTS `hook://file/...` URLS OUTRIGHT ("THE URL IS INVALID")
 # UNLESS THE ID IS EXACTLY 9 CHARACTERS - CONFIRMED BY DECODING ALL 112
@@ -117,24 +121,66 @@ def hookmark_url(folderPath):
     return f"hook://file/{_synthetic_id(absPath)}?p={parentB64}&n={nameEncoded}"
 
 
-def link_row_markdown(hookmarkUrl, dropboxUrl):
+def links_row(labelledUrls):
     """
-    *render the Finder/Dropbox link row as a single markdown line*
+    *render a set of labelled links as a single markdown line, dropping any that are `None`*
+
+    The shared renderer behind `link_row_markdown` (Craft's Finder/
+    Dropbox/Todoist row) and `todoist_sync`'s own Finder/Dropbox/Craft
+    project description - each embeds the other two mirrors' links plus
+    the local Finder link, in whichever order matters for that surface.
+
+    **Key Arguments:**
+
+    - ``labelledUrls`` -- an ordered list of `(label, url)` pairs; a pair whose `url` is falsy is omitted
+
+    **Return:**
+
+    - ``markdown`` -- the link row's markdown, or `None` if every url was falsy
+    """
+    links = [f"[{label}]({url})" for label, url in labelledUrls if url]
+    if not links:
+        return None
+    return "  ·  ".join(links)
+
+
+def link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl=None):
+    """
+    *render the Finder/Dropbox/Todoist link row as a single markdown line*
 
     **Key Arguments:**
 
     - ``hookmarkUrl`` -- the folder's Hookmark `hook://file/...` URL, or `None` to omit it
     - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None` to omit it
+    - ``todoistUrl`` -- the entity's linked Todoist project URL, or `None` to omit it. Default `None`.
 
     **Return:**
 
-    - ``markdown`` -- the link row's markdown, or `None` if both URLs are `None`
+    - ``markdown`` -- the link row's markdown, or `None` if every URL is `None`
     """
-    links = []
-    if hookmarkUrl:
-        links.append(f"[{FINDER_LABEL}]({hookmarkUrl})")
-    if dropboxUrl:
-        links.append(f"[{DROPBOX_LABEL}]({dropboxUrl})")
-    if not links:
-        return None
-    return "  ·  ".join(links)
+    return links_row([
+        (FINDER_LABEL, hookmarkUrl),
+        (DROPBOX_LABEL, dropboxUrl),
+        (TODOIST_LABEL, todoistUrl),
+    ])
+
+
+def todoist_description_markdown(hookmarkUrl, dropboxUrl, craftUrl):
+    """
+    *render the Finder/Dropbox/Craft description set on a mirrored Todoist project*
+
+    **Key Arguments:**
+
+    - ``hookmarkUrl`` -- the folder's Hookmark `hook://file/...` URL, or `None` to omit it
+    - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None` to omit it
+    - ``craftUrl`` -- the entity's linked Craft folder/document URL, or `None` to omit it
+
+    **Return:**
+
+    - ``markdown`` -- the description's markdown, or `None` if every URL is `None`
+    """
+    return links_row([
+        (FINDER_LABEL, hookmarkUrl),
+        (DROPBOX_LABEL, dropboxUrl),
+        (CRAFT_LABEL, craftUrl),
+    ])

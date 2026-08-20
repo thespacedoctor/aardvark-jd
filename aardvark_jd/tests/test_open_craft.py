@@ -49,10 +49,11 @@ def test_open_craft_opens_the_linked_url_on_darwin(seeded, monkeypatch):
     captured = {}
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: captured.setdefault("args", args))
 
-    label, craftUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
 
     assert label == "Cardiologist"
     assert craftUrl == "craftdocs://open?blockId=doc-1"
+    assert todoistUrl is None
     assert captured["args"] == ["open", "craftdocs://open?blockId=doc-1"]
 
 
@@ -79,7 +80,7 @@ def test_open_craft_defaults_to_the_current_directory(seeded, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: None)
 
-    label, _craftUrl = open_craft(log=log, dbConn=dbConn).get()
+    label, _craftUrl, _todoistUrl = open_craft(log=log, dbConn=dbConn).get()
     assert label == "Cardiologist"
 
 
@@ -92,10 +93,11 @@ def test_open_craft_resolves_the_bare_system_root(seeded, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: captured.setdefault("args", args))
 
     settings = {"system": {"root_path": rootPath}}
-    label, craftUrl = open_craft(log=log, dbConn=dbConn, path=rootPath, settings=settings).get()
+    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=rootPath, settings=settings).get()
 
     assert label == "Index"
     assert craftUrl == "craftdocs://open?blockId=doc-root"
+    assert todoistUrl is None
     assert captured["args"] == ["open", "craftdocs://open?blockId=doc-root"]
 
 
@@ -107,5 +109,40 @@ def test_open_craft_without_settings_still_resolves_a_normal_entity(seeded, monk
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(subprocess, "run", lambda args, check=False: None)
 
-    label, _craftUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+    label, _craftUrl, _todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
     assert label == "Cardiologist"
+
+
+def test_open_craft_opens_todoist_link_alongside_craft(seeded, monkeypatch):
+    dbConn, idFolderPath, _rootPath = seeded
+    entityType, entityKey, _folderPath, _label = locate.entity_for_path(dbConn, idFolderPath)
+    db.upsert_craft_link(dbConn, entityType, entityKey, craftDocumentId="doc-1", craftUrl="craftdocs://open?blockId=doc-1")
+    db.upsert_todoist_link(dbConn, entityType, entityKey, todoistProjectId="proj-1", todoistUrl="https://app.todoist.com/app/project/proj-1")
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    opened = []
+    monkeypatch.setattr(subprocess, "run", lambda args, check=False: opened.append(args[1]))
+
+    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+
+    assert label == "Cardiologist"
+    assert craftUrl == "craftdocs://open?blockId=doc-1"
+    assert todoistUrl == "https://app.todoist.com/app/project/proj-1"
+    assert opened == ["craftdocs://open?blockId=doc-1", "https://app.todoist.com/app/project/proj-1"]
+
+
+def test_open_craft_opens_todoist_only_when_craft_not_synced(seeded, monkeypatch):
+    dbConn, idFolderPath, _rootPath = seeded
+    entityType, entityKey, _folderPath, _label = locate.entity_for_path(dbConn, idFolderPath)
+    db.upsert_todoist_link(dbConn, entityType, entityKey, todoistProjectId="proj-1", todoistUrl="https://app.todoist.com/app/project/proj-1")
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    opened = []
+    monkeypatch.setattr(subprocess, "run", lambda args, check=False: opened.append(args[1]))
+
+    label, craftUrl, todoistUrl = open_craft(log=log, dbConn=dbConn, path=idFolderPath).get()
+
+    assert label == "Cardiologist"
+    assert craftUrl is None
+    assert todoistUrl == "https://app.todoist.com/app/project/proj-1"
+    assert opened == ["https://app.todoist.com/app/project/proj-1"]

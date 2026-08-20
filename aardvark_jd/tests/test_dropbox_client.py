@@ -1,10 +1,14 @@
 import json
+import logging
 
 import pytest
 import requests
 
-from aardvark_jd import dropbox_client
+from aardvark_jd import db, dropbox_client
 from aardvark_jd.dropbox_client import DropboxApiError, DropboxClient
+
+log = logging.getLogger("test_dropbox_client")
+log.addHandler(logging.NullHandler())
 
 
 class FakeResponse:
@@ -118,3 +122,61 @@ def test_shared_link_reraises_other_api_errors(monkeypatch):
     ])
     with pytest.raises(DropboxApiError):
         client.shared_link("/aardvark/03_AREAS")
+
+
+# ---------------------------------------------------------------------- #
+# `url_for_path` - shared between `craft_sync` and `todoist_sync`
+# ---------------------------------------------------------------------- #
+
+class FakeClient(object):
+    def __init__(self, url=None, error=None):
+        self.url = url
+        self.error = error
+        self.calls = []
+
+    def shared_link(self, dropboxPath):
+        self.calls.append(dropboxPath)
+        if self.error:
+            raise self.error
+        return self.url
+
+
+@pytest.fixture
+def dbConn():
+    conn = db.get_connection(":memory:")
+    db.initialise_schema(conn)
+    yield conn
+    conn.close()
+
+
+def test_url_for_path_returns_none_when_not_connected(dbConn):
+    assert dropbox_client.url_for_path(dbConn, None, None, "/root/03_AREAS", log) is None
+
+
+def test_url_for_path_returns_none_outside_the_dropbox_root(dbConn):
+    client = FakeClient(url="https://www.dropbox.com/scl/fo/abc")
+    result = dropbox_client.url_for_path(dbConn, client, "/Users/dave/Dropbox", "/elsewhere/03_AREAS", log)
+    assert result is None
+    assert client.calls == []
+
+
+def test_url_for_path_mints_and_caches(dbConn):
+    client = FakeClient(url="https://www.dropbox.com/scl/fo/abc")
+    folderPath = "/Users/dave/Dropbox/aardvark/03_AREAS"
+
+    first = dropbox_client.url_for_path(dbConn, client, "/Users/dave/Dropbox", folderPath, log)
+    second = dropbox_client.url_for_path(dbConn, client, "/Users/dave/Dropbox", folderPath, log)
+
+    assert first == "https://www.dropbox.com/scl/fo/abc"
+    assert second == "https://www.dropbox.com/scl/fo/abc"
+    # the second call is served from the `dropbox_links` cache, not the API
+    assert client.calls == [folderPath.replace("/Users/dave/Dropbox", "")]
+
+
+def test_url_for_path_degrades_to_none_on_api_failure(dbConn):
+    client = FakeClient(error=DropboxApiError("boom"))
+    folderPath = "/Users/dave/Dropbox/aardvark/03_AREAS"
+
+    result = dropbox_client.url_for_path(dbConn, client, "/Users/dave/Dropbox", folderPath, log)
+
+    assert result is None

@@ -5,7 +5,7 @@ Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
 
 Usage:
     aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
-    aardvark new_project <category> [<templateName>] [<projectTitle>] [-s <pathToSettingsFile>]
+    aardvark new_project <category> <projectTitle> [-t <templateName>] [-s <pathToSettingsFile>]
     aardvark add_area <domainLetter> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
     aardvark add_category <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
     aardvark add_id <category> <title> <description> [-s <pathToSettingsFile>]
@@ -15,6 +15,8 @@ Usage:
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
     aardvark craft_sync [-s <pathToSettingsFile>]
     aardvark connect_dropbox <appKey> <appSecret> [-s <pathToSettingsFile>]
+    aardvark connect_todoist <apiToken> [-s <pathToSettingsFile>]
+    aardvark todoist_sync [-s <pathToSettingsFile>]
     aardvark open [<path>] [-s <pathToSettingsFile>]
 
 Commands:
@@ -29,12 +31,14 @@ Commands:
     connect_craft                          connect a craft.do space and run the initial full mirror
     craft_sync                             re-run the craft.do mirror on demand, to backfill or repair drift
     connect_dropbox                        connect a Dropbox app and start adding Dropbox share links to synced documents
-    open                                   open the Craft folder/document that mirrors a filesystem path (default: the current directory)
+    connect_todoist                        connect a Todoist account and run the initial full mirror
+    todoist_sync                           re-run the Todoist mirror on demand, to backfill or repair drift
+    open                                   open the Craft/Todoist entities that mirror a filesystem path (default: the current directory)
 
 Arguments:
     systemName                             the name of the new system, e.g. "My Life"
     parentPath                             the path in which the system's root folder is created
-    templateName                           a `04_templates` zip's basename, or "blank"
+    templateName                           a category's `04_templates` zip's basename, or "blank"
     projectTitle                           the new project's title
     domainLetter                           "A" (areas), "R" (resources) or "P" (projects)
     area                                   a domain-prefixed area reference, e.g. "A10" or "A10-19"
@@ -45,15 +49,16 @@ Arguments:
     description                            a description
     term                                   a search word or phrase
     apiUrl                                 a craft.do API connection's unique base URL
-    apiToken                               a craft.do API connection token
+    apiToken                               a craft.do or Todoist API connection token
     appKey                                 a Dropbox app's key, from the App Console
     appSecret                              a Dropbox app's secret, from the App Console
-    path                                   a filesystem path to resolve to its Craft document/folder (default: the current directory)
+    path                                   a filesystem path to resolve to its Craft/Todoist entities (default: the current directory)
 
 Options:
     -h, --help                             show this help message
     -v, --version                          show version
     -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
+    -t, --template <templateName>          the template to use, skipping the interactive picker
     -s, --settings <pathToSettingsFile>    the settings file
 """
 
@@ -67,6 +72,7 @@ from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
 from aardvark_jd.connect_dropbox import connect_dropbox
+from aardvark_jd.connect_todoist import connect_todoist
 from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.initialiser import initialiser
 from aardvark_jd.new_project import new_project
@@ -74,6 +80,7 @@ from aardvark_jd.open_craft import open_craft
 from aardvark_jd.repair_emoji import repair_emoji
 from aardvark_jd.search import search, format_result
 from aardvark_jd.set_emoji import set_emoji
+from aardvark_jd.todoist_sync import todoist_sync
 
 CLEAR_ERRORS = (
     ValueError,
@@ -141,6 +148,7 @@ def main(arguments=None):
                     settings["craft"]["api_url"] = a["apiUrl"]
                     settings["craft"]["api_token"] = a["apiToken"]
                     settings_writer.write_settings(pathToSettingsFile, settings)
+                    _maybe_sync_todoist(log, indexDbConn, settings)
                     summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
                     print(
                         f"craft connected - folders created: {summary['folders_created']}, "
@@ -149,6 +157,7 @@ def main(arguments=None):
                         f"link rows written: {summary['link_rows_written']}"
                     )
                 elif a["craft_sync"]:
+                    _maybe_sync_todoist(log, indexDbConn, settings)
                     summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
                     print(
                         f"craft synced - folders created: {summary['folders_created']}, "
@@ -163,10 +172,30 @@ def main(arguments=None):
                         pathToSettingsFile=pathToSettingsFile,
                     ).get()
                     settings = settings_writer.read_settings(pathToSettingsFile)
+                    _maybe_sync_todoist(log, indexDbConn, settings)
                     summary = craft_sync(log=log, dbConn=indexDbConn, settings=settings).get()
                     print(
                         f"dropbox connected - link rows written: {summary['link_rows_written']}"
                     )
+                elif a["connect_todoist"]:
+                    pathToSettingsFile = arguments.get("--settings") or su.configSettingsPath
+                    connect_todoist(
+                        log=log, apiToken=a["apiToken"], pathToSettingsFile=pathToSettingsFile,
+                    ).get()
+                    settings = settings_writer.read_settings(pathToSettingsFile)
+                    summary = todoist_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+                    print(
+                        f"todoist connected - projects created: {summary['projects_created']}, "
+                        f"descriptions updated: {summary['descriptions_updated']}"
+                    )
+                    _maybe_sync_craft(log, indexDbConn, settings)
+                elif a["todoist_sync"]:
+                    summary = todoist_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+                    print(
+                        f"todoist synced - projects created: {summary['projects_created']}, "
+                        f"descriptions updated: {summary['descriptions_updated']}"
+                    )
+                    _maybe_sync_craft(log, indexDbConn, settings)
                 else:
                     _dispatch(a, log, indexDbConn, settings)
             finally:
@@ -184,6 +213,32 @@ def main(arguments=None):
     )
 
     return
+
+
+def _maybe_sync_todoist(log, indexDbConn, settings):
+    """
+    *push a Todoist sync after a mutating command, when Todoist is connected*
+
+    Must run before `_maybe_sync_craft` at every call site: the Craft
+    link row embeds the entity's Todoist URL (see
+    `craft_sync._write_link_row`), so Todoist's own project has to exist
+    before Craft's sync can link to it. A Todoist failure here is
+    reported as a warning rather than raised, matching `_maybe_sync_craft`
+    - the filesystem + SQLite mutation that triggered it has already
+    succeeded and remains the source of truth.
+
+    **Key Arguments:**
+
+    - ``log`` -- logger
+    - ``indexDbConn`` -- an open SQLite connection to the active system's index
+    - ``settings`` -- the aardvark settings dict
+    """
+    if not (settings.get("todoist") or {}).get("enabled"):
+        return
+    try:
+        todoist_sync(log=log, dbConn=indexDbConn, settings=settings).get()
+    except Exception as error:
+        print(f"warning: todoist sync failed: {error}", file=sys.stderr)
 
 
 def _maybe_sync_craft(log, indexDbConn, settings):
@@ -221,10 +276,11 @@ def _dispatch(a, log, indexDbConn, settings):
     """
     if a["new_project"]:
         code, title, folderPath, templateUsed = new_project(
-            log=log, dbConn=indexDbConn, categoryRef=a["category"], templateName=a["templateName"],
+            log=log, dbConn=indexDbConn, categoryRef=a["category"], templateName=a["templateFlag"],
             projectTitle=a["projectTitle"], settings=settings,
         ).get()
         print(f"{code}  {title}  {folderPath} (template: {templateUsed})")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_area"]:
@@ -234,6 +290,7 @@ def _dispatch(a, log, indexDbConn, settings):
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_category"]:
@@ -244,6 +301,7 @@ def _dispatch(a, log, indexDbConn, settings):
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["set_emoji"]:
@@ -251,6 +309,7 @@ def _dispatch(a, log, indexDbConn, settings):
             log=log, dbConn=indexDbConn, ref=a["ref"], newEmoji=a["emoji"],
         ).get()
         print(f"{label}  {folderPath}")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["repair_emoji"]:
@@ -259,6 +318,7 @@ def _dispatch(a, log, indexDbConn, settings):
             print("every folder already matches the current naming convention")
         for folderKey, folderPath in repaired:
             print(f"{folderKey}  {folderPath}")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_id"]:
@@ -268,6 +328,7 @@ def _dispatch(a, log, indexDbConn, settings):
             title=a["title"], description=a["description"],
         ).get()
         print(f"{code}  {folderPath}")
+        _maybe_sync_todoist(log, indexDbConn, settings)
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["search"]:
@@ -278,8 +339,11 @@ def _dispatch(a, log, indexDbConn, settings):
             print(format_result(row))
 
     elif a["open"]:
-        label, craftUrl = open_craft(log=log, dbConn=indexDbConn, path=a["path"], settings=settings).get()
-        print(f"opened {label}  {craftUrl}")
+        label, craftUrl, todoistUrl = open_craft(log=log, dbConn=indexDbConn, path=a["path"], settings=settings).get()
+        if craftUrl:
+            print(f"opened {label}  {craftUrl}")
+        if todoistUrl:
+            print(f"opened {label}  {todoistUrl}")
 
 
 if __name__ == "__main__":

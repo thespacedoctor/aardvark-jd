@@ -24,6 +24,8 @@ import os
 
 import requests
 
+from aardvark_jd import db
+
 
 class DropboxApiError(Exception):
     pass
@@ -231,3 +233,48 @@ class DropboxClient(object):
         if not links:
             raise DropboxApiError(f"dropbox reported an existing shared link for '{dropboxPath}' but none was found")
         return links[0]["url"]
+
+
+def url_for_path(dbConn, client, dropboxRoot, folderPath, log):
+    """
+    *resolve (and cache) a folder's Dropbox share URL, or `None` if it isn't reachable via Dropbox*
+
+    Shared between `craft_sync` and `todoist_sync`, both of which need the
+    same folder's Dropbox link for their own link row - caching in
+    `dropbox_links` means it's minted once regardless of how many mirrors
+    ask for it. A Dropbox API failure degrades to `None` and a logged
+    warning rather than raising, so the caller's own sync (whose
+    filesystem/index/Craft state is already correct by the time this
+    runs) is never aborted by it.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``client`` -- an authenticated `DropboxClient`, or `None` if Dropbox isn't connected
+    - ``dropboxRoot`` -- the local Dropbox root containing the aardvark system, from `find_containing_root`, or `None`
+    - ``folderPath`` -- the folder's absolute local path
+    - ``log`` -- logger, for a warning on API failure
+
+    **Return:**
+
+    - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None`
+    """
+    if not client or not dropboxRoot:
+        return None
+
+    cached = db.get_dropbox_link(dbConn, folderPath)
+    if cached:
+        return cached["dropbox_url"]
+
+    dropboxPath = to_dropbox_path(folderPath, dropboxRoot)
+    if not dropboxPath:
+        return None
+
+    try:
+        url = client.shared_link(dropboxPath)
+    except DropboxApiError as error:
+        log.warning(f"dropbox share link failed for '{folderPath}': {error}")
+        return None
+
+    db.upsert_dropbox_link(dbConn, folderPath, url)
+    return url

@@ -86,6 +86,16 @@ CREATE TABLE IF NOT EXISTS dropbox_links (
     dropbox_url  TEXT NOT NULL,
     synced_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now'))
 );
+
+CREATE TABLE IF NOT EXISTS todoist_links (
+    entity_type          TEXT NOT NULL,
+    entity_key           TEXT NOT NULL,
+    todoist_project_id   TEXT,
+    todoist_url          TEXT,
+    description          TEXT,
+    synced_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
+    PRIMARY KEY (entity_type, entity_key)
+);
 """
 
 # `CREATE TRIGGER IF NOT EXISTS` NEVER UPDATES AN EXISTING TRIGGER'S BODY, SO
@@ -201,12 +211,48 @@ CREATE INDEX IF NOT EXISTS idx_search_index_title ON search_index(title);
 # BUMP WHEN `_BASE_SCHEMA` CHANGES IN A WAY THAT AN ALREADY-INITIALISED
 # DATABASE CAN'T PICK UP VIA THE `IF NOT EXISTS` DDL ALONE (E.G. A WIDENED
 # `CHECK` CONSTRAINT), AND ADD THE ONE-OFF REBUILD TO `_migrate_schema`.
-_SCHEMA_VERSION = "3"
+_SCHEMA_VERSION = "4"
 
 
 def _migrate_schema(dbConn):
     """
-    *rebuild `areas`/`categories`/`ids` onto the current schema, drop the legacy flat `projects` table, and add the `craft_links.links_markdown` column*
+    *step an already-initialised database up through each versioned migration to the current schema*
+
+    Each step below is gated on the `meta['schema_version']` value stored
+    *before* this call, so an already-current database runs nothing and a
+    database several versions behind runs every step it hasn't seen yet,
+    in order. A brand-new database (no `areas` table yet, so already
+    current against `_BASE_SCHEMA`) just stamps the version and skips
+    every step.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    """
+    priorVersion = get_meta(dbConn, "schema_version")
+    if priorVersion == _SCHEMA_VERSION:
+        return
+
+    areasTableExists = dbConn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'areas'"
+    ).fetchone()
+    if areasTableExists is None:
+        set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
+        return
+
+    if priorVersion != "3" and priorVersion != "4":
+        _migrate_to_v3(dbConn)
+
+    if priorVersion != "4":
+        _migrate_to_v4(dbConn)
+
+    dbConn.commit()
+    set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
+
+
+def _migrate_to_v3(dbConn):
+    """
+    *rebuild `areas`/`categories`/`ids` onto the widened domain `CHECK` constraint, drop the legacy flat `projects` table, and add the `craft_links.links_markdown` column*
 
     SQLite cannot alter a `CHECK` constraint in place, so an
     already-initialised database - whose `areas`/`categories`/`ids` tables
@@ -218,24 +264,12 @@ def _migrate_schema(dbConn):
     table are dropped. `craft_links.links_markdown` (added for the Finder/
     Dropbox link row - see `craft_sync._write_link_row`) is a plain `ALTER
     TABLE ADD COLUMN`, since it isn't `CHECK`-constrained and needs no
-    rebuild. Both steps are gated on `meta['schema_version']` so they only
-    run once. A brand-new database (created directly against the current
-    `_BASE_SCHEMA`, so already current) just stamps the version.
+    rebuild.
 
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
     """
-    if get_meta(dbConn, "schema_version") == _SCHEMA_VERSION:
-        return
-
-    areasTableExists = dbConn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'areas'"
-    ).fetchone()
-    if areasTableExists is None:
-        set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
-        return
-
     dbConn.execute("PRAGMA foreign_keys = OFF")
     dbConn.execute("ALTER TABLE areas RENAME TO areas_old")
     dbConn.execute("ALTER TABLE categories RENAME TO categories_old")
@@ -254,8 +288,26 @@ def _migrate_schema(dbConn):
     if craftLinksColumns and "links_markdown" not in craftLinksColumns:
         dbConn.execute("ALTER TABLE craft_links ADD COLUMN links_markdown TEXT")
 
-    dbConn.commit()
-    set_meta(dbConn, "schema_version", _SCHEMA_VERSION)
+
+def _migrate_to_v4(dbConn):
+    """
+    *clear stale `entity_type = 'id'` craft links, now that an ID mirrors as a folder rather than a document*
+
+    An earlier version's `craft_links` rows of type `id` carry a
+    `craft_document_id` and no `craft_folder_id`, pointing at the old
+    top-level ID document rather than the new `id` folder / `id:index`
+    document pair `craft_sync` now creates. Deleting them here rather than
+    trying to migrate them in place means the next `craft_sync` just
+    creates the new shape from scratch, exactly as it would for a
+    never-synced ID - the old orphaned Craft documents themselves are
+    left behind and must be cleaned up by hand in the Craft app, since
+    the API cannot delete or convert them.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    """
+    dbConn.execute("DELETE FROM craft_links WHERE entity_type = 'id'")
 
 
 def get_connection(pathToDb):
@@ -797,6 +849,56 @@ def get_craft_link(dbConn, entityType, entityKey):
     """
     return dbConn.execute(
         "SELECT * FROM craft_links WHERE entity_type = ? AND entity_key = ?", (entityType, entityKey)
+    ).fetchone()
+
+
+def upsert_todoist_link(dbConn, entityType, entityKey, todoistProjectId=None, todoistUrl=None, description=None):
+    """
+    *record or refresh an entity's linked Todoist project*
+
+    Fields left as `None` keep whatever was already stored, rather than
+    being wiped, matching `upsert_craft_link`'s behaviour. `description`
+    tracks the last-written Craft/Finder/Dropbox link row set on the
+    Todoist project - see `todoist_sync.todoist_sync`.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- `'area'` or `'category'` (under `03 AREAS`), or `'id'` (under `02 PROJECTS`)
+    - ``entityKey`` -- the entity's key: an `area_id`/`category_id`/`id_id` cast to text
+    - ``todoistProjectId`` -- the linked Todoist project's id, if any. Default `None`.
+    - ``todoistUrl`` -- the linked Todoist project's shareable URL, if any. Default `None`.
+    - ``description`` -- the project's last-written description, if any. Default `None`.
+    """
+    dbConn.execute(
+        "INSERT INTO todoist_links(entity_type, entity_key, todoist_project_id, todoist_url, description) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(entity_type, entity_key) DO UPDATE SET "
+        "todoist_project_id = COALESCE(excluded.todoist_project_id, todoist_links.todoist_project_id), "
+        "todoist_url = COALESCE(excluded.todoist_url, todoist_links.todoist_url), "
+        "description = COALESCE(excluded.description, todoist_links.description), "
+        "synced_at = strftime('%Y-%m-%d %H:%M:%S','now')",
+        (entityType, entityKey, todoistProjectId, todoistUrl, description),
+    )
+    dbConn.commit()
+
+
+def get_todoist_link(dbConn, entityType, entityKey):
+    """
+    *look up an entity's linked Todoist project, if any*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- `'area'`, `'category'` or `'id'`
+    - ``entityKey`` -- the entity's key, as passed to `upsert_todoist_link`
+
+    **Return:**
+
+    - ``row`` -- the `todoist_links` row, or `None` if not yet synced
+    """
+    return dbConn.execute(
+        "SELECT * FROM todoist_links WHERE entity_type = ? AND entity_key = ?", (entityType, entityKey)
     ).fetchone()
 
 

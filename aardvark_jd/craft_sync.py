@@ -4,8 +4,10 @@
 *Mirror the aardvark index into a craft.do space as linked folders/documents*
 
 The top-level PARA folders become top-level Craft folders (Craft spaces
-cannot be created via API), areas and categories nest as folders below
-them, and IDs become Craft documents named with their `X.AC.ID` code.
+cannot be created via API), and areas, categories and IDs all nest as
+folders below them - an ID's folder carries a single `00 Index` document
+inside it, which is where its Finder/Dropbox/Todoist link row lives,
+since a bare Craft folder has no body of its own to write it into.
 
 Every domain root (`projects`, `areas`, `resources`) and every area also
 gets its own `<X>_system` folder mirrored alongside its areas/categories,
@@ -25,7 +27,7 @@ Author
 
 from aardvark_jd import db, doc_links, dropbox_client, folders, paths
 from aardvark_jd.craft_client import CraftClient
-from aardvark_jd.dropbox_client import DropboxApiError, DropboxClient
+from aardvark_jd.dropbox_client import DropboxClient
 
 _ROOT_FOLDER_KEYS = ("root.inbox", "root.projects", "root.areas", "root.resources", "root.archive")
 _DOMAIN_ROOT_KEY = {"projects": "root.projects", "areas": "root.areas", "resources": "root.resources"}
@@ -179,10 +181,12 @@ class craft_sync(object):
                 idChildren = []
                 for idRow in db.list_ids(self.dbConn, domain, category["category_id"]):
                     idName = folders.display_name(idRow["folder_name"])
-                    documentId, idUrl = self._ensure_document(
-                        "id", str(idRow["id_id"]), idName, categoryFolderId,
+                    idKey = str(idRow["id_id"])
+                    idFolderId, idUrl = self._ensure_folder(
+                        "id", idKey, idName, parentFolderId=categoryFolderId,
                     )
-                    self._write_link_row("id", str(idRow["id_id"]), documentId, idRow["folder_path"])
+                    documentId, _docUrl = self._ensure_document("id:index", idKey, idName, idFolderId)
+                    self._write_link_row("id:index", idKey, documentId, idRow["folder_path"], todoistEntityType="id")
                     idChildren.append((None, idName, idRow["description"], idUrl))
 
                 # A CATEGORY HAS NO SEPARATE `<X>_system` FOLDER OF ITS OWN - ITS TEN
@@ -395,14 +399,14 @@ class craft_sync(object):
     # Finder/Dropbox link row - see `doc_links.py`
     # ------------------------------------------------------------------ #
 
-    def _write_link_row(self, entityType, entityKey, documentId, folderPath, forceRewrite=False):
+    def _write_link_row(self, entityType, entityKey, documentId, folderPath, forceRewrite=False, todoistEntityType=None):
         """
-        *(re)write a document's Finder/Dropbox link row, skipping the API round-trip when nothing changed*
+        *(re)write a document's Finder/Dropbox/Todoist link row, skipping the API round-trip when nothing changed*
 
         Called after a document's own content has been written, never
-        before. For an ID document (whose body `craft_sync` never
-        touches) this is a genuine idempotency check - an unchanged row
-        costs zero API calls. For a `.00_index` document, `forceRewrite`
+        before. For an ID's `00 Index` document (whose body `craft_sync`
+        never otherwise touches) this is a genuine idempotency check - an
+        unchanged row costs zero API calls. For a `.00_index` document, `forceRewrite`
         must be set: `_write_index_content` deletes the document's entire
         content wholesale immediately before this runs, which silently
         invalidates the link row's previously recorded block id even when
@@ -416,10 +420,17 @@ class craft_sync(object):
         - ``documentId`` -- the entity's Craft document id
         - ``folderPath`` -- the entity's own absolute folder path, linked to from the row
         - ``forceRewrite`` -- skip the unchanged-markdown fast path, because the document's whole body (and so the row's prior block) was just wiped by `_write_index_content`. Default `False`.
+        - ``todoistEntityType`` -- the entity's `todoist_links` type (`entityKey` is shared between the two tables), or `None` if this entity is never mirrored to Todoist - only IDs are. Default `None`.
         """
         hookmarkUrl = doc_links.hookmark_url(folderPath)
-        dropboxUrl = self._dropbox_url_for(folderPath)
-        markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl)
+        dropboxUrl = dropbox_client.url_for_path(
+            self.dbConn, self.dropboxClient, self.dropboxRoot, folderPath, self.log,
+        )
+        todoistUrl = None
+        if todoistEntityType:
+            todoistLink = db.get_todoist_link(self.dbConn, todoistEntityType, entityKey)
+            todoistUrl = todoistLink["todoist_url"] if todoistLink else None
+        markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl)
         if markdown is None:
             return
 
@@ -434,39 +445,3 @@ class craft_sync(object):
         blockId = self.client.add_block(documentId, markdown, position="start")
         db.upsert_craft_link(self.dbConn, entityType, entityKey, craftBlockId=blockId, linksMarkdown=markdown)
         self.linkRowsWritten += 1
-
-    def _dropbox_url_for(self, folderPath):
-        """
-        *resolve (and cache) a folder's Dropbox share URL, or `None` if Dropbox isn't connected/applicable*
-
-        A Dropbox API failure degrades to a Finder-only link row and a
-        logged warning rather than aborting the sync - the filesystem +
-        Craft state is already correct by the time this runs.
-
-        **Key Arguments:**
-
-        - ``folderPath`` -- the folder's absolute path
-
-        **Return:**
-
-        - ``dropboxUrl`` -- the folder's Dropbox share URL, or `None`
-        """
-        if not self.dropboxClient or not self.dropboxRoot:
-            return None
-
-        cached = db.get_dropbox_link(self.dbConn, folderPath)
-        if cached:
-            return cached["dropbox_url"]
-
-        dropboxPath = dropbox_client.to_dropbox_path(folderPath, self.dropboxRoot)
-        if not dropboxPath:
-            return None
-
-        try:
-            url = self.dropboxClient.shared_link(dropboxPath)
-        except DropboxApiError as error:
-            self.log.warning(f"dropbox share link failed for '{folderPath}': {error}")
-            return None
-
-        db.upsert_dropbox_link(self.dbConn, folderPath, url)
-        return url

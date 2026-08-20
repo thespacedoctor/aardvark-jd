@@ -11,7 +11,8 @@ doc = cl_utils.__doc__
 
 @pytest.mark.parametrize("command,expectedKey", [
     ("init TestSystem /tmp/somewhere", "init"),
-    ("new_project P11 blank Title", "new_project"),
+    ("new_project P11 Title", "new_project"),
+    ("new_project P11 Title -t website", "new_project"),
     ("add_area A Health desc", "add_area"),
     ("add_category A10-19 Doctors desc", "add_category"),
     ("add_id A11 Cardiologist desc", "add_id"),
@@ -20,6 +21,8 @@ doc = cl_utils.__doc__
     ("search cardio", "search"),
     ("connect_craft https://connect.craft.do/links/abc/api/v1 my-token", "connect_craft"),
     ("craft_sync", "craft_sync"),
+    ("connect_todoist my-token", "connect_todoist"),
+    ("todoist_sync", "todoist_sync"),
 ])
 def test_docopt_parses_each_subcommand(command, expectedKey):
     args = docopt(doc, command.split(" "))
@@ -71,7 +74,7 @@ def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["add_category", "P10-19", "Website", "desc"]))
     assert "P11" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["new_project", "P11", "blank", "Relaunch"]))
+    cl_utils.main(docopt(doc, ["new_project", "P11", "Relaunch"]))
     assert "P11.10" in capsys.readouterr().out
 
     cl_utils.main(docopt(doc, ["search", "cardiologist"]))

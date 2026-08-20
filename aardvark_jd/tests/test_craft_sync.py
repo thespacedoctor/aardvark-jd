@@ -176,6 +176,53 @@ def test_craft_sync_mirrors_area_category_id_nesting(dbConn, craftSettings, fake
     assert any("A11.10 cardiologist" in body and "d3" in body for body in fakeClient.index_bodies())
 
 
+def test_craft_sync_mirrors_an_id_as_a_folder_with_an_inner_index_document(dbConn, craftSettings, fakeClient):
+    """*an ID mirrors as a Craft folder (not a bare document), carrying a single "00 Index" document inside it*"""
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    byName = {name: (folderId, parent) for folderId, name, parent in fakeClient.folders}
+    categoryFolderId = next(fid for name, (fid, _p) in byName.items() if name.startswith("A11 doctors"))
+    idFolderId, idFolderParent = next(
+        (fid, parent) for name, (fid, parent) in byName.items() if name.startswith("A11.10 cardiologist")
+    )
+    assert idFolderParent == categoryFolderId
+
+    idDocumentId, idDocumentTitle, idDocumentFolder = next(
+        (docId, title, folder) for docId, title, folder in fakeClient.documents
+        if title.startswith("A11.10 cardiologist")
+    )
+    assert idDocumentFolder == idFolderId
+
+    # the id's own "00 Index" document carries the Finder link row (Darwin only)
+    assert any("Finder" in md for _docId, md, _blockId in fakeClient.blocksAdded if _docId == idDocumentId)
+
+    # the category's index links to the id's *folder*, not its inner document
+    link = db.get_craft_link(dbConn, "id", "1")
+    assert link["craft_folder_id"] == idFolderId
+    assert "craftdocs://openfolder" in link["craft_url"]
+
+
+def test_craft_sync_id_index_document_is_untouched_on_resync(dbConn, craftSettings, fakeClient):
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    documentsAfterFirst = len(fakeClient.documents)
+    foldersAfterFirst = len(fakeClient.folders)
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert len(fakeClient.documents) == documentsAfterFirst
+    assert len(fakeClient.folders) == foldersAfterFirst
+    assert summary["documents_created"] == 0
+    assert summary["folders_created"] == 0
+
+
 def test_craft_sync_mirrors_the_three_level_system_scaffolding(dbConn, craftSettings, fakeClient):
     """*domain- and area-level system folders, and their reserved subfolders, mirror three levels deep*"""
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()

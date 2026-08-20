@@ -20,7 +20,7 @@ def test_schema_creates_all_tables(dbConn):
             "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
         ).fetchall()
     }
-    for expected in ("meta", "system_folders", "areas", "categories", "ids", "craft_links", "search_index"):
+    for expected in ("meta", "system_folders", "areas", "categories", "ids", "craft_links", "todoist_links", "search_index"):
         assert expected in tables
     assert "projects" not in tables
 
@@ -147,6 +147,26 @@ def test_migrate_schema_upgrades_a_pre_projects_domain_database(tmp_path):
     upgradedConn.close()
 
 
+def test_migrate_schema_clears_stale_id_craft_links(tmp_path):
+    """*a v3 database's `craft_links` rows of type 'id' (pointing at the old top-level ID document) are cleared on upgrade to v4, leaving other entity types untouched*"""
+    dbPath = str(tmp_path / "v3.db")
+    conn = db.get_connection(dbPath)
+    db.initialise_schema(conn)
+
+    db.upsert_craft_link(conn, "id", "1", craftDocumentId="old-doc-1", craftUrl="craftdocs://open?blockId=old-doc-1")
+    db.upsert_craft_link(conn, "area", "1", craftFolderId="folder-1", craftUrl="craftdocs://openfolder?folderId=folder-1")
+    db.set_meta(conn, "schema_version", "3")
+
+    db.initialise_schema(conn)
+
+    assert db.get_craft_link(conn, "id", "1") is None
+    area = db.get_craft_link(conn, "area", "1")
+    assert area is not None
+    assert area["craft_folder_id"] == "folder-1"
+    assert db.get_meta(conn, "schema_version") == "4"
+    conn.close()
+
+
 def test_craft_link_round_trip(dbConn):
     assert db.get_craft_link(dbConn, "area", "1") is None
 
@@ -231,4 +251,23 @@ def test_dropbox_link_round_trip(dbConn):
     row = db.get_dropbox_link(dbConn, "/root/03_AREAS")
     assert row["dropbox_url"] == "https://dropbox.example/a-renamed"
     count = dbConn.execute("SELECT COUNT(*) AS c FROM dropbox_links").fetchone()["c"]
+    assert count == 1
+
+
+def test_todoist_link_round_trip(dbConn):
+    assert db.get_todoist_link(dbConn, "area", "1") is None
+
+    db.upsert_todoist_link(dbConn, "area", "1", todoistProjectId="proj-1", todoistUrl="https://app.todoist.com/app/project/proj-1")
+    row = db.get_todoist_link(dbConn, "area", "1")
+    assert row["todoist_project_id"] == "proj-1"
+    assert row["todoist_url"] == "https://app.todoist.com/app/project/proj-1"
+    assert row["description"] is None
+
+    # re-upserting the same key updates rather than duplicates
+    db.upsert_todoist_link(dbConn, "area", "1", description="[📁 Finder](hook://file/abc)")
+    row = db.get_todoist_link(dbConn, "area", "1")
+    assert row["description"] == "[📁 Finder](hook://file/abc)"
+    # untouched fields from the first upsert survive a later upsert that omits them
+    assert row["todoist_project_id"] == "proj-1"
+    count = dbConn.execute("SELECT COUNT(*) AS c FROM todoist_links").fetchone()["c"]
     assert count == 1

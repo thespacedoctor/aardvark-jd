@@ -20,34 +20,39 @@ BLANK_CHOICE = "blank"
 
 class new_project(object):
     """
-    *create a new project ID within a `projects` category, either from a `04_templates` zip or a blank scaffold*
+    *create a new project ID within a `projects` category, either from that category's own `04_templates` zip or a blank scaffold*
 
     Projects are Johnny Decimal coded like Areas/Resources - a project is a
     plain ID (no emoji) created inside an existing project category.
+    Templates are read from the category's own reserved `04_templates`
+    system ID, not a shared domain-level pool - each project category
+    curates its own template set.
 
     **Key Arguments:**
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
     - ``categoryRef`` -- the parent project category reference, e.g. `"P11"`
-    - ``templateName`` -- the template zip's basename (with or without `.zip`), or `"blank"`. If `None`, prompts interactively. Default `None`.
-    - ``projectTitle`` -- the new project's title. If `None`, prompts interactively. Default `None`.
+    - ``projectTitle`` -- the new project's title
+    - ``templateName`` -- the template zip's basename (with or without `.zip`), or `"blank"`. If `None`, prompts interactively (or defaults to blank in a non-interactive session). Default `None`.
     - ``settings`` -- the aardvark settings dict. Default `None`.
 
     **Usage:**
 
     ```python
     from aardvark_jd.new_project import new_project
-    code, title, folderPath, templateUsed = new_project(log=log, dbConn=dbConn, categoryRef="P11").get()
+    code, title, folderPath, templateUsed = new_project(
+        log=log, dbConn=dbConn, categoryRef="P11", projectTitle="My Project",
+    ).get()
     ```
     """
 
-    def __init__(self, log, dbConn, categoryRef, templateName=None, projectTitle=None, settings=None):
+    def __init__(self, log, dbConn, categoryRef, projectTitle, templateName=None, settings=None):
         self.log = log
         self.dbConn = dbConn
         self.categoryRef = categoryRef
-        self.templateName = templateName
         self.projectTitle = projectTitle
+        self.templateName = templateName
         self.settings = settings
 
     def get(self):
@@ -68,11 +73,17 @@ class new_project(object):
         if category is None:
             raise ValueError(f"no category '{self.categoryRef}' found in domain 'projects'")
 
-        templatesFolder = paths.resolve(self.dbConn, "projects.system.04_templates")
-        templateZips = sorted(glob.glob(f"{templatesFolder}/*.zip"))
+        try:
+            templatesFolder = paths.resolve(self.dbConn, f"projects.{acNumber}.04_templates")
+            templateZips = sorted(glob.glob(f"{templatesFolder}/*.zip"))
+        except KeyError:
+            # NO RESERVED `04_templates` SYSTEM ID YET (A CATEGORY CREATED BEFORE
+            # THAT SCAFFOLDING EXISTED, NOT YET `repair_emoji`'D) - TREAT AS "NO
+            # TEMPLATES" RATHER THAN FAILING new_project OUTRIGHT.
+            templateZips = []
 
         templateChoice = self._resolve_template_choice(templateZips)
-        title = self._resolve_title()
+        title = self.projectTitle
 
         itemNumber = folders.next_id_number(self.dbConn, "projects", category)
         folderName = folders.id_folder_name("projects", acNumber, itemNumber, title)
@@ -121,7 +132,7 @@ class new_project(object):
             return BLANK_CHOICE
 
         print("Available project templates:")
-        print(f"  0) {BLANK_CHOICE} (README.md, input/, output/)")
+        print("  0) New blank project (README.md, input/, output/)")
         for index, zipPath in enumerate(templateZips, start=1):
             print(f"  {index}) {os.path.basename(zipPath)}")
 
@@ -132,24 +143,6 @@ class new_project(object):
             print("Invalid choice, try again.")
 
         return BLANK_CHOICE if choice == "0" else templateZips[int(choice) - 1]
-
-    def _resolve_title(self):
-        """
-        *resolve the project title, from the constructor arg or an interactive prompt*
-
-        **Return:**
-
-        - ``title`` -- the new project's title
-        """
-        if self.projectTitle:
-            return self.projectTitle
-        if not sys.stdin.isatty():
-            raise ValueError("a <projectTitle> is required in non-interactive sessions")
-        while True:
-            title = input("Project title: ").strip()
-            if title:
-                return title
-            print("A project title is required.")
 
     def _build_blank_scaffold(self, folderPath):
         """
