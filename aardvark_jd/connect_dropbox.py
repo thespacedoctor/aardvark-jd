@@ -9,6 +9,15 @@ the OAuth2 PKCE flow (`token_access_type=offline` is what makes Dropbox
 hand back a refresh token at all) and stored in the user settings file
 alongside the connecting app's key/secret.
 
+`redirect_uri` is deliberately omitted from both the authorise URL and
+the token exchange, rather than pointed at some fixed aardvark-chosen
+value: Dropbox requires any redirect URI actually used to be
+pre-registered against the connecting app in the App Console, which
+aardvark has no way to do on the user's behalf. Omitting it entirely
+puts Dropbox into its "no redirect" flow instead, where the
+authorisation page displays the code directly for the user to copy -
+exactly what this flow already prompts for.
+
 Author
 : David Young
 """
@@ -25,7 +34,6 @@ from aardvark_jd import settings_writer
 
 _AUTHORIZE_URL = "https://www.dropbox.com/oauth2/authorize"
 _TOKEN_URL = "https://api.dropbox.com/oauth2/token"
-_REDIRECT_URI = "https://www.dropbox.com/1/oauth2/redirect_receiver"
 
 
 class connect_dropbox(object):
@@ -72,7 +80,7 @@ class connect_dropbox(object):
         authorizeUrl = (
             f"{_AUTHORIZE_URL}?client_id={self.appKey}&response_type=code"
             f"&code_challenge={codeChallenge}&code_challenge_method=S256"
-            f"&token_access_type=offline&redirect_uri={_REDIRECT_URI}"
+            f"&token_access_type=offline"
         )
         print(f"opening Dropbox authorisation page - if it doesn't open automatically, visit:\n{authorizeUrl}")
         webbrowser.open(authorizeUrl)
@@ -118,7 +126,6 @@ class connect_dropbox(object):
                 "client_id": self.appKey,
                 "client_secret": self.appSecret,
                 "code_verifier": codeVerifier,
-                "redirect_uri": _REDIRECT_URI,
             },
         )
         if not response.ok:
