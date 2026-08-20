@@ -29,7 +29,7 @@ def dbConnWithArea(tmp_path):
 
 def test_add_category_happy_path(dbConnWithArea):
     code, folderPath = add_category(
-        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Doctors", description="desc"
+        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10", title="Doctors", description="desc"
     ).get()
     assert code == "A11"
     assert "A11_doctors" in folderPath
@@ -47,7 +47,7 @@ def test_add_category_happy_path_projects_domain(tmp_path):
     add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
 
     code, folderPath = add_category(
-        log=log, dbConn=conn, domain="projects", areaRef="10", title="Website", description="desc"
+        log=log, dbConn=conn, domain="projects", areaRef="P10", title="Website", description="desc"
     ).get()
     assert code == "P11"
     assert "P11_website" in folderPath
@@ -57,7 +57,7 @@ def test_add_category_happy_path_projects_domain(tmp_path):
 
 def test_add_category_accepts_range_ref(dbConnWithArea):
     code, _ = add_category(
-        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10-19", title="Doctors", description=""
+        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10-19", title="Doctors", description=""
     ).get()
     assert code == "A11"
 
@@ -65,22 +65,22 @@ def test_add_category_accepts_range_ref(dbConnWithArea):
 def test_add_category_unknown_area_raises_clear_error(dbConnWithArea):
     with pytest.raises(ValueError):
         add_category(
-            log=log, dbConn=dbConnWithArea, domain="areas", areaRef="20", title="X", description=""
+            log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A20", title="X", description=""
         ).get()
 
 
 def test_add_category_exhaustion_surfaces_clear_error(dbConnWithArea):
     for _ in range(9):
-        add_category(log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="X", description="").get()
+        add_category(log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10", title="X", description="").get()
     with pytest.raises(folders.CategoryExhaustedError):
         add_category(
-            log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Overflow", description=""
+            log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10", title="Overflow", description=""
         ).get()
 
 
 def test_add_category_creates_its_ten_reserved_ids(dbConnWithArea):
     _code, folderPath = add_category(
-        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="10", title="Doctors", description="desc"
+        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10", title="Doctors", description="desc"
     ).get()
 
     expectedNames = [

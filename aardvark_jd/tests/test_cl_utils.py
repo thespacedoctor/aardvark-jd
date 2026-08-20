@@ -12,10 +12,10 @@ doc = cl_utils.__doc__
 @pytest.mark.parametrize("command,expectedKey", [
     ("init TestSystem /tmp/somewhere", "init"),
     ("new_project P11 blank Title", "new_project"),
-    ("add_area areas Health desc", "add_area"),
-    ("add_category areas 10 Doctors desc", "add_category"),
-    ("add_id areas 11 Cardiologist desc", "add_id"),
-    ("set_emoji areas 10 X", "set_emoji"),
+    ("add_area A Health desc", "add_area"),
+    ("add_category A10-19 Doctors desc", "add_category"),
+    ("add_id A11 Cardiologist desc", "add_id"),
+    ("set_emoji A10-19 X", "set_emoji"),
     ("repair_emoji", "repair_emoji"),
     ("search cardio", "search"),
     ("connect_craft https://connect.craft.do/links/abc/api/v1 my-token", "connect_craft"),
@@ -27,8 +27,8 @@ def test_docopt_parses_each_subcommand(command, expectedKey):
 
 
 @pytest.mark.parametrize("command", [
-    "add_area areas Health desc",
-    "add_category areas 10 Doctors desc",
+    "add_area A Health desc",
+    "add_category A10-19 Doctors desc",
 ])
 def test_docopt_accepts_the_emoji_flag(command):
     assert docopt(doc, command.split(" ") + ["-e", "X"])["--emoji"] == "X"
@@ -38,7 +38,7 @@ def test_docopt_accepts_the_emoji_flag(command):
 def test_emoji_flag_and_set_emoji_positional_do_not_collide():
     # `--emoji` is an option on the add_* commands while `<emoji>` is a
     # positional on set_emoji, so check docopt keeps the two apart
-    args = docopt(doc, ["set_emoji", "areas", "10", "X"])
+    args = docopt(doc, ["set_emoji", "A10-19", "X"])
     assert args["<emoji>"] == "X"
     assert args["--emoji"] is None
 
@@ -56,19 +56,19 @@ def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
     assert "initialised" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
     assert "A10-19" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["add_category", "areas", "10", "Doctors", "desc"]))
+    cl_utils.main(docopt(doc, ["add_category", "A10-19", "Doctors", "desc"]))
     assert "A11" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["add_id", "areas", "11", "Cardiologist", "desc"]))
+    cl_utils.main(docopt(doc, ["add_id", "A11", "Cardiologist", "desc"]))
     assert "A11.10" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["add_area", "projects", "Launches", "desc"]))
+    cl_utils.main(docopt(doc, ["add_area", "P", "Launches", "desc"]))
     assert "P10-19" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["add_category", "projects", "10", "Website", "desc"]))
+    cl_utils.main(docopt(doc, ["add_category", "P10-19", "Website", "desc"]))
     assert "P11" in capsys.readouterr().out
 
     cl_utils.main(docopt(doc, ["new_project", "P11", "blank", "Relaunch"]))
@@ -85,14 +85,14 @@ def test_main_reports_missing_system(isolatedHome, capsys):
     assert "run `aardvark init" in capsys.readouterr().err
 
 
-def test_main_reports_clear_error_for_invalid_domain(isolatedHome, capsys):
+def test_main_reports_clear_error_for_an_invalid_domain_letter(isolatedHome, capsys):
     rootParent = str(isolatedHome / "root_parent")
     os.makedirs(rootParent)
     cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
     capsys.readouterr()
 
     with pytest.raises(SystemExit) as excInfo:
-        cl_utils.main(docopt(doc, ["add_area", "bogus", "X", "desc"]))
+        cl_utils.main(docopt(doc, ["add_area", "Q", "X", "desc"]))
     assert excInfo.value.code == 1
     assert "error:" in capsys.readouterr().err
 
@@ -103,10 +103,10 @@ def test_main_set_emoji_and_repair_emoji_end_to_end(isolatedHome, monkeypatch, c
     os.makedirs(rootParent)
 
     cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc", "-e", "X"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "-e", "X"]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["set_emoji", "areas", "10", "Y"]))
+    cl_utils.main(docopt(doc, ["set_emoji", "A10-19", "Y"]))
     out = capsys.readouterr().out
     assert "A10-19" in out
     assert "A10_19_healthY" in out
@@ -115,7 +115,7 @@ def test_main_set_emoji_and_repair_emoji_end_to_end(isolatedHome, monkeypatch, c
     cl_utils.main(docopt(doc, ["repair_emoji"]))
     assert "already matches the current naming convention" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["set_emoji", "system", "root.areas", "Z"]))
+    cl_utils.main(docopt(doc, ["set_emoji", "root.areas", "Z"]))
     capsys.readouterr()
     cl_utils.main(docopt(doc, ["repair_emoji"]))
     assert "root.areas" in capsys.readouterr().out
@@ -136,7 +136,7 @@ def test_main_emoji_flag_skips_the_suggester(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Taxes", "desc", "-e", "T"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Taxes", "desc", "-e", "T"]))
     assert "A10_19_taxesT" in capsys.readouterr().out
 
 
@@ -264,7 +264,7 @@ def test_connect_craft_without_s_flag_still_persists_to_the_default_settings_fil
     # THE REAL REGRESSION TEST: A LATER COMMAND, ALSO RUN WITHOUT `-s`, MUST
     # PICK UP `craft.enabled` FROM THAT SAME DEFAULT FILE AND AUTO-PUSH.
     fakeCraftClient.folders.clear()
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
     capsys.readouterr()
     assert any(name.startswith("A10-19 health") for _id, name, _parent in fakeCraftClient.folders)
 
@@ -291,7 +291,7 @@ def test_add_area_auto_pushes_to_craft_once_connected(isolatedHome, fakeCraftCli
     cl_utils.main(docopt(doc, ["connect_craft", _CRAFT_API_URL, "my-token", "-s", settingsPath]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
     assert "A10-19" in capsys.readouterr().out
 
     # the craft folder mirrors the on-disk name (lowercased, emoji suffixed)
@@ -310,14 +310,14 @@ def test_repair_emoji_auto_pushes_to_craft_once_connected(isolatedHome, monkeypa
     rootParent = str(isolatedHome / "root_parent")
     os.makedirs(rootParent)
     cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
-    cl_utils.main(docopt(doc, ["add_area", "areas", "Health", "desc", "-e", "X"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "-e", "X"]))
     capsys.readouterr()
 
     settingsPath = str(isolatedHome / ".config" / "aardvark" / "aardvark.yaml")
     cl_utils.main(docopt(doc, ["connect_craft", _CRAFT_API_URL, "my-token", "-s", settingsPath]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["set_emoji", "areas", "10", "Y"]))
+    cl_utils.main(docopt(doc, ["set_emoji", "A10-19", "Y"]))
     capsys.readouterr()
 
     blocksDeletedBefore = len(fakeCraftClient.blocksDeleted)

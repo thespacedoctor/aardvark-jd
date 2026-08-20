@@ -24,14 +24,14 @@ def dbConnWithCategory(tmp_path):
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
     add_area(log=log, dbConn=conn, domain="areas", title="Health", description="").get()
-    add_category(log=log, dbConn=conn, domain="areas", areaRef="10", title="Doctors", description="").get()
+    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors", description="").get()
     yield conn
     conn.close()
 
 
 def test_add_id_happy_path(dbConnWithCategory):
     code, folderPath = add_id(
-        log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="11",
+        log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
         title="Cardiologist", description="Dr Smith",
     ).get()
     assert code == "A11.10"
@@ -51,10 +51,10 @@ def test_add_id_happy_path_projects_domain(tmp_path):
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
     add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
-    add_category(log=log, dbConn=conn, domain="projects", areaRef="10", title="Website", description="").get()
+    add_category(log=log, dbConn=conn, domain="projects", areaRef="P10", title="Website", description="").get()
 
     code, folderPath = add_id(
-        log=log, dbConn=conn, domain="projects", categoryRef="11",
+        log=log, dbConn=conn, domain="projects", categoryRef="P11",
         title="Redesign", description="",
     ).get()
     assert code == "P11.10"
@@ -66,7 +66,7 @@ def test_add_id_happy_path_projects_domain(tmp_path):
 def test_add_id_unknown_category_raises_clear_error(dbConnWithCategory):
     with pytest.raises(ValueError):
         add_id(
-            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="12",
+            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A12",
             title="X", description="",
         ).get()
 
@@ -76,11 +76,11 @@ def test_add_id_exhaustion_surfaces_clear_error(dbConnWithCategory):
     # 90 USER-CREATED IDS (10..99) FIT BEFORE EXHAUSTION
     for _ in range(90):
         add_id(
-            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="11",
+            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
             title="X", description="",
         ).get()
     with pytest.raises(folders.IdExhaustedError):
         add_id(
-            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="11",
+            log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
             title="Overflow", description="",
         ).get()

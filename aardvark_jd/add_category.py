@@ -19,7 +19,7 @@ class add_category(object):
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
     - ``domain`` -- `areas`, `resources` or `projects`
-    - ``areaRef`` -- the parent area reference, e.g. `"10"` or `"10-19"`
+    - ``areaRef`` -- the parent area reference, e.g. `"A10"` or `"A10-19"`
     - ``title`` -- the category's title
     - ``description`` -- the category's description
     - ``chosenEmoji`` -- an emoji supplied on the command-line, bypassing the suggester. Default `None`.
@@ -30,7 +30,7 @@ class add_category(object):
     ```python
     from aardvark_jd.add_category import add_category
     code, folderPath = add_category(
-        log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="..."
+        log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="..."
     ).get()
     ```
     """
@@ -56,7 +56,7 @@ class add_category(object):
         """
         self.log.debug("starting the ``get`` method")
 
-        decadeStart = codes.parse_area_ref(self.areaRef)
+        decadeStart = codes.parse_area_ref(self.areaRef, domain=self.domain)
         area = db.get_area(self.dbConn, self.domain, decadeStart)
         if area is None:
             raise ValueError(f"no area '{self.areaRef}' found in domain '{self.domain}'")

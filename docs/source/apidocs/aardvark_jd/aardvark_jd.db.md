@@ -15,6 +15,10 @@
 :class: autosummary longtable
 :align: left
 
+* - {py:obj}`entity_rows_for_path_prefix <aardvark_jd.db.entity_rows_for_path_prefix>`
+  - ```{autodoc2-docstring} aardvark_jd.db.entity_rows_for_path_prefix
+    :summary:
+    ```
 * - {py:obj}`fts5_enabled <aardvark_jd.db.fts5_enabled>`
   - ```{autodoc2-docstring} aardvark_jd.db.fts5_enabled
     :summary:
@@ -31,12 +35,16 @@
   - ```{autodoc2-docstring} aardvark_jd.db.get_connection
     :summary:
     ```
-* - {py:obj}`get_meta <aardvark_jd.db.get_meta>`
-  - ```{autodoc2-docstring} aardvark_jd.db.get_meta
+* - {py:obj}`get_craft_link <aardvark_jd.db.get_craft_link>`
+  - ```{autodoc2-docstring} aardvark_jd.db.get_craft_link
     :summary:
     ```
-* - {py:obj}`get_project_by_title <aardvark_jd.db.get_project_by_title>`
-  - ```{autodoc2-docstring} aardvark_jd.db.get_project_by_title
+* - {py:obj}`get_dropbox_link <aardvark_jd.db.get_dropbox_link>`
+  - ```{autodoc2-docstring} aardvark_jd.db.get_dropbox_link
+    :summary:
+    ```
+* - {py:obj}`get_meta <aardvark_jd.db.get_meta>`
+  - ```{autodoc2-docstring} aardvark_jd.db.get_meta
     :summary:
     ```
 * - {py:obj}`get_system_folder <aardvark_jd.db.get_system_folder>`
@@ -57,10 +65,6 @@
     ```
 * - {py:obj}`insert_id <aardvark_jd.db.insert_id>`
   - ```{autodoc2-docstring} aardvark_jd.db.insert_id
-    :summary:
-    ```
-* - {py:obj}`insert_project <aardvark_jd.db.insert_project>`
-  - ```{autodoc2-docstring} aardvark_jd.db.insert_project
     :summary:
     ```
 * - {py:obj}`insert_system_folder <aardvark_jd.db.insert_system_folder>`
@@ -99,17 +103,32 @@
   - ```{autodoc2-docstring} aardvark_jd.db.update_category_emoji
     :summary:
     ```
-* - {py:obj}`update_project_emoji <aardvark_jd.db.update_project_emoji>`
-  - ```{autodoc2-docstring} aardvark_jd.db.update_project_emoji
+* - {py:obj}`update_id_name <aardvark_jd.db.update_id_name>`
+  - ```{autodoc2-docstring} aardvark_jd.db.update_id_name
     :summary:
     ```
 * - {py:obj}`update_system_folder <aardvark_jd.db.update_system_folder>`
   - ```{autodoc2-docstring} aardvark_jd.db.update_system_folder
     :summary:
     ```
+* - {py:obj}`upsert_craft_link <aardvark_jd.db.upsert_craft_link>`
+  - ```{autodoc2-docstring} aardvark_jd.db.upsert_craft_link
+    :summary:
+    ```
+* - {py:obj}`upsert_dropbox_link <aardvark_jd.db.upsert_dropbox_link>`
+  - ```{autodoc2-docstring} aardvark_jd.db.upsert_dropbox_link
+    :summary:
+    ```
 ````
 
 ### API
+
+````{py:function} entity_rows_for_path_prefix(dbConn)
+:canonical: aardvark_jd.db.entity_rows_for_path_prefix
+
+```{autodoc2-docstring} aardvark_jd.db.entity_rows_for_path_prefix
+```
+````
 
 ````{py:function} fts5_enabled(dbConn)
 :canonical: aardvark_jd.db.fts5_enabled
@@ -139,17 +158,24 @@
 ```
 ````
 
+````{py:function} get_craft_link(dbConn, entityType, entityKey)
+:canonical: aardvark_jd.db.get_craft_link
+
+```{autodoc2-docstring} aardvark_jd.db.get_craft_link
+```
+````
+
+````{py:function} get_dropbox_link(dbConn, folderPath)
+:canonical: aardvark_jd.db.get_dropbox_link
+
+```{autodoc2-docstring} aardvark_jd.db.get_dropbox_link
+```
+````
+
 ````{py:function} get_meta(dbConn, key)
 :canonical: aardvark_jd.db.get_meta
 
 ```{autodoc2-docstring} aardvark_jd.db.get_meta
-```
-````
-
-````{py:function} get_project_by_title(dbConn, title)
-:canonical: aardvark_jd.db.get_project_by_title
-
-```{autodoc2-docstring} aardvark_jd.db.get_project_by_title
 ```
 ````
 
@@ -185,13 +211,6 @@
 :canonical: aardvark_jd.db.insert_id
 
 ```{autodoc2-docstring} aardvark_jd.db.insert_id
-```
-````
-
-````{py:function} insert_project(dbConn, title, description, emoji, folderName, folderPath, templateUsed)
-:canonical: aardvark_jd.db.insert_project
-
-```{autodoc2-docstring} aardvark_jd.db.insert_project
 ```
 ````
 
@@ -258,10 +277,10 @@
 ```
 ````
 
-````{py:function} update_project_emoji(dbConn, projectId, emoji, folderName, folderPath)
-:canonical: aardvark_jd.db.update_project_emoji
+````{py:function} update_id_name(dbConn, idId, folderName, folderPath)
+:canonical: aardvark_jd.db.update_id_name
 
-```{autodoc2-docstring} aardvark_jd.db.update_project_emoji
+```{autodoc2-docstring} aardvark_jd.db.update_id_name
 ```
 ````
 
@@ -269,5 +288,19 @@
 :canonical: aardvark_jd.db.update_system_folder
 
 ```{autodoc2-docstring} aardvark_jd.db.update_system_folder
+```
+````
+
+````{py:function} upsert_craft_link(dbConn, entityType, entityKey, craftFolderId=None, craftDocumentId=None, craftBlockId=None, craftUrl=None, linksMarkdown=None, clearBlockId=False)
+:canonical: aardvark_jd.db.upsert_craft_link
+
+```{autodoc2-docstring} aardvark_jd.db.upsert_craft_link
+```
+````
+
+````{py:function} upsert_dropbox_link(dbConn, folderPath, dropboxUrl)
+:canonical: aardvark_jd.db.upsert_dropbox_link
+
+```{autodoc2-docstring} aardvark_jd.db.upsert_dropbox_link
 ```
 ````

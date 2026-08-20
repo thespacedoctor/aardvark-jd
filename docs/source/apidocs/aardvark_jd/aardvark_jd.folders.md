@@ -23,6 +23,14 @@
   - ```{autodoc2-docstring} aardvark_jd.folders.category_folder_name
     :summary:
     ```
+* - {py:obj}`create_reserved_system_ids <aardvark_jd.folders.create_reserved_system_ids>`
+  - ```{autodoc2-docstring} aardvark_jd.folders.create_reserved_system_ids
+    :summary:
+    ```
+* - {py:obj}`display_name <aardvark_jd.folders.display_name>`
+  - ```{autodoc2-docstring} aardvark_jd.folders.display_name
+    :summary:
+    ```
 * - {py:obj}`id_folder_name <aardvark_jd.folders.id_folder_name>`
   - ```{autodoc2-docstring} aardvark_jd.folders.id_folder_name
     :summary:
@@ -43,8 +51,8 @@
   - ```{autodoc2-docstring} aardvark_jd.folders.next_id_number
     :summary:
     ```
-* - {py:obj}`project_folder_name <aardvark_jd.folders.project_folder_name>`
-  - ```{autodoc2-docstring} aardvark_jd.folders.project_folder_name
+* - {py:obj}`slugify <aardvark_jd.folders.slugify>`
+  - ```{autodoc2-docstring} aardvark_jd.folders.slugify
     :summary:
     ```
 * - {py:obj}`system_folder_name <aardvark_jd.folders.system_folder_name>`
@@ -65,6 +73,10 @@
     ```
 * - {py:obj}`MAX_ITEM_NUMBER <aardvark_jd.folders.MAX_ITEM_NUMBER>`
   - ```{autodoc2-docstring} aardvark_jd.folders.MAX_ITEM_NUMBER
+    :summary:
+    ```
+* - {py:obj}`MIN_ITEM_NUMBER <aardvark_jd.folders.MIN_ITEM_NUMBER>`
+  - ```{autodoc2-docstring} aardvark_jd.folders.MIN_ITEM_NUMBER
     :summary:
     ```
 ````
@@ -532,21 +544,45 @@ Bases: {py:obj}`Exception`
 
 ````
 
-````{py:function} area_folder_name(decadeStart, decadeEnd, title, emoji)
+````{py:data} MIN_ITEM_NUMBER
+:canonical: aardvark_jd.folders.MIN_ITEM_NUMBER
+:value: >
+   10
+
+```{autodoc2-docstring} aardvark_jd.folders.MIN_ITEM_NUMBER
+```
+
+````
+
+````{py:function} area_folder_name(domain, decadeStart, decadeEnd, title, emoji)
 :canonical: aardvark_jd.folders.area_folder_name
 
 ```{autodoc2-docstring} aardvark_jd.folders.area_folder_name
 ```
 ````
 
-````{py:function} category_folder_name(acNumber, title, emoji)
+````{py:function} category_folder_name(domain, acNumber, title, emoji)
 :canonical: aardvark_jd.folders.category_folder_name
 
 ```{autodoc2-docstring} aardvark_jd.folders.category_folder_name
 ```
 ````
 
-````{py:function} id_folder_name(acNumber, itemNumber, title)
+````{py:function} create_reserved_system_ids(dbConn, domain, acNumber, containingFolderPath)
+:canonical: aardvark_jd.folders.create_reserved_system_ids
+
+```{autodoc2-docstring} aardvark_jd.folders.create_reserved_system_ids
+```
+````
+
+````{py:function} display_name(folderName)
+:canonical: aardvark_jd.folders.display_name
+
+```{autodoc2-docstring} aardvark_jd.folders.display_name
+```
+````
+
+````{py:function} id_folder_name(domain, acNumber, itemNumber, title, emoji='')
 :canonical: aardvark_jd.folders.id_folder_name
 
 ```{autodoc2-docstring} aardvark_jd.folders.id_folder_name
@@ -581,10 +617,10 @@ Bases: {py:obj}`Exception`
 ```
 ````
 
-````{py:function} project_folder_name(title, emoji)
-:canonical: aardvark_jd.folders.project_folder_name
+````{py:function} slugify(title)
+:canonical: aardvark_jd.folders.slugify
 
-```{autodoc2-docstring} aardvark_jd.folders.project_folder_name
+```{autodoc2-docstring} aardvark_jd.folders.slugify
 ```
 ````
 

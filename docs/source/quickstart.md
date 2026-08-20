@@ -17,7 +17,7 @@ Areas, categories and projects get an emoji suggested from their title and descr
 In an interactive session the suggestion is shown for you to accept or replace:
 
 ```bash
-aardvark add_area areas "Doctors" "GP and specialists"
+aardvark add_area A "Doctors" "GP and specialists"
 # Suggested emoji for 'Doctors': 🩺
 # Press Enter to accept, or type a replacement emoji:
 ```
@@ -25,7 +25,7 @@ aardvark add_area areas "Doctors" "GP and specialists"
 Pass `--emoji` to skip both the API call and the prompt:
 
 ```bash
-aardvark add_area areas "Taxes" "Self assessment and receipts" --emoji 🧾
+aardvark add_area A "Taxes" "Self assessment and receipts" --emoji 🧾
 ```
 
 To stay offline permanently, set `use_llm: false` under `emoji:` in your settings file.
@@ -35,10 +35,10 @@ To stay offline permanently, set `use_llm: false` under `emoji:` in your setting
 `set_emoji` retargets something that already exists, renaming the folder and repointing the index at it in one step:
 
 ```bash
-aardvark set_emoji areas 10 🏥            # an area
-aardvark set_emoji areas 11 🩺            # a category
-aardvark set_emoji projects 11 🌐         # a project category
-aardvark set_emoji system root.areas 🧭   # a static system folder
+aardvark set_emoji A10-19 🏥        # an area
+aardvark set_emoji A11 🩺           # a category
+aardvark set_emoji P11 🌐           # a project category
+aardvark set_emoji root.areas 🧭    # a static system folder
 ```
 
 Renaming a folder moves everything nested inside it, so the paths recorded for those descendants are rewritten at the same time - nothing is left pointing at the old location.
@@ -51,12 +51,14 @@ aardvark repair_emoji
 
 ## Growing the Johnny Decimal index
 
-`02_PROJECTS`, `03_AREAS` and `04_RESOURCES` are all Johnny Decimal systems. Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
+`02_PROJECTS`, `03_AREAS` and `04_RESOURCES` are all Johnny Decimal systems, named by their domain letter: `P`, `A` and `R`. Every reference you pass on the command-line carries that letter, so nothing has to say which system it means - `A11` is a category under Areas, `P11` the same number under Projects.
+
+Add an area, then a category within it, then IDs within that category - each level auto-numbers itself:
 
 ```bash
-aardvark add_area areas "Health" "Everything related to my physical and mental health"
-aardvark add_category areas 10 "Doctors" "Doctors, specialists and appointments"
-aardvark add_id areas 11 "Cardiologist" "Dr Smith, cardiology follow-ups"
+aardvark add_area A "Health" "Everything related to my physical and mental health"
+aardvark add_category A10-19 "Doctors" "Doctors, specialists and appointments"
+aardvark add_id A11 "Cardiologist" "Dr Smith, cardiology follow-ups"
 ```
 
 Area and category folders are named `<X><AC>_<title><emoji>` - domain letter, lowercase, spaces
@@ -84,8 +86,8 @@ and backfills any missing reserved scaffolding - safe to run repeatedly.
 A project is a Johnny Decimal ID in the `projects` domain, so it needs an existing project category to live in - add an area and category first, the same way as for `areas`/`resources`:
 
 ```bash
-aardvark add_area projects "Launches" "Things I'm shipping"
-aardvark add_category projects 10 "Website" "The site rebuild"
+aardvark add_area P "Launches" "Things I'm shipping"
+aardvark add_category P10-19 "Website" "The site rebuild"
 aardvark new_project P11
 ```
 

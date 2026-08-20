@@ -11,9 +11,16 @@ import re
 
 DOMAINS = ("areas", "resources", "projects")
 DOMAIN_LETTER = {"areas": "A", "resources": "R", "projects": "P"}
+LETTER_DOMAIN = {letter: domain for domain, letter in DOMAIN_LETTER.items()}
 
-_AREA_REF_RE = re.compile(r"^(?:[APR]\.?)?(\d{2})(?:-(\d{2}))?$")
-_CATEGORY_REF_RE = re.compile(r"^(?:[APR]\.?)?(\d{2})$")
+# THE DOMAIN LETTER IS MANDATORY ON EVERY REFERENCE - IT IS THE ONLY THING
+# TELLING `A11` FROM `R11` FROM `P11`, NOW THAT COMMANDS NO LONGER TAKE A
+# SEPARATE DOMAIN ARGUMENT. THE PERIOD AFTER IT IS THE LEGACY `A.11` FORM,
+# STILL ACCEPTED BUT NO LONGER WRITTEN.
+_AREA_REF_RE = re.compile(r"^([APR])\.?(\d{2})(?:-(\d{2}))?$", re.IGNORECASE)
+_CATEGORY_REF_RE = re.compile(r"^([APR])\.?(\d{2})$", re.IGNORECASE)
+
+LETTER_HINT = "'A' (areas), 'R' (resources) or 'P' (projects)"
 
 
 def validate_domain(domain):
@@ -51,52 +58,230 @@ def domain_letter(domain):
     return DOMAIN_LETTER[domain]
 
 
-def parse_area_ref(text):
+def domain_from_letter(text):
     """
-    *parse a user-supplied area reference into its decade-start number*
+    *resolve a single-letter domain code to its domain (`A` -> `areas`, `R` -> `resources`, `P` -> `projects`)*
 
-    Accepts `"10"`, `"10-19"`, `"A10"` or `"A10-19"` style input (the older
-    `"A.10"`/`"A.10-19"` form with the period still parses too).
+    The full domain word is accepted too, so anything already holding an
+    `"areas"`-style string can be passed straight through.
 
     **Key Arguments:**
 
-    - ``text`` -- the raw area reference supplied on the command-line
+    - ``text`` -- the domain letter supplied on the command-line
 
     **Return:**
 
-    - ``decadeStart`` -- the area's decade-start number, e.g. `10`
+    - ``domain`` -- `areas`, `resources` or `projects`
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    domain = codes.domain_from_letter("A")
+    ```
+    """
+    text = str(text).strip()
+    if text in DOMAINS:
+        return text
+    letter = text.upper()
+    if letter not in LETTER_DOMAIN:
+        raise ValueError(
+            f"'{text}' is not a valid domain letter - expected {LETTER_HINT}"
+        )
+    return LETTER_DOMAIN[letter]
+
+
+def is_jd_ref(text):
+    """
+    *decide whether a reference is a Johnny Decimal area/category code rather than something else*
+
+    Used to tell an area or category reference (`"A10-19"`, `"R11"`) apart
+    from a system folder key (`"root.areas"`), now that neither carries an
+    explicit domain argument alongside it.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference supplied on the command-line
+
+    **Return:**
+
+    - ``isJdRef`` -- `True` if the reference is a Johnny Decimal area or category code
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    isJdRef = codes.is_jd_ref("A10-19")
+    ```
+    """
+    return _AREA_REF_RE.match(str(text).strip()) is not None
+
+
+def domain_from_ref(text):
+    """
+    *return the domain a Johnny Decimal reference belongs to, from its letter prefix*
+
+    Only the letter is validated here - the numbers are left to
+    `split_area_ref`/`split_category_ref`, so this answers "which domain?"
+    for an area ref and a category ref alike.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference supplied on the command-line
+
+    **Return:**
+
+    - ``domain`` -- `areas`, `resources` or `projects`
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    domain = codes.domain_from_ref("A11")
+    ```
     """
     text = str(text).strip()
     match = _AREA_REF_RE.match(text)
     if not match:
         raise ValueError(
-            f"'{text}' is not a valid area reference - expected e.g. '10', '10-19' or 'A.10-19'"
+            f"'{text}' is not a valid Johnny Decimal reference - expected a domain letter "
+            f"prefix, e.g. 'A10-19', 'R10' or 'P11'"
         )
-    decadeStart = int(match.group(1))
+    return LETTER_DOMAIN[match.group(1).upper()]
+
+
+def _check_domain_matches(text, letter, domain):
+    """
+    *check a reference's domain letter agrees with the domain a command is working in*
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw reference, quoted back in the error message
+    - ``letter`` -- the reference's upper-cased domain letter
+    - ``domain`` -- the domain to check against, or `None` to skip the check
+
+    **Return:**
+
+    - ``domain`` -- the reference's own domain
+    """
+    refDomain = LETTER_DOMAIN[letter]
+    if domain is not None and refDomain != domain:
+        raise ValueError(
+            f"'{text}' is a '{refDomain}' reference, but this command is working in '{domain}'"
+        )
+    return refDomain
+
+
+def split_area_ref(text, domain=None):
+    """
+    *split a user-supplied area reference into its domain and decade-start number*
+
+    Accepts `"A10"`, `"A10-19"`, `"R10-19"` or `"P10"` style input (the older
+    `"A.10"`/`"A.10-19"` form with the period still parses too). The domain
+    letter is required.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw area reference supplied on the command-line
+    - ``domain`` -- a domain the reference must belong to, or `None` to take the reference's own. Default `None`.
+
+    **Return:**
+
+    - ``domain`` -- the area's domain, e.g. `areas`
+    - ``decadeStart`` -- the area's decade-start number, e.g. `10`
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    domain, decadeStart = codes.split_area_ref("A10-19")
+    ```
+    """
+    text = str(text).strip()
+    match = _AREA_REF_RE.match(text)
+    if not match:
+        raise ValueError(
+            f"'{text}' is not a valid area reference - expected a domain letter prefix, "
+            f"e.g. 'A10-19', 'R10-19' or 'P10-19'"
+        )
+    refDomain = _check_domain_matches(text, match.group(1).upper(), domain)
+    decadeStart = int(match.group(2))
     if decadeStart % 10 != 0 or decadeStart == 0:
         raise ValueError(
             f"'{text}' is not a valid area reference - decade must be one of 10, 20, ..., 90"
         )
-    decadeEndText = match.group(2)
+    decadeEndText = match.group(3)
     if decadeEndText is not None and int(decadeEndText) != decadeStart + 9:
         raise ValueError(
             f"'{text}' is not a valid area reference - a decade range must span exactly "
             f"'{decadeStart:02d}-{decadeStart + 9:02d}'"
         )
-    return decadeStart
+    return refDomain, decadeStart
 
 
-def parse_area_ref_is_area(text):
+def split_category_ref(text, domain=None):
+    """
+    *split a user-supplied category reference into its domain and AC number*
+
+    Accepts `"A11"`, `"R11"` or `"P11"` style input (the older `"A.11"` form
+    with the period still parses too). The domain letter is required.
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw category reference supplied on the command-line
+    - ``domain`` -- a domain the reference must belong to, or `None` to take the reference's own. Default `None`.
+
+    **Return:**
+
+    - ``domain`` -- the category's domain, e.g. `areas`
+    - ``acNumber`` -- the category's 2-digit AC number, e.g. `11`
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import codes
+    domain, acNumber = codes.split_category_ref("A11")
+    ```
+    """
+    text = str(text).strip()
+    match = _CATEGORY_REF_RE.match(text)
+    if not match:
+        raise ValueError(
+            f"'{text}' is not a valid category reference - expected a domain letter prefix, "
+            f"e.g. 'A11', 'R11' or 'P11'"
+        )
+    refDomain = _check_domain_matches(text, match.group(1).upper(), domain)
+    return refDomain, int(match.group(2))
+
+
+def parse_area_ref(text, domain=None):
+    """
+    *parse a user-supplied area reference into its decade-start number*
+
+    **Key Arguments:**
+
+    - ``text`` -- the raw area reference supplied on the command-line
+    - ``domain`` -- a domain the reference must belong to, or `None` to accept any. Default `None`.
+
+    **Return:**
+
+    - ``decadeStart`` -- the area's decade-start number, e.g. `10`
+    """
+    return split_area_ref(text, domain=domain)[1]
+
+
+def parse_area_ref_is_area(text, domain=None):
     """
     *decide whether a reference points at an area rather than a category*
 
-    Area decades are always multiples of ten (`10-19`, `20-29`, ...), and the
-    `X0` slot inside each decade is reserved, so category numbers never are.
-    That makes a bare two-digit reference unambiguous.
+    Area decades are always multiples of ten (`A10-19`, `A20-29`, ...), and
+    the `X0` slot inside each decade is reserved, so category numbers never
+    are. That makes a two-digit reference unambiguous.
 
     **Key Arguments:**
 
     - ``text`` -- the raw reference supplied on the command-line
+    - ``domain`` -- a domain the reference must belong to, or `None` to accept any. Default `None`.
 
     **Return:**
 
@@ -106,42 +291,36 @@ def parse_area_ref_is_area(text):
 
     ```python
     from aardvark_jd import codes
-    isArea = codes.parse_area_ref_is_area("10")
+    isArea = codes.parse_area_ref_is_area("A10")
     ```
     """
     text = str(text).strip()
     match = _AREA_REF_RE.match(text)
     if not match:
         raise ValueError(
-            f"'{text}' is not a valid area or category reference - expected e.g. '10', '10-19' or '11'"
+            f"'{text}' is not a valid area or category reference - expected a domain letter "
+            f"prefix, e.g. 'A10-19', 'R10' or 'P11'"
         )
-    if match.group(2) is not None:
+    _check_domain_matches(text, match.group(1).upper(), domain)
+    if match.group(3) is not None:
         return True
-    return int(match.group(1)) % 10 == 0
+    return int(match.group(2)) % 10 == 0
 
 
-def parse_category_ref(text):
+def parse_category_ref(text, domain=None):
     """
     *parse a user-supplied category reference into its AC number*
-
-    Accepts `"11"` or `"A11"` style input (the older `"A.11"` form with the
-    period still parses too).
 
     **Key Arguments:**
 
     - ``text`` -- the raw category reference supplied on the command-line
+    - ``domain`` -- a domain the reference must belong to, or `None` to accept any. Default `None`.
 
     **Return:**
 
     - ``acNumber`` -- the category's 2-digit AC number, e.g. `11`
     """
-    text = str(text).strip()
-    match = _CATEGORY_REF_RE.match(text)
-    if not match:
-        raise ValueError(
-            f"'{text}' is not a valid category reference - expected e.g. '11' or 'A.11'"
-        )
-    return int(match.group(1))
+    return split_category_ref(text, domain=domain)[1]
 
 
 def format_area_code(domain, decadeStart, decadeEnd):

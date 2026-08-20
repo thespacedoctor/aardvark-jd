@@ -43,8 +43,24 @@
   - ```{autodoc2-docstring} aardvark_jd.paths.DB_BASENAME
     :summary:
     ```
+* - {py:obj}`SYSTEM_FOLDER_EMOJI <aardvark_jd.paths.SYSTEM_FOLDER_EMOJI>`
+  - ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_FOLDER_EMOJI
+    :summary:
+    ```
 * - {py:obj}`SYSTEM_SKELETON <aardvark_jd.paths.SYSTEM_SKELETON>`
   - ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SKELETON
+    :summary:
+    ```
+* - {py:obj}`SYSTEM_SUBFOLDERS <aardvark_jd.paths.SYSTEM_SUBFOLDERS>`
+  - ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDERS
+    :summary:
+    ```
+* - {py:obj}`SYSTEM_SUBFOLDER_KIND_DOCUMENT <aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_DOCUMENT>`
+  - ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_DOCUMENT
+    :summary:
+    ```
+* - {py:obj}`SYSTEM_SUBFOLDER_KIND_FOLDER <aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_FOLDER>`
+  - ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_FOLDER
     :summary:
     ```
 ````
@@ -61,12 +77,52 @@
 
 ````
 
+````{py:data} SYSTEM_FOLDER_EMOJI
+:canonical: aardvark_jd.paths.SYSTEM_FOLDER_EMOJI
+:value: >
+   '⚙️'
+
+```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_FOLDER_EMOJI
+```
+
+````
+
 ````{py:data} SYSTEM_SKELETON
 :canonical: aardvark_jd.paths.SYSTEM_SKELETON
 :value: >
    [('root.index', None, '00_INDEX', 'Index', 'The aardvark database and system index', '🗂️'), ('root.i...
 
 ```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SKELETON
+```
+
+````
+
+````{py:data} SYSTEM_SUBFOLDERS
+:canonical: aardvark_jd.paths.SYSTEM_SUBFOLDERS
+:value: >
+   [('00_index', 'Index', 'The index for this section', '🗂️'), ('01_inbox', 'Inbox', 'Unsorted items aw...
+
+```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDERS
+```
+
+````
+
+````{py:data} SYSTEM_SUBFOLDER_KIND_DOCUMENT
+:canonical: aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_DOCUMENT
+:value: >
+   'document'
+
+```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_DOCUMENT
+```
+
+````
+
+````{py:data} SYSTEM_SUBFOLDER_KIND_FOLDER
+:canonical: aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_FOLDER
+:value: >
+   'folder'
+
+```{autodoc2-docstring} aardvark_jd.paths.SYSTEM_SUBFOLDER_KIND_FOLDER
 ```
 
 ````

@@ -6,10 +6,10 @@ Documentation for aardvark can be found here: http://aardvark-jd.readthedocs.org
 Usage:
     aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
     aardvark new_project <category> [<templateName>] [<projectTitle>] [-s <pathToSettingsFile>]
-    aardvark add_area <domain> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
-    aardvark add_category <domain> <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
-    aardvark add_id <domain> <category> <title> <description> [-s <pathToSettingsFile>]
-    aardvark set_emoji <domain> <ref> <emoji> [-s <pathToSettingsFile>]
+    aardvark add_area <domainLetter> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
+    aardvark add_category <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
+    aardvark add_id <category> <title> <description> [-s <pathToSettingsFile>]
+    aardvark set_emoji <ref> <emoji> [-s <pathToSettingsFile>]
     aardvark repair_emoji [-s <pathToSettingsFile>]
     aardvark search <term>... [-s <pathToSettingsFile>]
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
@@ -20,7 +20,7 @@ Usage:
 Commands:
     init                                   create a new PARA + Johnny Decimal root and index
     new_project                            create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank
-    add_area                               add a new Johnny Decimal area to `areas` or `resources`
+    add_area                               add a new Johnny Decimal area to `areas`, `resources` or `projects`
     add_category                           add a new Johnny Decimal category to an existing area
     add_id                                 add a new Johnny Decimal ID to an existing category
     set_emoji                              change the emoji on an existing folder, moving it and repointing the index
@@ -36,10 +36,10 @@ Arguments:
     parentPath                             the path in which the system's root folder is created
     templateName                           a `04_templates` zip's basename, or "blank"
     projectTitle                           the new project's title
-    domain                                 "areas", "resources" or "projects"; set_emoji also takes "system"
-    area                                   an area reference, e.g. "10" or "10-19"
-    category                               a category reference, e.g. "11"
-    ref                                    what to retarget: an area ("10"), category ("11"), or system folder key ("root.areas")
+    domainLetter                           "A" (areas), "R" (resources) or "P" (projects)
+    area                                   a domain-prefixed area reference, e.g. "A10" or "A10-19"
+    category                               a domain-prefixed category reference, e.g. "A11" or "P11"
+    ref                                    what to retarget: an area ("A10-19"), category ("A11"), or system folder key ("root.areas")
     emoji                                  an emoji character
     title                                  a title
     description                            a description
@@ -62,7 +62,7 @@ import sys
 
 from fundamentals import tools, times
 
-from aardvark_jd import db, folders, paths, settings_writer
+from aardvark_jd import codes, db, folders, paths, settings_writer
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -229,15 +229,17 @@ def _dispatch(a, log, indexDbConn, settings):
 
     elif a["add_area"]:
         code, folderPath = add_area(
-            log=log, dbConn=indexDbConn, domain=a["domain"], title=a["title"], description=a["description"],
+            log=log, dbConn=indexDbConn, domain=codes.domain_from_letter(a["domainLetter"]),
+            title=a["title"], description=a["description"],
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_category"]:
+        domain, _ = codes.split_area_ref(a["area"])
         code, folderPath = add_category(
-            log=log, dbConn=indexDbConn, domain=a["domain"], areaRef=a["area"],
+            log=log, dbConn=indexDbConn, domain=domain, areaRef=a["area"],
             title=a["title"], description=a["description"],
             chosenEmoji=a["emojiFlag"], settings=settings,
         ).get()
@@ -246,7 +248,7 @@ def _dispatch(a, log, indexDbConn, settings):
 
     elif a["set_emoji"]:
         label, folderPath = set_emoji(
-            log=log, dbConn=indexDbConn, domain=a["domain"], ref=a["ref"], newEmoji=a["emoji"],
+            log=log, dbConn=indexDbConn, ref=a["ref"], newEmoji=a["emoji"],
         ).get()
         print(f"{label}  {folderPath}")
         _maybe_sync_craft(log, indexDbConn, settings)
@@ -260,8 +262,9 @@ def _dispatch(a, log, indexDbConn, settings):
         _maybe_sync_craft(log, indexDbConn, settings)
 
     elif a["add_id"]:
+        domain, _ = codes.split_category_ref(a["category"])
         code, folderPath = add_id(
-            log=log, dbConn=indexDbConn, domain=a["domain"], categoryRef=a["category"],
+            log=log, dbConn=indexDbConn, domain=domain, categoryRef=a["category"],
             title=a["title"], description=a["description"],
         ).get()
         print(f"{code}  {folderPath}")

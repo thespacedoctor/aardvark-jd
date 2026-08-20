@@ -29,7 +29,7 @@ class new_project(object):
 
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
-    - ``categoryRef`` -- the parent project category reference, e.g. `"P11"` or `"11"`
+    - ``categoryRef`` -- the parent project category reference, e.g. `"P11"`
     - ``templateName`` -- the template zip's basename (with or without `.zip`), or `"blank"`. If `None`, prompts interactively. Default `None`.
     - ``projectTitle`` -- the new project's title. If `None`, prompts interactively. Default `None`.
     - ``settings`` -- the aardvark settings dict. Default `None`.
@@ -63,7 +63,7 @@ class new_project(object):
         """
         self.log.debug("starting the ``get`` method")
 
-        acNumber = codes.parse_category_ref(self.categoryRef)
+        acNumber = codes.parse_category_ref(self.categoryRef, domain="projects")
         category = db.get_category(self.dbConn, "projects", acNumber)
         if category is None:
             raise ValueError(f"no category '{self.categoryRef}' found in domain 'projects'")

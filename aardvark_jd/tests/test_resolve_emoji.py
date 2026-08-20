@@ -138,7 +138,7 @@ def test_add_category_honours_the_chosen_emoji(systemDbConn, noSuggester, intera
     add_area(log=log, dbConn=systemDbConn, domain="areas", title="Health",
              description="...", chosenEmoji="🩺").get()
     _code, folderPath = add_category(
-        log=log, dbConn=systemDbConn, domain="areas", areaRef="10", title="Doctors",
+        log=log, dbConn=systemDbConn, domain="areas", areaRef="A10", title="Doctors",
         description="...", chosenEmoji="👩‍⚕️",
     ).get()
 

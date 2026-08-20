@@ -39,14 +39,6 @@
 :class: autosummary longtable
 :align: left
 
-* - {py:obj}`PROJECTS_DOMAIN <aardvark_jd.set_emoji.PROJECTS_DOMAIN>`
-  - ```{autodoc2-docstring} aardvark_jd.set_emoji.PROJECTS_DOMAIN
-    :summary:
-    ```
-* - {py:obj}`SET_EMOJI_DOMAINS <aardvark_jd.set_emoji.SET_EMOJI_DOMAINS>`
-  - ```{autodoc2-docstring} aardvark_jd.set_emoji.SET_EMOJI_DOMAINS
-    :summary:
-    ```
 * - {py:obj}`SYSTEM_DOMAIN <aardvark_jd.set_emoji.SYSTEM_DOMAIN>`
   - ```{autodoc2-docstring} aardvark_jd.set_emoji.SYSTEM_DOMAIN
     :summary:
@@ -54,26 +46,6 @@
 ````
 
 ### API
-
-````{py:data} PROJECTS_DOMAIN
-:canonical: aardvark_jd.set_emoji.PROJECTS_DOMAIN
-:value: >
-   'projects'
-
-```{autodoc2-docstring} aardvark_jd.set_emoji.PROJECTS_DOMAIN
-```
-
-````
-
-````{py:data} SET_EMOJI_DOMAINS
-:canonical: aardvark_jd.set_emoji.SET_EMOJI_DOMAINS
-:value: >
-   None
-
-```{autodoc2-docstring} aardvark_jd.set_emoji.SET_EMOJI_DOMAINS
-```
-
-````
 
 ````{py:data} SYSTEM_DOMAIN
 :canonical: aardvark_jd.set_emoji.SYSTEM_DOMAIN
@@ -92,7 +64,7 @@
 ```
 ````
 
-`````{py:class} set_emoji(log, dbConn, domain, ref, newEmoji)
+`````{py:class} set_emoji(log, dbConn, ref, newEmoji)
 :canonical: aardvark_jd.set_emoji.set_emoji
 
 Bases: {py:obj}`object`

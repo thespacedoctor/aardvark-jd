@@ -21,7 +21,7 @@ class add_id(object):
     - ``log`` -- logger
     - ``dbConn`` -- an open SQLite connection
     - ``domain`` -- `areas`, `resources` or `projects`
-    - ``categoryRef`` -- the parent category reference, e.g. `"11"`
+    - ``categoryRef`` -- the parent category reference, e.g. `"A11"`
     - ``title`` -- the ID's title
     - ``description`` -- the ID's description
 
@@ -30,7 +30,7 @@ class add_id(object):
     ```python
     from aardvark_jd.add_id import add_id
     code, folderPath = add_id(
-        log=log, dbConn=dbConn, domain="areas", categoryRef="11", title="Cardiologist", description="..."
+        log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="..."
     ).get()
     ```
     """
@@ -54,7 +54,7 @@ class add_id(object):
         """
         self.log.debug("starting the ``get`` method")
 
-        acNumber = codes.parse_category_ref(self.categoryRef)
+        acNumber = codes.parse_category_ref(self.categoryRef, domain=self.domain)
         category = db.get_category(self.dbConn, self.domain, acNumber)
         if category is None:
             raise ValueError(f"no category '{self.categoryRef}' found in domain '{self.domain}'")

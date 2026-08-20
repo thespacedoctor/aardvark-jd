@@ -158,8 +158,8 @@ def test_craft_sync_mirrors_root_folders(dbConn, craftSettings, fakeClient):
 
 def test_craft_sync_mirrors_area_category_id_nesting(dbConn, craftSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="d2").get()
-    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="11", title="Cardiologist", description="d3").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 
@@ -179,7 +179,7 @@ def test_craft_sync_mirrors_area_category_id_nesting(dbConn, craftSettings, fake
 def test_craft_sync_mirrors_the_three_level_system_scaffolding(dbConn, craftSettings, fakeClient):
     """*domain- and area-level system folders, and their reserved subfolders, mirror three levels deep*"""
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="d2").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 
@@ -256,8 +256,8 @@ def test_craft_sync_adopts_folders_already_in_the_space(dbConn, craftSettings, f
 
 def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="10", title="Doctors", description="d2").get()
-    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="11", title="Cardiologist", description="d3").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
     foldersAfterFirst = len(fakeClient.folders)
@@ -287,7 +287,7 @@ def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn,
     from aardvark_jd.new_project import new_project
 
     add_area(log=log, dbConn=dbConn, domain="projects", title="Launches", description="d1").get()
-    add_category(log=log, dbConn=dbConn, domain="projects", areaRef="10", title="Website", description="d2").get()
+    add_category(log=log, dbConn=dbConn, domain="projects", areaRef="P10", title="Website", description="d2").get()
     new_project(log=log, dbConn=dbConn, categoryRef="P11", templateName="blank", projectTitle="Relaunch").get()
 
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()

@@ -25,7 +25,7 @@ def dbConnWithProjectCategory(tmp_path):
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
     add_area(log=log, dbConn=conn, domain="projects", title="Launches", description="").get()
-    add_category(log=log, dbConn=conn, domain="projects", areaRef="10", title="Website", description="").get()
+    add_category(log=log, dbConn=conn, domain="projects", areaRef="P10", title="Website", description="").get()
     templatesFolder = paths.resolve(conn, "projects.system.04_templates")
     yield conn, templatesFolder
     conn.close()

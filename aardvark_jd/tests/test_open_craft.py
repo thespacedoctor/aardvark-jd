@@ -26,9 +26,9 @@ def seeded(tmp_path):
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
     add_area(log=log, dbConn=conn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=conn, domain="areas", areaRef="10", title="Doctors", description="d2").get()
+    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
     _code, idFolderPath = add_id(
-        log=log, dbConn=conn, domain="areas", categoryRef="11", title="Cardiologist", description="d3"
+        log=log, dbConn=conn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3"
     ).get()
     yield conn, idFolderPath, rootPath
     conn.close()

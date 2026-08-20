@@ -45,7 +45,7 @@
 
 ````
 
-`````{py:class} new_project(log, dbConn, templateName=None, projectTitle=None, chosenEmoji=None, settings=None)
+`````{py:class} new_project(log, dbConn, categoryRef, templateName=None, projectTitle=None, settings=None)
 :canonical: aardvark_jd.new_project.new_project
 
 Bases: {py:obj}`object`
