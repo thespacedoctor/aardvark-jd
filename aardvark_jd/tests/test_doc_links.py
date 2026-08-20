@@ -1,43 +1,51 @@
 import base64
 import sys
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import unquote, urlparse
 
 from aardvark_jd import doc_links
 
 
 def _decode(url):
-    """*decode a `hook://file/...` URL's `p=`/`n=` back to a (parentPath, name) pair*
+    """*decode a `hook://file/...` URL's `p=`/`n=` back to a (parentHint, name) pair*
 
-    `hookmark_url` embeds raw, unescaped base64 - matching Hookmark's own
-    documented example exactly - so this decodes it the same way: pull
-    `p=`/`n=` off the raw query string rather than through a percent-decoding
-    parser, since there is nothing percent-encoded to undo.
+    `p=` is base64 of a two-component path hint (not the full parent
+    path), and `n=` is percent-encoded plain text (not base64) -
+    matching Hookmark's own `hook://file/` links, read off the live
+    Hookmark database.
     """
     query = dict(pair.split("=", 1) for pair in urlparse(url).query.split("&"))
-    parentPath = base64.b64decode(query["p"]).decode("utf-8")
-    name = base64.b64decode(query["n"]).decode("utf-8")
-    return parentPath, name
+    parentHint = base64.b64decode(query["p"]).decode("utf-8")
+    name = unquote(query["n"])
+    return parentHint, name
 
 
 def test_hookmark_url_on_darwin(monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     url = doc_links.hookmark_url("/Users/dave/Dropbox/aardvark")
     assert url.startswith("hook://file/")
-    parentPath, name = _decode(url)
-    assert parentPath == "/Users/dave/Dropbox"
+    parentHint, name = _decode(url)
+    assert parentHint == "dave/Dropbox"
     assert name == "aardvark"
 
 
-def test_hookmark_url_embeds_raw_base64_not_percent_encoded(monkeypatch):
-    # regression test: percent-encoding the base64 padding (`=` -> `%3D`)
-    # made Hookmark itself reject the URL as invalid, even though the
-    # scheme handoff from Craft worked - matching Hookmark's own
-    # documented example (`p=Lw==`) means the padding must stay literal.
+def test_hookmark_url_matches_a_real_captured_example(monkeypatch):
+    # pins the format to a verbatim example captured from the live
+    # Hookmark database (/Users/Dave/Dropbox/reading), not to a
+    # description of it - only the id differs, since ours is synthetic.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    url = doc_links.hookmark_url("/Users/Dave/Dropbox/reading")
+    assert url.endswith("?p=RGF2ZS9Ecm9wYm94&n=reading")
+
+
+def test_hookmark_url_id_is_nine_characters(monkeypatch):
+    # regression test: an 8-character id fails a length check before
+    # Hookmark ever tries to resolve the link, and it rejects the whole
+    # URL outright as invalid - confirmed against all 112 `hook://file/`
+    # bookmarks in the live Hookmark database, every one of them 9 chars.
     monkeypatch.setattr(sys, "platform", "darwin")
     url = doc_links.hookmark_url("/Users/dave/Dropbox/aardvark")
-    assert "%3D" not in url
-    assert "%2F" not in url
-    assert "==" in url
+    id_ = url.removeprefix("hook://file/").split("?", 1)[0]
+    assert len(id_) == 9
 
 
 def test_hookmark_url_is_none_off_darwin(monkeypatch):
@@ -50,15 +58,15 @@ def test_hookmark_url_round_trips_a_space_and_an_emoji(monkeypatch):
     url = doc_links.hookmark_url("/Users/dave/Dropbox/A11 doctors🩺")
     assert " " not in url
     assert "🩺" not in url
-    parentPath, name = _decode(url)
-    assert parentPath == "/Users/dave/Dropbox"
+    parentHint, name = _decode(url)
+    assert parentHint == "dave/Dropbox"
     assert name == "A11 doctors🩺"
 
 
 def test_hookmark_url_is_deterministic_for_the_same_path(monkeypatch):
     # craft_sync's idempotency check relies on the same folder always
-    # producing the same markdown, so the placeholder id must be fixed,
-    # not freshly generated per call.
+    # producing the same markdown, so the synthetic id must be derived
+    # deterministically from the path, not freshly generated per call.
     monkeypatch.setattr(sys, "platform", "darwin")
     first = doc_links.hookmark_url("/Users/dave/Dropbox/aardvark")
     second = doc_links.hookmark_url("/Users/dave/Dropbox/aardvark")
