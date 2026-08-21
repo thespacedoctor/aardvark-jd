@@ -10,6 +10,17 @@ aardvark init "My Life" ~/
 
 This creates the full folder tree (`00_INDEX`, `01_INBOX`, `02_PROJECTS`, `03_AREAS`, `04_RESOURCES`, `09_ARCHIVE`) under `~/My Life`, an `aardvark.db` SQLite index inside `00_INDEX`, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml`. Every non-ID folder is suffixed with an emoji; the static system folders carry a fixed emoji each.
 
+## Shell completion
+
+Enable tab completion for `aardvark`/`av`, its commands, and Johnny Decimal references by evaluating the generated script from your shell's startup file:
+
+```bash
+eval "$(aardvark completion zsh)"    # ~/.zshrc
+eval "$(aardvark completion bash)"   # ~/.bashrc
+```
+
+With this loaded, `aardvark add_category A<TAB>` lists existing areas, `aardvark archive <TAB>` lists archivable references, and `aardvark <TAB>` lists the commands themselves. `aardvark --help-all` also lists every command, including the setup/connection commands that the default `--help` screen hides to keep the everyday ones easy to find.
+
 ## Folder emoji
 
 Areas, categories and projects get an emoji suggested from their title and description. Suggestions come from the Claude API, so make credentials available the way the [Anthropic SDK expects](https://platform.claude.com/docs/en/api/overview) - typically an `ANTHROPIC_API_KEY` environment variable. Without them aardvark quietly falls back to an offline keyword search, which is thinner: it has no entry for "doctor" or "finance", so those land on the generic 📁.
@@ -95,9 +106,43 @@ Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder
 
 ## Searching the index
 
+A plain term does a keyword search:
+
 ```bash
 aardvark search cardio
 ```
+
+Run `search` with no argument to print the whole index as a tree, reserved `.00`-`.09` system IDs excluded:
+
+```bash
+aardvark search
+```
+
+```
+03 AREAS🧭
+└── A10-19 health🏥
+    └── A11 doctors🩺
+        └── A11.10 cardiologist
+```
+
+Pass a Johnny Decimal reference instead of a term to jump straight to that branch - `A` or `A10-19` prints the subtree
+for that area, `A11` the subtree for that category, and `A11.10` the single matching entry, the same line `search
+cardio` would have printed for it. A reference-shaped term that doesn't actually resolve falls back to an ordinary
+keyword search, so `search A11` never errors just because you meant the letter "A" followed by "11".
+
+## Opening a folder interactively
+
+`open` with no path launches an arrow-key picker: use the up/down arrows to move, Enter to descend into a domain,
+area or category (or open the highlighted level directly), `q`/Esc to cancel. It starts pre-selected on wherever the
+current directory resolves to, so if you're already inside a mirrored folder, `open` then Enter-Enter reproduces
+today's "open the current directory" behaviour in two keystrokes:
+
+```bash
+cd ~/aardvark/03_AREAS/A11_doctors/A11.10_cardiologist
+aardvark open
+```
+
+Passing a path explicitly (`aardvark open <path>`) skips the picker entirely, as before.
 
 ## Connecting to craft.do
 
@@ -137,9 +182,41 @@ aardvark todoist_sync
 
 Each mirrored project's description carries a Finder/Dropbox/Craft link row back to its sibling objects, matching the Finder/Dropbox/Todoist row Craft documents carry.
 
-## Opening a folder in Craft and Todoist
+## Connecting to Google Drive
 
-Once connected, `open` resolves a filesystem path back to whichever of the Craft folder/document and Todoist project mirror it, and opens every one that's synced:
+Aardvark can also mirror its folder structure - folders only, no documents - into Google Drive. Create an OAuth
+client of type **Desktop app** in a Google Cloud project (APIs & Services -> Credentials), then connect it:
+
+```bash
+aardvark connect_gdrive <your-client-id> <your-client-secret>
+```
+
+This opens a browser for you to sign in and grant access (the full `drive` scope, so aardvark can also see and adopt
+folders you've already created by hand - expect a one-off "unverified app" warning for a personal OAuth client
+unless you've verified it with Google), captures the authorisation code over a local loopback listener, stores a
+refresh token in your settings file, and runs the first full mirror.
+
+At your Drive root, aardvark creates one folder named after your aardvark system, and inside it mirrors
+`01_INBOX`, `02_PROJECTS`, `03_AREAS`, `04_RESOURCES` and `09_ARCHIVE`, with areas/categories/IDs nested under each
+domain exactly as they are on disk - `00_INDEX` is deliberately excluded, since it holds `aardvark.db`, which has no
+business leaving your machine. Every system folder only carries its three commonly used reserved subfolders -
+`P01_inbox📥`, `P04_templates📐`, `P09_archive🗄️` (rendered per domain) - the other reserved slots aren't
+mirrored. No documents are written, only folders.
+
+To backfill or repair drift on demand:
+
+```bash
+aardvark gdrive_sync
+```
+
+If a folder already exists at the right place and name in Drive, aardvark adopts its existing folder ID instead of
+creating a duplicate - this also means a corrupted or reset local database can be repaired by re-running the sync
+rather than by re-creating everything from scratch.
+
+## Opening a folder in Craft, Todoist and Google Drive
+
+Once connected, `open` resolves a filesystem path back to whichever of the Craft folder/document, Todoist project and
+Google Drive folder mirror it, and opens every one that's synced:
 
 ```bash
 cd ~/aardvark/03_AREAS/A11_doctors/A11.10_cardiologist
@@ -157,6 +234,27 @@ aardvark connect_dropbox <your-app-key> <your-app-secret>
 ```
 
 This opens a browser to authorise the app, prompts you to paste back the code Dropbox shows you, and stores a long-lived refresh token in your settings file - Dropbox access tokens themselves only last 4 hours, so aardvark re-exchanges the refresh token on every sync rather than needing you to reconnect. `craft_sync` mints each folder's share link once and caches it, so re-running doesn't re-request one that already exists.
+
+## Archiving an area, category or project
+
+`archive <ref>` retires an area, category or project ID - and everything nested inside it - freeing its Johnny
+Decimal number for reuse:
+
+```bash
+aardvark archive A11.10
+```
+
+This moves the folder on disk to the nearest `09_archive` folder above it (an ID moves into its own category's
+`AC.09_archive🗄️`; a category into its area's `A0.09_archive🗄️`; an area into the domain's root
+`09_ARCHIVE🗄️`), does the same move in Google Drive if connected, flags the entry archived in the database -
+removing it from `search` and freeing its number for the next `add_area`/`add_category`/`add_id`/`add_project`
+- and archives (not deletes) its mirrored Todoist project. The archived folder name carries a date suffix so that,
+once a number is reused, the old and new occupants never collide inside the same archive folder.
+
+Craft's API can neither move nor delete a folder or document, so archiving there is necessarily best-effort: aardvark
+drops a warning block into the folder's index document and prints a note that you'll need to delete the Craft folder
+by hand. There is no `unarchive` in this version - `archive` moves real folders and asks for confirmation before it
+does (skip the prompt with `-y`/`--yes`).
 
 ## Command-Line Usage
 

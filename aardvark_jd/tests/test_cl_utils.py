@@ -199,6 +199,16 @@ class FakeCraftClient(object):
         self._documentContent[documentId] = []
         return documentId, f"https://craft.example/doc/{documentId}"
 
+    def list_documents(self, folderId):
+        return [
+            {"id": documentId, "title": title}
+            for documentId, title, parent in self.documents
+            if parent == folderId
+        ]
+
+    def _deep_link(self, itemId):
+        return f"https://craft.example/doc/{itemId}"
+
     def add_block(self, documentId, markdown, position="end"):
         blockId = self._next_id("block")
         self.blocksAdded.append((documentId, markdown, blockId))
@@ -335,3 +345,23 @@ def test_repair_emoji_auto_pushes_to_craft_once_connected(isolatedHome, monkeypa
     capsys.readouterr()
     assert len(fakeCraftClient.blocksDeleted) > blocksDeletedBefore
     assert any("A10-19 healthY" in body for body in fakeCraftClient.index_bodies())
+
+
+def test_the_usage_docs_match_the_live_docopt_string():
+    """docs/source/usage.md embeds __doc__ by hand, and had already drifted once"""
+    import os
+
+    usagePath = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "docs", "source", "usage.md",
+    )
+    if not os.path.exists(usagePath):
+        pytest.skip("docs are not shipped in the installed package")
+
+    with open(usagePath, encoding="utf-8") as usageFile:
+        rendered = usageFile.read()
+
+    # COMPARE LINE BY LINE, IGNORING THE FENCE AND THE UNIFORM INDENT
+    for line in doc.strip("\n").split("\n"):
+        if line.strip():
+            assert line.strip() in rendered, line.strip()

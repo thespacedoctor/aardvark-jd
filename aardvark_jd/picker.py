@@ -39,7 +39,7 @@ class NotATtyError(Exception):
     pass
 
 
-def select_one(options, title="", readKey=None, stream=None):
+def select_one(options, title="", readKey=None, stream=None, initialIndex=0):
     """
     *let the user choose one of `options` with the arrow keys*
 
@@ -49,6 +49,7 @@ def select_one(options, title="", readKey=None, stream=None):
     - ``title`` -- a heading drawn above the list. Default *""*.
     - ``readKey`` -- an injectable key reader returning one of the module's key constants, for testing. Default *None*, meaning read the real terminal.
     - ``stream`` -- where to draw. Default *None*, meaning `sys.stderr`.
+    - ``initialIndex`` -- which option starts highlighted, so a caller can pre-select the most likely answer. Default *0*.
 
     **Return:**
 
@@ -74,7 +75,7 @@ def select_one(options, title="", readKey=None, stream=None):
             raise NotATtyError("an interactive terminal is required")
         readKey = _raw_key_reader()
 
-    selectedIndex = 0
+    selectedIndex = initialIndex if 0 <= initialIndex < len(options) else 0
     drawnLines = 0
     try:
         while True:

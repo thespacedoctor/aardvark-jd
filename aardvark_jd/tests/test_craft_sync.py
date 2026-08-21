@@ -37,6 +37,7 @@ class FakeCraftClient(object):
         self.blocksDeleted = []
         self._documentContent = {}
         self.listFolderCalls = 0
+        self.listDocumentCalls = 0
 
     def _next_id(self, prefix):
         self._counter += 1
@@ -67,6 +68,17 @@ class FakeCraftClient(object):
         self.documents.append((documentId, title, folderId))
         self._documentContent[documentId] = []
         return documentId, f"https://craft.example/doc/{documentId}"
+
+    def list_documents(self, folderId):
+        self.listDocumentCalls += 1
+        return [
+            {"id": documentId, "title": title}
+            for documentId, title, parent in self.documents
+            if parent == folderId
+        ]
+
+    def _deep_link(self, itemId):
+        return f"https://craft.example/doc/{itemId}"
 
     def add_block(self, documentId, markdown, position="end"):
         blockId = self._next_id("block")
@@ -352,3 +364,55 @@ def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn,
 
     documentTitles = {title for _id, title, _folder in fakeClient.documents}
     assert any(title.startswith("P11.10 relaunch") for title in documentTitles)
+
+
+# ---------------------------------------------------------------------- #
+# document adoption
+# ---------------------------------------------------------------------- #
+
+def _filed_documents(client):
+    """*the documents that live inside a folder, which are the ones adoption can reach*"""
+    return [entry for entry in client.documents if entry[2] is not None]
+
+
+def test_craft_sync_adopts_a_document_when_its_link_row_is_missing(dbConn, craftSettings, fakeClient):
+    """a rebuilt index, a v4 migration or an archive can drop the link row"""
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    filedBefore = _filed_documents(fakeClient)
+
+    # WIPE EVERY RECORDED DOCUMENT ID, AS A LOST DATABASE WOULD
+    dbConn.execute("UPDATE craft_links SET craft_document_id = NULL, craft_url = NULL")
+    dbConn.commit()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    # EVERY DOCUMENT THAT LIVES IN A FOLDER IS ADOPTED RATHER THAN REMADE.
+    # THE SPACE-ROOT INDEX IS UNFILED (`folderId` OF `None`), SO IT CANNOT BE
+    # LOOKED UP AND IS THE ONE DOCUMENT STILL RECREATED - SEE `_adopt_document`.
+    assert _filed_documents(fakeClient) == filedBefore
+
+
+def test_craft_sync_relinks_the_adopted_document(dbConn, craftSettings, fakeClient):
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    linkRow = db.get_craft_link(dbConn, "system_folder", "areas.system.00_index")
+    before = linkRow["craft_document_id"] if linkRow else None
+
+    dbConn.execute("UPDATE craft_links SET craft_document_id = NULL, craft_url = NULL")
+    dbConn.commit()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    after = db.get_craft_link(dbConn, "system_folder", "areas.system.00_index")["craft_document_id"]
+    assert after == before
+
+
+def test_a_craft_api_without_document_listing_still_creates(dbConn, craftSettings, fakeClient, monkeypatch):
+    """list_documents returning [] must degrade to the old create-anyway behaviour"""
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    documentsAfterFirstSync = len(fakeClient.documents)
+
+    monkeypatch.setattr(fakeClient, "list_documents", lambda folderId: [])
+    dbConn.execute("UPDATE craft_links SET craft_document_id = NULL, craft_url = NULL")
+    dbConn.commit()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert len(fakeClient.documents) > documentsAfterFirstSync

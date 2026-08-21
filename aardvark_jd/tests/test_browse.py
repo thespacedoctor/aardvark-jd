@@ -37,7 +37,7 @@ def _scripted(monkeypatch, *labels):
     """*drive the picker by option label, so tests read as the user's journey*"""
     seen = []
 
-    def fakeSelect(options, title="", readKey=None, stream=None):
+    def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
         wanted = labels[len(seen)]
         seen.append(wanted)
         for value, label in options:
@@ -79,7 +79,7 @@ def test_going_back_from_an_area_returns_to_the_domain_list(seeded, monkeypatch)
     conn, settings, _idFolderPath = seeded
     calls = []
 
-    def fakeSelect(options, title="", readKey=None, stream=None):
+    def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
         calls.append(title)
         if len(calls) == 1:
             return next(v for v, label in options if label.startswith("A  areas"))
@@ -97,7 +97,7 @@ def test_an_empty_domain_still_offers_a_way_back(seeded, monkeypatch):
     conn, settings, _idFolderPath = seeded
     labels = []
 
-    def fakeSelect(options, title="", readKey=None, stream=None):
+    def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
         labels.append([label for _value, label in options])
         if len(labels) == 1:
             return next(v for v, label in options if label.startswith("P  projects"))
@@ -106,3 +106,64 @@ def test_an_empty_domain_still_offers_a_way_back(seeded, monkeypatch):
     monkeypatch.setattr(picker, "select_one", fakeSelect)
     browse(log=log, dbConn=conn, settings=settings).get()
     assert labels[1] == ["← back"]
+
+
+# ---------------------------------------------------------------------- #
+# pre-selecting whatever holds the starting path
+# ---------------------------------------------------------------------- #
+
+def _capture_indexes(monkeypatch, *labels):
+    """*drive the picker by label, recording the initialIndex offered at each level*"""
+    seen = []
+    indexes = []
+
+    def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
+        indexes.append((initialIndex, [label for _value, label in options]))
+        if len(seen) >= len(labels):
+            return None
+        wanted = labels[len(seen)]
+        seen.append(wanted)
+        for value, label in options:
+            if label.startswith(wanted):
+                return value
+        raise AssertionError(f"no option starting {wanted!r}")
+
+    monkeypatch.setattr(picker, "select_one", fakeSelect)
+    return indexes
+
+
+def test_the_domain_holding_the_starting_path_is_pre_selected(seeded, monkeypatch):
+    conn, settings, idFolderPath = seeded
+    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "A11", "A11.10")
+    browse(log=log, dbConn=conn, settings=settings, startPath=idFolderPath).get()
+    # "areas" IS THE FIRST DOMAIN, AND THE ID LIVES INSIDE IT
+    domainIndex, domainLabels = indexes[0]
+    assert domainLabels[domainIndex].startswith("A  areas")
+
+
+def test_the_area_category_and_id_holding_the_starting_path_are_pre_selected(seeded, monkeypatch):
+    conn, settings, idFolderPath = seeded
+    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "A11", "A11.10")
+    browse(log=log, dbConn=conn, settings=settings, startPath=idFolderPath).get()
+
+    for level, expectedPrefix in ((1, "A10-19"), (2, "A11 "), (3, "A11.10")):
+        index, labels = indexes[level]
+        assert labels[index].startswith(expectedPrefix), (level, labels[index])
+
+
+def test_a_starting_path_outside_the_system_falls_back_to_the_first_option(seeded, monkeypatch, tmp_path):
+    conn, settings, _idFolderPath = seeded
+    indexes = _capture_indexes(monkeypatch, "A  areas", "← back")
+    browse(log=log, dbConn=conn, settings=settings, startPath=str(tmp_path)).get()
+    assert indexes[0][0] == 0
+    # BELOW THE TOP LEVEL THE FALLBACK IS THE FIRST REAL ROW, PAST "open"/"back"
+    assert indexes[1][0] == 1
+
+
+def test_an_area_starting_path_pre_selects_that_area(seeded, monkeypatch):
+    conn, settings, _idFolderPath = seeded
+    area = conn.execute("SELECT folder_path FROM areas LIMIT 1").fetchone()
+    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "→ open")
+    browse(log=log, dbConn=conn, settings=settings, startPath=area["folder_path"]).get()
+    index, labels = indexes[1]
+    assert labels[index].startswith("A10-19")

@@ -76,6 +76,8 @@ class craft_sync(object):
         self.indexesRefreshed = 0
         self.linkRowsWritten = 0
         self.folderIndex = {}
+        # LAZY PER-FOLDER INDEX OF EXISTING DOCUMENT TITLES, FOR ADOPTION.
+        self.documentIndex = {}
 
         self.rootPath = (settings.get("system") or {}).get("root_path")
         self.dropboxClient = None
@@ -274,10 +276,52 @@ class craft_sync(object):
         if link and link["craft_document_id"]:
             return link["craft_document_id"], link["craft_url"]
 
+        # NOTHING RECORDED - BUT A DOCUMENT WITH THIS TITLE MAY ALREADY BE
+        # SITTING IN THE FOLDER, LEFT BY A REBUILT INDEX, A `_migrate_to_v4`
+        # CLEAR-OUT, AN ARCHIVE THAT DROPPED THE LINK ROWS, OR SIMPLY BY
+        # HAND. ADOPT IT RATHER THAN CREATING A DUPLICATE ALONGSIDE IT -
+        # THE SAME `(parent, name)` MATCHING `_ensure_folder` ALREADY DOES.
+        adoptedId = self._adopt_document(folderId, title)
+        if adoptedId:
+            url = self.client._deep_link(adoptedId)
+            db.upsert_craft_link(
+                self.dbConn, entityType, entityKey, craftDocumentId=adoptedId, craftUrl=url,
+            )
+            return adoptedId, url
+
         documentId, url = self.client.create_document(title, folderId=folderId)
         db.upsert_craft_link(self.dbConn, entityType, entityKey, craftDocumentId=documentId, craftUrl=url)
         self.documentsCreated += 1
         return documentId, url
+
+    def _adopt_document(self, folderId, title):
+        """
+        *find an existing document with this title in this folder, if the API will tell us*
+
+        Cached per folder for the life of the sync, so a folder is listed
+        at most once however many documents are checked against it. An
+        unfiled document (`folderId` of `None`) cannot be looked up, and
+        `CraftClient.list_documents` returns `[]` when the endpoint is
+        unavailable - both cases simply mean "no adoption".
+
+        **Key Arguments:**
+
+        - ``folderId`` -- the containing folder's id, or `None`
+        - ``title`` -- the document title to match
+
+        **Return:**
+
+        - ``documentId`` -- the existing document's id, or `None`
+        """
+        if not folderId:
+            return None
+        if folderId not in self.documentIndex:
+            self.documentIndex[folderId] = {
+                document.get("title"): document.get("id")
+                for document in self.client.list_documents(folderId)
+                if document.get("id")
+            }
+        return self.documentIndex[folderId].get(title)
 
     def _refresh_index(self, entityType, entityKey, folderId, children):
         """

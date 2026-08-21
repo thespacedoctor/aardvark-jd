@@ -18,6 +18,7 @@ Author
 """
 
 import os
+import sqlite3
 
 from aardvark_jd import codes, db, folders, locate, picker
 
@@ -43,10 +44,15 @@ class browse(object):
     ```
     """
 
-    def __init__(self, log, dbConn, settings=None):
+    def __init__(self, log, dbConn, settings=None, startPath=None):
         self.log = log
         self.dbConn = dbConn
         self.settings = settings or {}
+        # WHERE THE USER IS STANDING, IF THAT IS ANYWHERE INSIDE THE SYSTEM.
+        # EVERY LEVEL PRE-HIGHLIGHTS WHATEVER CONTAINS IT, SO A BARE
+        # `aardvark open` STILL REACHES "OPEN WHAT I AM IN" IN A COUPLE OF
+        # KEYSTROKES RATHER THAN LOSING THAT BEHAVIOUR ALTOGETHER.
+        self.startPath = os.path.realpath(startPath or os.getcwd())
 
     def get(self):
         """
@@ -63,6 +69,48 @@ class browse(object):
         self.log.debug("completed the ``get`` method")
         return folderPath
 
+    def _initial_index(self, options, offset=0):
+        """
+        *which option to highlight first - the one whose folder contains the starting path*
+
+        **Key Arguments:**
+
+        - ``options`` -- the `(value, label)` pairs, whose values are index rows below `offset`
+        - ``offset`` -- how many leading non-row options ("open this level", "back") to skip. Default *0*.
+
+        **Return:**
+
+        - ``index`` -- the index to highlight, or `offset` if nothing matches
+        """
+        for index, (value, _label) in enumerate(options):
+            if index < offset or not isinstance(value, sqlite3.Row):
+                continue
+            folderPath = os.path.realpath(value["folder_path"])
+            if self.startPath == folderPath or self.startPath.startswith(folderPath + os.sep):
+                return index
+        return offset
+
+    def _initial_domain_index(self, options):
+        """
+        *which domain to highlight first - the one whose root folder holds the starting path*
+
+        **Key Arguments:**
+
+        - ``options`` -- the `(domain, label)` pairs
+
+        **Return:**
+
+        - ``index`` -- the index to highlight, or `0` if the starting path is outside the system
+        """
+        for index, (domain, _label) in enumerate(options):
+            systemFolder = db.get_system_folder(self.dbConn, f"root.{domain}")
+            if not systemFolder:
+                continue
+            folderPath = os.path.realpath(systemFolder["folder_path"])
+            if self.startPath == folderPath or self.startPath.startswith(folderPath + os.sep):
+                return index
+        return 0
+
     def _domain_level(self):
         """
         *choose a domain letter, then descend into its areas*
@@ -76,7 +124,10 @@ class browse(object):
                 (domain, f"{codes.DOMAIN_LETTER[domain]}  {domain}")
                 for domain in codes.DOMAINS
             ]
-            chosen = picker.select_one(options, title="Which domain?")
+            chosen = picker.select_one(
+                options, title="Which domain?",
+                initialIndex=self._initial_domain_index(options),
+            )
             if chosen is None:
                 return None
             folderPath = self._area_level(chosen)
@@ -102,7 +153,10 @@ class browse(object):
                 (row, f"{codes.format_area_code(domain, row['decade_start'], row['decade_end'])}  {row['title']}")
                 for row in rows
             ]
-            chosen = picker.select_one(options, title=f"Which area in {domain}?")
+            chosen = picker.select_one(
+                options, title=f"Which area in {domain}?",
+                initialIndex=self._initial_index(options, offset=1),
+            )
             if chosen is None or chosen == _GO_BACK:
                 return None
             folderPath = self._category_level(domain, chosen)
@@ -132,7 +186,10 @@ class browse(object):
                 (row, f"{codes.format_category_code(domain, row['ac_number'])}  {row['title']}")
                 for row in rows
             ]
-            chosen = picker.select_one(options, title=f"Which category in {area['title']}?")
+            chosen = picker.select_one(
+                options, title=f"Which category in {area['title']}?",
+                initialIndex=self._initial_index(options, offset=2),
+            )
             if chosen is None or chosen == _GO_BACK:
                 return None
             if chosen == _OPEN_THIS_LEVEL:
@@ -163,7 +220,10 @@ class browse(object):
             (row, f"{codes.format_id_code(domain, row['ac_number'], row['item_number'])}  {row['title']}")
             for row in rows
         ]
-        chosen = picker.select_one(options, title=f"Which ID in {category['title']}?")
+        chosen = picker.select_one(
+            options, title=f"Which ID in {category['title']}?",
+            initialIndex=self._initial_index(options, offset=2),
+        )
         if chosen is None or chosen == _GO_BACK:
             return None
         if chosen == _OPEN_THIS_LEVEL:

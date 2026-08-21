@@ -26,12 +26,17 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 * `init` a PARA + Johnny Decimal root folder structure, indexed in a local SQLite database
 * `add_area` / `add_category` / `add_id` to grow the Johnny Decimal index under Areas or Resources, with auto-numbering
 * `add_project` to spin up a new (optionally templated) project folder under Projects
-* `search` the index by keyword or phrase
+* `search` the index by keyword or phrase, or with no argument to print the whole index as a tree; pass a Johnny Decimal reference (`A`, `A10-19`, `A11`, `A11.10`) to browse or jump straight to that branch
+* `archive <ref>` to retire an area, category or project ID - the folder moves to its nearest `09_archive` folder on disk (and in Google Drive, best-effort in Craft/Todoist), the entry is flagged archived in the database, and its Johnny Decimal number becomes free for reuse
+* `open` with no argument launches an arrow-key picker through Areas/Resources/Projects down to an ID, seeded from the current directory when it resolves to one
+* shell tab completion for commands, references and flag values - `aardvark completion zsh|bash`
 * every non-ID folder is suffixed with a relevant emoji, suggested by Claude and confirmable at the prompt (or set outright with `--emoji`)
 * `set_emoji` / `repair_emoji` to change an emoji after the fact, moving the folder and repointing the index together
 * `connect_craft` / `craft_sync` to mirror the whole index into a craft.do space, with a Finder link (and, once `connect_dropbox` is set up, a Dropbox share link) on every synced document
-* `open [<path>]` to jump straight from a filesystem path back to its mirrored Craft folder/document (defaults to the current directory)
+* `connect_gdrive` / `gdrive_sync` to mirror the folder structure into Google Drive as well, linked alongside Craft and Todoist
+* `open [<path>]` to jump straight from a filesystem path back to its mirrored Craft folder/document/Todoist project/Drive folder (defaults to the current directory)
 * every command is also available under the shorter `av` alias, e.g. `av open`, `av search cardio`
+* `aardvark --help-all` lists every command, including the less commonly used setup/connection commands hidden from the default `--help` screen
 
 
 
@@ -75,5 +80,16 @@ aardvark init "My Life" ~/
 ```
 
 This builds the full PARA + Johnny Decimal folder tree, creates the `aardvark.db` SQLite index, and records the system as active in your user settings file at `~/.config/aardvark/aardvark.yaml` (created automatically on first run, populated with aardvark's default settings).
+
+## Shell completion
+
+Add tab completion for commands, Johnny Decimal references and flag values by evaluating the generated script in your shell's startup file:
+
+```bash
+echo 'eval "$(aardvark completion zsh)"' >> ~/.zshrc    # zsh
+echo 'eval "$(aardvark completion bash)"' >> ~/.bashrc  # bash
+```
+
+Both `aardvark` and `av` complete once this is loaded.
 
 You are now ready to start using aardvark - see the [quickstart](https://aardvark-jd.readthedocs.io/en/main/quickstart.html) for the full command reference.

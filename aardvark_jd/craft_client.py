@@ -290,3 +290,38 @@ class CraftClient(object):
         if not blockIds:
             return
         self._request("DELETE", "/blocks", json={"blockIds": blockIds})
+
+    def list_documents(self, folderId):
+        """
+        *list the documents directly inside a Craft folder*
+
+        **Unverified against a live space.** Every other endpoint in this
+        module was confirmed against Craft's published Space-API reference
+        or probed empirically; `GET /documents` is neither, and may simply
+        not exist. It is used only to *adopt* a document that already
+        carries the right title in the right folder, so a failure is not
+        fatal - the caller falls back to creating one, which is exactly
+        what happened before adoption existed. That is why this returns an
+        empty list on `CraftApiError` rather than propagating it.
+
+        **Key Arguments:**
+
+        - ``folderId`` -- the containing folder's id
+
+        **Return:**
+
+        - ``documents`` -- a list of dicts carrying at least `id` and `title`, or `[]` if the endpoint is unavailable
+
+        **Usage:**
+
+        ```python
+        documents = client.list_documents("folder-1")
+        ```
+        """
+        try:
+            payload = self._request("GET", "/documents", params={"folderId": folderId})
+        except CraftApiError:
+            return []
+        if isinstance(payload, list):
+            return payload
+        return payload.get("items") or payload.get("documents") or []
