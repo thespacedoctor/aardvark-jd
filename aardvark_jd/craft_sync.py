@@ -340,11 +340,11 @@ class craft_sync(object):
         """
         indexEntityType = f"{entityType}:index"
         documentId, _url = self._ensure_document(indexEntityType, entityKey, _INDEX_DOC_TITLE, folderId)
-        rewritten = self._write_index_content(documentId, children)
+        rewritten = self._write_index_content(documentId, children, indexEntityType, entityKey)
         if self.rootPath:
             self._write_link_row(indexEntityType, entityKey, documentId, self.rootPath, forceRewrite=rewritten)
 
-    def _write_index_content(self, documentId, children):
+    def _write_index_content(self, documentId, children, linkEntityType, linkEntityKey):
         """
         *rewrite an index document's content with a fresh listing of the given children, unless it already says exactly that*
 
@@ -354,8 +354,7 @@ class craft_sync(object):
         real space), so there is no single block id to update in place.
         Instead this reads the document's current top-level content,
         deletes all of it, and inserts the fresh markdown - read, delete,
-        insert in place of an update. `craft_block_id` is no longer written
-        or read anywhere; the column stays in `craft_links` but unused.
+        insert in place of an update.
 
         Rewriting unconditionally cost four API calls per index document on
         every run - 112 calls across the 28 index documents even when
@@ -364,10 +363,20 @@ class craft_sync(object):
         exactly the computed listing, this returns without writing, taking
         an unchanged index document to one `GET` and no writes.
 
+        The comparison is over the document's **whole** content - the
+        expected link row (from `craft_links.links_markdown`, whatever
+        `_write_link_row` last recorded, or nothing if it has never written
+        one here) followed by the computed body. Anything else the document
+        holds - a removed entry still listed, a hand-added note, a
+        hand-deleted link row - makes the content unequal and forces the
+        rewrite, which is the drift repair a full sync exists to do.
+
         **Key Arguments:**
 
         - ``documentId`` -- the index document's Craft id
         - ``children`` -- a list of `(codeOrNone, title, description, url)` tuples, one per child
+        - ``linkEntityType`` -- the `craft_links` type the document's link row is keyed under (the same one the matching `_write_link_row` call is passed)
+        - ``linkEntityKey`` -- the `craft_links` key the document's link row is keyed under
 
         **Return:**
 
@@ -382,9 +391,12 @@ class craft_sync(object):
                 lines.append(f"- {linkText} — {description}")
         markdown = "\n".join(lines) if lines else "*(nothing here yet)*"
 
+        link = db.get_craft_link(self.dbConn, linkEntityType, linkEntityKey)
+        linkRowMarkdown = link["links_markdown"] if link else None
+
         existingBlock = self.client.get_block(documentId)
         existingItems = existingBlock.get("content") or []
-        if self._index_content_matches(existingItems, markdown):
+        if self._index_content_matches(existingItems, markdown, linkRowMarkdown):
             return False
 
         self.client.delete_blocks([item["id"] for item in existingItems])
@@ -394,25 +406,24 @@ class craft_sync(object):
         return True
 
     @staticmethod
-    def _index_content_matches(existingItems, markdown):
+    def _index_content_matches(existingItems, markdown, linkRowMarkdown):
         """
-        *is this document's existing content already exactly the computed index listing?*
+        *is this document's existing content already exactly the expected link row plus computed listing?*
 
-        Compares on the **tail** of the document rather than the whole of
-        it, because an index document's content is always `[link row] +
-        [one block per index line]`: `_write_index_content` appends the
-        body at the end, and `_write_link_row` then prepends its row at
-        `position="start"`. Matching the tail keeps this method ignorant of
-        what a link row looks like, and the "at most one block ahead of the
-        body" guard means anything else the document has picked up - a
-        stray block, a hand-edited note, a second link row - fails the
-        comparison and forces a rewrite, preserving the drift repair a full
-        sync is there to do.
+        An index document's content is `[link row] + [one block per index
+        line]` - `_write_index_content` appends the body, `_write_link_row`
+        then prepends its single-line row at `position="start"` (and writes
+        nothing at all where no Finder/Dropbox/Drive/Todoist link is
+        available). This compares the whole of that against the whole of
+        what is expected: the caller's recorded link-row markdown, if any,
+        then the computed body. An exact match is the only match - a stale
+        entry, a stray block, a missing or duplicated link row all fail it
+        and force the rewrite that repairs the drift.
 
         Craft round-trips block markdown verbatim apart from trailing
-        whitespace, which it strips (both verified against the live space,
-        for the `- [title](url) — description` bullets and the
-        `*(nothing here yet)*` placeholder alike), so the comparison is a
+        whitespace, which it strips (verified against the live space, for
+        the `- [title](url) — description` bullets and the
+        `*(nothing here yet)*` placeholder alike), so the comparison is
         plain string equality per `rstrip`ped line and needs no rendering
         step.
 
@@ -420,21 +431,20 @@ class craft_sync(object):
 
         - ``existingItems`` -- the document's current top-level content items, as `get_block` returns them
         - ``markdown`` -- the freshly computed listing, one index line per line
+        - ``linkRowMarkdown`` -- the link-row markdown `_write_link_row` last recorded for this document, or `None` if it has never written one here
 
         **Return:**
 
-        - ``matches`` -- `True` if the document already holds exactly this listing
+        - ``matches`` -- `True` if the document already holds exactly this content
         """
         # COMPARE ON TRAILING-WHITESPACE-STRIPPED LINES: CRAFT STRIPS TRAILING
         # WHITESPACE WHEN IT STORES A BLOCK, SO A CHILD WITH AN EMPTY DESCRIPTION -
         # WHICH RENDERS AS `... — ` - WOULD OTHERWISE NEVER COMPARE EQUAL TO WHAT
         # WAS STORED, AND ITS INDEX DOCUMENT WOULD REWRITE ON EVERY RUN FOREVER.
-        lines = [line.rstrip() for line in markdown.split("\n")]
+        bodyLines = [line.rstrip() for line in markdown.split("\n")]
+        expected = ([linkRowMarkdown.rstrip()] if linkRowMarkdown else []) + bodyLines
         existingMarkdown = [(item.get("markdown") or "").rstrip() for item in existingItems]
-        leadingBlocks = len(existingMarkdown) - len(lines)
-        if leadingBlocks not in (0, 1):
-            return False
-        return existingMarkdown[leadingBlocks:] == lines
+        return existingMarkdown == expected
 
     def _sync_system_folder(self, systemFolderKey, reservedKeyPrefix, parentFolderId, indexChildren):
         """
@@ -489,7 +499,7 @@ class craft_sync(object):
 
             if baseName == "00_index":
                 documentId, _url = self._ensure_document("system_folder", folderKey, name, containingFolderId)
-                rewritten = self._write_index_content(documentId, indexChildren)
+                rewritten = self._write_index_content(documentId, indexChildren, "system_folder", folderKey)
                 self._write_link_row("system_folder", folderKey, documentId, row["folder_path"], forceRewrite=rewritten)
             elif craftKind == paths.SYSTEM_SUBFOLDER_KIND_FOLDER:
                 self._ensure_folder("system_folder", folderKey, name, parentFolderId=containingFolderId)

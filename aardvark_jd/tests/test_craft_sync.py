@@ -440,6 +440,120 @@ def test_the_link_row_rewrite_is_coupled_to_the_content_rewrite(dbConn, craftSet
     assert all(item["markdown"].startswith("- ") for item in content[1:])
 
 
+def test_craft_sync_rewrites_an_index_document_when_a_child_is_removed(dbConn, craftSettings, fakeClient):
+    """*removing a child rewrites its parent index, and the link row is force-rewritten with it*"""
+    from aardvark_jd.archive import archive
+
+    archiveSettings = {"craft": {"enabled": False}, "system": craftSettings["system"]}
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    archive(log=log, dbConn=dbConn, ref="A11.10", settings=archiveSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    bodyLines = [item["markdown"] for item in content]
+    assert not any("cardiologist" in line for line in bodyLines)
+    assert any("dermatologist" in line for line in bodyLines)
+    # THE LINK ROW SURVIVES THE REWRITE, STILL THE DOCUMENT'S FIRST BLOCK.
+    assert "Finder" in bodyLines[0]
+
+
+def test_craft_sync_converges_an_empty_index_document(dbConn, craftSettings, fakeClient):
+    """*a childless index renders the placeholder and still converges to zero writes on resync*
+
+    The `*(nothing here yet)*` body is the `else` branch of the listing
+    builder, and it has to round-trip through the comparison the same way
+    a populated body does - otherwise every empty index document rewrites
+    on every run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    # NO ids ADDED, SO THE CATEGORY'S `.00_index` BODY IS THE PLACEHOLDER.
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert any("nothing here yet" in item["markdown"] for item in content)
+
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 0
+    assert fakeClient.blocksAdded == []
+    assert fakeClient.blocksDeleted == []
+
+
+def test_craft_sync_restores_a_hand_deleted_link_row(dbConn, craftSettings, fakeClient):
+    """*a link row deleted by hand is re-added on the next sync, though the body still matches*
+
+    The comparison must include the expected link row, not just the body.
+    An index document whose link row someone removed in Craft still has a
+    body that equals the computed listing exactly, so a body-only
+    comparison skips it and the row never heals. `develop`'s
+    unconditional rewrite restored it on every run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    link = db.get_craft_link(dbConn, "system_folder", "areas.11.00_index")
+    documentId = link["craft_document_id"]
+    assert "Finder" in fakeClient._documentContent[documentId][0][1]
+    # HAND-DELETE THE LINK-ROW BLOCK, LEAVING A BODY THAT STILL MATCHES THE LISTING.
+    fakeClient._documentContent[documentId] = fakeClient._documentContent[documentId][1:]
+
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    healed = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert "Finder" in healed[0]["markdown"]
+    assert all(item["markdown"].startswith("- ") for item in healed[1:])
+
+
+def test_index_comparison_is_exact_when_no_link_row_is_present(dbConn, craftSettings, fakeClient, monkeypatch):
+    """*with no link row, a removed first child is still detected and repaired*
+
+    Off Darwin, with no Dropbox or Drive link, `_write_link_row` writes
+    nothing and an index document is body-only. The earlier tail-only
+    comparison treated a body-only document's first block as a possible
+    link row, so dropping exactly the first child produced a tail that
+    lined up, the comparison returned a false match, and the removed
+    entry stayed in the document forever.
+    """
+    monkeypatch.setattr(craft_sync_module.doc_links, "hookmark_url", lambda folderPath: None)
+    from aardvark_jd.archive import archive
+
+    archiveSettings = {"craft": {"enabled": False}, "system": craftSettings["system"]}
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert "Finder" not in content[0]["markdown"]
+    assert "cardiologist" in content[0]["markdown"]
+
+    archive(log=log, dbConn=dbConn, ref="A11.10", settings=archiveSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    healed = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert not any("cardiologist" in item["markdown"] for item in healed)
+
+
 def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
     add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
