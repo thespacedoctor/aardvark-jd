@@ -1,7 +1,7 @@
 # Measure `av add_project` after content comparison lands
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: none
 
 ## Question
@@ -93,3 +93,89 @@ ticket 05) and an optional prompt to the `add_*` flow. The prompt is human
 think-time and does not count against the gate, but take the `add_project`
 measurement with the wordlist-load path present, or explicitly note it was measured
 without it.
+
+
+## Answer (2026-08-28)
+
+**The gate is missed by roughly sixty times. [How do the three sync engines accept a scope?](04-sync-scope-interface.md) survives** — but the measurement also shows that scoping craft alone cannot close the gap either, so the strategic question moves ahead of it as [How does `av add_project` return in under 500 ms?](12-how-does-the-cli-return-promptly.md).
+
+### The measurement
+
+Taken against the live craft.do space, the live Todoist, Drive and Dropbox connections, and the real 28-index-document system. `av add_project P22 <title>` into an existing projects category, and a full `av craft_sync` repair run. Call counts are HTTP requests observed at the `requests.Session` level, so every service is counted the same way.
+
+| | before | after |
+|---|---|---|
+| `av add_project` wall-clock | **56.0 s** | **30.7 s** |
+| `av add_project` craft calls | **118** | **41** |
+| `av add_project` calls, all services | 171 | 94 |
+| `av craft_sync` wall-clock | 48.4 s, **then died** | 25.3 - 28.5 s |
+| `av craft_sync` craft calls | 101, then `429` | **30, every one a read** |
+| 429s on a normal single run | **yes** | **none observed** |
+
+Craft calls on an unchanged repair run are now `GET /folders`, `GET /connection` and 28 `GET /blocks`: **zero writes**, confirmed stable across four consecutive runs. Ticket 03 predicted "roughly 34 calls, of which about 30 are reads". The measured figure is 30, all reads.
+
+### The 429 is real, and the baseline reproduced it
+
+The before-run did not merely look slow, it **failed**: `craft API POST /blocks failed (429): {"error":"Rate limit exceeded"}` after 101 craft calls in 48 seconds. No run since the change has hit the limit. The 429 fix is demonstrated, not merely argued.
+
+Two caveats on that, both honest gaps rather than findings:
+
+- **The 429's headers were not captured.** Ticket 02 asked for them, and this was the opportunity. The counting harness was only taught to record response headers *after* that run, and no later run reproduced the limit. The response body was `{"error":"Rate limit exceeded"}`. The harness now captures headers if it recurs, so the next 429 anywhere will settle ticket 02's engineered defaults.
+- **A transient `502` on `GET /folders`** aborted one `add_project` run's craft sync entirely. Backoff therefore has to cover 5xx, not only 429. The next run self-healed the missing folder and document, which is the drift repair working as designed.
+
+### Where the 30.7 seconds actually goes
+
+This is the finding that decides the gate, and it is not about craft:
+
+| service | calls | network time |
+|---|---|---|
+| Google Drive | 47 | **13.8 s** |
+| craft.do | 41 | 13.1 s |
+| Todoist | 4 | 1.6 s |
+| Dropbox | 2 | 1.4 s |
+
+29.9 of the 30.7 seconds is network. Local work is under a second. **Taking craft to zero would still leave about 17 seconds**, because Google Drive is now the single largest component and this change did not touch it. Scoped syncing of craft alone therefore cannot reach 500 ms; nothing that only reduces call *counts* can, at roughly 300 ms per round trip.
+
+Measured **without** the spell-correction path, which is not implemented yet. Its +12.3 ms wordlist load (ticket 05) is noise at this scale and does not affect the gate decision.
+
+### The change
+
+`craft_sync._write_index_content()` reads the existing block, compares it against the computed listing, and returns `False` without writing when they match. Both call sites pass that return value straight through as `_write_link_row`'s `forceRewrite`, which is the coupling ticket 03 required.
+
+The comparison matches on the **tail** of the document, because an index document's content is always `[link row] + [one block per index line]` — the body is appended at the end and the link row is then prepended at `position="start"`. Matching the tail keeps the comparison ignorant of what a link row looks like, and a guard of "at most one block ahead of the body" means any other stray content fails the comparison and forces a rewrite, preserving the drift repair a full sync exists to do.
+
+Ticket 08's constraint is already satisfied on this path: `db.upsert_craft_link` commits at `db.py:909`, so no SQLite write lock is held across HTTP.
+
+### The normalisation trap the ticket warned about, found live
+
+The ticket predicted that getting the comparison's form wrong would fail silently in the safe direction. It very nearly did, in a narrower form that only measurement could catch.
+
+**Craft strips trailing whitespace when it stores a block.** The listing format is `- [code title](url) — {description}`, so a child with an **empty description** is sent as `... — ` and comes back as `... —`. Those lines never compare equal, so their index documents rewrite on **every single run, forever**. Two of the 28 documents behaved exactly that way after the first fix, and only converged once the comparison normalised with `rstrip` on both sides.
+
+This was not an edge case: **`add_project` always stores an empty description** (`add_project.py`, `db.insert_id(..., title, "", ...)`), so every projects category was affected. Unit tests alone would not have caught it — the fake client had to be taught the real API's behaviour first. `test_an_index_entry_with_no_description_still_converges` now pins it.
+
+Related, and left alone deliberately: a description-less entry renders with a **dangling em-dash**, `- [P22.13 zz latency probe one](url) —`. That is pre-existing cosmetic behaviour, not a comparison problem, and changing the rendered output is a separate decision. Noted under Out of scope on the map.
+
+### Test-infrastructure correction
+
+`FakeCraftClient` was unfaithful to the real API in exactly the dimension this change depends on, which would have made the new tests vacuous. Its docstring claimed it modelled per-line splitting; it did not. Three corrections, all verified against the live space:
+
+- `add_block` now splits multi-line markdown into **one block per line**, as `POST /blocks` does.
+- `position="start"` now actually prepends. It was previously ignored, so the fake put link rows **last** — the opposite of the real document shape the comparison relies on.
+- Stored markdown is `rstrip`ped, as Craft does.
+
+`test_craft_sync_is_idempotent` previously asserted the *cost of the old behaviour* (two deletes and two adds per index document per run). It now asserts the opposite, which is the point of the change: a repair run over an unchanged tree writes nothing at all.
+
+Full suite: **454 passed**. Coverage on `craft_sync.py`: **96%**. One unrelated pre-existing failure, `test_cl_utils.py::test_main_end_to_end`, fails only under `--cov` and fails identically on a pristine tree.
+
+### New finding: delete-before-insert is not crash-safe
+
+`_write_index_content` deletes a document's whole content before inserting the replacement, so a failure in that window leaves the document **empty**. The baseline 429 landed on the link-row POST rather than the content insert, so nothing was lost — verified by scanning all 28 live index documents afterwards, none empty — but the window is real and a rate limit is exactly the thing that lands in it.
+
+Content comparison narrows the exposure from all 28 documents on every run to only the ones that actually changed, but it does not close it. Recorded as fog on the map rather than a ticket, because the fix is entangled with the backoff design that ticket 02 left as engineered defaults.
+
+### The gate decision
+
+**Over 500 ms, by a factor of about sixty.** Per this ticket's own rule, [How do the three sync engines accept a scope?](04-sync-scope-interface.md) goes live rather than being ruled out of scope, and the backgrounding fog **opens**.
+
+The measurement sharpens both, though, and reorders them. Scoping is no longer sufficient on its own: it addresses craft's 28 reads, worth about 13 seconds, and leaves Drive's 47 calls and 13.8 seconds untouched. So the strategic decision — whether the CLI returns promptly by backgrounding, by scoping every mirror, or by both — comes first, as [How does `av add_project` return in under 500 ms?](12-how-does-the-cli-return-promptly.md), which now blocks ticket 04. Google Drive's cost gets its own ticket, [What are Google Drive's 47 calls per run, and can they be cut?](13-gdrive-call-cost.md), since it is now the largest single component.

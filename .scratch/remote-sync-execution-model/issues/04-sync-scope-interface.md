@@ -2,11 +2,15 @@
 
 Type: grilling
 Status: open
-Blocked by: 09
+Blocked by: 12
 
-## Status note
+## Status note (updated 2026-08-28)
 
-**This ticket may not survive.** [Which entities must re-sync when one entity changes?](03-index-doc-dependency-closure.md) established that the 429s are caused by unconditional index rewrites rather than by the breadth of the walk, and that content comparison alone cuts a run from ~114 API calls to ~34 without any scope plumbing. If [Measure `av add_project` after content comparison lands](09-measure-latency-after-comparison.md) comes in under the 500 ms gate, this ticket should be **closed and ruled out of scope** rather than resolved.
+**This ticket survives.** [Measure `av add_project` after content comparison lands](09-measure-latency-after-comparison.md) came in at **30.7 s** against the 500 ms gate, so scoping was not ruled out of scope.
+
+But the same measurement changed what this ticket is for. Content comparison already took craft from 118 calls to 41 without any scope plumbing, and 29.9 of the 30.7 seconds is network spread across four services — Drive's 47 calls now cost more than craft's 41. **Scoping craft alone cannot reach the gate**: taking craft to zero still leaves about 17 seconds.
+
+So this is no longer the ticket that closes the gap. It is now blocked by [How does `av add_project` return in under 500 ms?](12-how-does-the-cli-return-promptly.md), which decides whether the CLI waits for sync at all. If it does not, scoping becomes an optimisation without a deadline, and the interface below should be designed for tidiness rather than for latency. The last line of the Question section, that this should be resolved before any latency measurement, is now spent: the measurement happened first and reframed it.
 
 ## Question
 
