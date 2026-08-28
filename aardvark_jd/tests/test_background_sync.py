@@ -327,8 +327,13 @@ def test_spawn_detached_runs_craft_sync_in_its_own_session(monkeypatch):
 
     assert pid == 4321
     # THE MODULE, NOT THE `av` CONSOLE SCRIPT - SAME INTERPRETER, NO `PATH` DEPENDENCE.
-    assert captured["command"][:3] == [background_sync.sys.executable, "-m", "aardvark_jd.cl_utils"]
-    assert captured["command"][3] == "craft_sync"
+    # `-P` KEEPS THE CHILD'S CWD OFF `sys.path`, SO A STRAY `aardvark_jd/` OR
+    # `requests.py` IN THE DIRECTORY THE USER HAPPENED TO RUN FROM CANNOT BE
+    # IMPORTED BY THE BACKGROUND SYNC.
+    assert captured["command"][:4] == [
+        background_sync.sys.executable, "-P", "-m", "aardvark_jd.cl_utils",
+    ]
+    assert captured["command"][4] == "craft_sync"
     assert captured["command"][-2:] == ["-s", "/tmp/settings.yaml"]
     assert captured["kwargs"]["start_new_session"] is True
 
@@ -473,3 +478,32 @@ def test_a_lockfile_with_a_special_pid_is_treated_as_stale(systemRoot, badPid):
     with open(pathToLock) as stream:
         assert json.load(stream)["pid"] == os.getpid()
     background_sync.release_lock(pathToLock)
+
+
+@pytest.mark.parametrize("badPid", [2 ** 31, 1e999])
+def test_a_lockfile_with_an_out_of_range_pid_is_treated_as_stale(systemRoot, badPid):
+    """*an oversized pid must not escape as `OverflowError` and stop syncing silently*
+
+    `os.kill` raises `OverflowError` above the C `int` range, and a JSON
+    `1e999` parses to `inf` and raises the same from `int()`. Neither is
+    an `OSError`, so an unguarded one would leave `acquire_lock` as a
+    traceback into the detached child's `/dev/null`.
+    """
+    with open(background_sync.lock_path(systemRoot), "w") as stream:
+        stream.write(json.dumps({"pid": badPid, "startedAt": 0.0}))
+
+    assert background_sync.is_lock_stale(background_sync.lock_path(systemRoot)) is True
+
+    pathToLock = background_sync.acquire_lock(systemRoot)
+    background_sync.release_lock(pathToLock)
+
+
+def test_set_pending_refuses_to_follow_a_symlink(systemRoot, tmp_path):
+    """*a symlink planted at the flag path must not redirect the write onto another file*"""
+    target = tmp_path / "innocent.txt"
+    target.write_text("do not clobber me")
+    os.symlink(str(target), background_sync.pending_path(systemRoot))
+
+    background_sync.set_pending(systemRoot)  # MUST NOT RAISE
+
+    assert target.read_text() == "do not clobber me"

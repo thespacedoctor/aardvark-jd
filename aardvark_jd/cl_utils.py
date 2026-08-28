@@ -78,6 +78,7 @@ Options:
 
 import contextlib
 import os
+import re
 import sys
 
 from fundamentals import tools, times
@@ -339,6 +340,27 @@ def _foreground_announcer():
     return announce
 
 
+def _printable(text):
+    """
+    *strip control characters from text that came back from a remote API*
+
+    A failure reason is ultimately an exception message carrying a
+    craft.do / Google / Todoist response body, and under `--wait` it is
+    printed straight to a real terminal. Escape sequences in that body
+    would otherwise reach the terminal and could move the cursor, rewrite
+    the title, or hide what actually failed.
+
+    **Key Arguments:**
+
+    - ``text`` -- the untrusted text
+
+    **Return:**
+
+    - ``printable`` -- the text with C0/C1 control characters removed
+    """
+    return re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", str(text))
+
+
 def _report_sync_outcome(failures):
     """
     *print what a foreground sync did, one line per drifted mirror*
@@ -351,7 +373,10 @@ def _report_sync_outcome(failures):
         print("mirrors synced")
         return
     for mirror, reason, failureClass in failures:
-        print(f"warning: {mirror} sync failed ({failureClass}): {reason}", file=sys.stderr)
+        print(
+            f"warning: {mirror} sync failed ({failureClass}): {_printable(reason)}",
+            file=sys.stderr,
+        )
 
 
 def _warn_about_drift(indexDbConn):

@@ -52,6 +52,10 @@ import requests
 
 from aardvark_jd import db, http_retry
 
+# A PID MUST FIT A C `int` OR `os.kill` RAISES `OverflowError` RATHER THAN
+# REPORTING THE PROCESS MISSING.
+_MAX_PID = 2 ** 31 - 1
+
 _LOCK_BASENAME = ".sync.lock"
 _PENDING_BASENAME = ".sync.pending"
 
@@ -150,22 +154,29 @@ def _read_lock(pathToLock):
     A corrupt lockfile is treated as absent rather than as a permanent
     block: a half-written file must not be able to stop syncing forever.
 
-    The pid is rejected unless it is a real process id. `os.kill` gives
-    `0` and negative values special meanings - the caller's process group,
-    and every process the user may signal - and both report "alive", so an
-    unvalidated `0` or `-1` in this file would make the liveness check
-    useless and leave the lock held until the age cutoff expired. The file
-    lives in a Dropbox-synced tree, so an odd value can arrive from another
-    machine as well as from a half-written local write.
+    The pid is rejected unless it is a real process id, at **both** ends.
+    `os.kill` gives `0` and negative values special meanings - the caller's
+    process group, and every process the user may signal - and both report
+    "alive", so an unvalidated `0` or `-1` would make the liveness check
+    useless. A value above the C `int` range raises `OverflowError` from
+    `os.kill`, and a JSON `1e999` parses to `inf` and raises the same from
+    `int()`; neither is an `OSError`, so an unguarded one would escape
+    `acquire_lock` as a traceback into the detached child's `/dev/null` and
+    stop syncing silently on every spawn until the age cutoff - exactly the
+    failure this module exists to prevent.
+
+    The file lives in a Dropbox-synced tree, and the exclusion that keeps
+    it local is macOS-only, so an odd value can arrive from another machine
+    as well as from a half-written local write.
     """
     try:
         with open(pathToLock) as stream:
             held = json.load(stream)
         pid = int(held["pid"])
         startedAt = float(held["startedAt"])
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError, OverflowError):
         return None
-    if pid < 1:
+    if not 1 <= pid <= _MAX_PID:
         return None
     return pid, startedAt
 
@@ -224,7 +235,11 @@ def acquire_lock(rootPath, now=None):
 
     for attempt in (1, 2):
         try:
-            handle = os.open(pathToLock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            handle = os.open(
+                pathToLock,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                0o644,
+            )
         except FileExistsError:
             if attempt == 2 or not is_lock_stale(pathToLock, now=now):
                 raise SyncBusy(f"another sync is already running (lock: {pathToLock})")
@@ -325,7 +340,15 @@ def set_pending(rootPath):
     - ``rootPath`` -- the aardvark system root
     """
     try:
-        with open(pending_path(rootPath), "w") as stream:
+        # `O_NOFOLLOW` SO A SYMLINK PLANTED AT THIS PATH CANNOT REDIRECT THE
+        # WRITE ONTO ANOTHER FILE. THE LOCK IS SAFE WITHOUT IT (`O_EXCL |
+        # O_CREAT` REFUSES A SYMLINK), BUT THIS PLAIN TRUNCATING WRITE IS NOT.
+        handle = os.open(
+            pending_path(rootPath),
+            os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW,
+            0o644,
+        )
+        with os.fdopen(handle, "w") as stream:
             stream.write("1")
     except OSError:
         # THE FLAG IS AN OPTIMISATION, NOT A GUARANTEE - THE NEXT MUTATING
@@ -397,7 +420,12 @@ def spawn_detached(pathToSettingsFile=None, log=None):
 
     - ``pid`` -- the detached child's pid, or `None` if the spawn failed
     """
-    command = [sys.executable, "-m", "aardvark_jd.cl_utils", "craft_sync"]
+    # `-P` KEEPS THE CHILD'S WORKING DIRECTORY OFF `sys.path`. `python -m`
+    # OTHERWISE PREPENDS IT, SO RUNNING A MUTATING COMMAND FROM A DIRECTORY
+    # HOLDING A STRAY `aardvark_jd/` OR `requests.py` WOULD HAVE THE
+    # BACKGROUND SYNC IMPORT THAT INSTEAD. THE PARENT IS SAFE EITHER WAY -
+    # IT RUNS FROM THE `av` CONSOLE SCRIPT, WHICH INJECTS NO CWD.
+    command = [sys.executable, "-P", "-m", "aardvark_jd.cl_utils", "craft_sync"]
     if pathToSettingsFile:
         command += ["-s", pathToSettingsFile]
 

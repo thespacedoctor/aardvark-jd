@@ -578,3 +578,21 @@ def test_the_carrier_still_errors_when_nothing_at_all_is_connected(isolatedHome,
         cl_utils.main(docopt(doc, ["craft_sync"]))
     assert excInfo.value.code == 1
     assert "craft is not connected" in capsys.readouterr().err
+
+
+def test_a_mirror_failure_reason_cannot_smuggle_terminal_escapes(connectedSystem, monkeypatch, capsys):
+    """*the reason carries a remote API response body, and `--wait` prints it to a real terminal*"""
+    from aardvark_jd import background_sync
+
+    nasty = "rate limited \x1b[2J\x07 and cleared your screen"
+    monkeypatch.setattr(
+        background_sync, "run_mirrors",
+        lambda log, dbConn, settings, announce=None: ([("craft", nasty, "rate-limited")], False),
+    )
+
+    with pytest.raises(SystemExit):
+        cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
+
+    err = capsys.readouterr().err
+    assert "\x1b" not in err and "\x07" not in err
+    assert "rate limited" in err and "cleared your screen" in err
