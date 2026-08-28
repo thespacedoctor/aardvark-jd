@@ -29,14 +29,20 @@ have saved.
   run abandons after a bounded total rather than backing off for the sum
   of every request's worst case.
 
-A `RunBudget` covers **one mirror sync** (`craft_sync`, `gdrive_sync` or
-`todoist_sync`). A single mutating command runs all three in sequence in
-one process under one lock, so the per-invocation backoff ceiling is
-`3 * RUN_BACKOFF_BUDGET_SECONDS`; the mirrors keep independent budgets
-deliberately, because a Drive stall should not spend craft's retry
-allowance (ticket 14: the run carries on to the next mirror). Ticket 12's
-stale-lock cutoff must exceed that per-invocation ceiling plus the actual
-work, not a single budget.
+A `RunBudget` covers **one invocation**, not one mirror.
+`background_sync.run_mirrors` builds a single budget and threads it
+through all three engines, so a command's total backoff is bounded at
+`RUN_BACKOFF_BUDGET_SECONDS` however many mirrors it runs. That is what
+`background_sync.STALE_LOCK_CUTOFF_SECONDS` is derived from: per-mirror
+budgets would put a legitimate run's worst case at three times the
+cutoff's own basis, and a healthy-but-throttled sync could then have its
+lock stolen mid-flight.
+
+The trade-off is deliberate and it does bite: a mirror that stalls early
+spends allowance the later mirrors might have wanted. Bounding the run
+wins because the lock, not the mirror, is what a wrong number breaks -
+and a mirror starved of retries still records a drift marker and is
+repaired by the next whole-tree run.
 
 Author
 : David Young

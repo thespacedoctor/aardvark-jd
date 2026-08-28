@@ -65,7 +65,7 @@ class todoist_sync(object):
     ```
     """
 
-    def __init__(self, log, dbConn, settings):
+    def __init__(self, log, dbConn, settings, budget=None, announce=None):
         self.log = log
         self.dbConn = dbConn
 
@@ -76,9 +76,12 @@ class todoist_sync(object):
         if not apiToken:
             raise ValueError("no todoist api_token configured - run `aardvark connect_todoist <apiToken>` first")
 
-        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`).
-        self.retryBudget = http_retry.RunBudget()
-        self.client = TodoistClient(apiToken=apiToken, budget=self.retryBudget)
+        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`),
+        # SHARED WITH THE OTHER MIRRORS WHEN THE CALLER PASSES ONE IN.
+        self.retryBudget = budget or http_retry.RunBudget()
+        self.client = TodoistClient(
+            apiToken=apiToken, budget=self.retryBudget, announce=announce,
+        )
         self.systemName = (settings.get("system") or {}).get("name") or "aardvark"
         self.projectsCreated = 0
         self.descriptionsUpdated = 0

@@ -73,7 +73,7 @@ def todoistSettings(dbConn):
 @pytest.fixture
 def fakeClient(monkeypatch):
     client = FakeTodoistClient(apiToken="fake-token")
-    monkeypatch.setattr(todoist_sync_module, "TodoistClient", lambda apiToken, budget=None: client)
+    monkeypatch.setattr(todoist_sync_module, "TodoistClient", lambda apiToken, budget=None, announce=None: client)
     return client
 
 

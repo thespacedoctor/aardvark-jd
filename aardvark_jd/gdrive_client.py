@@ -64,7 +64,7 @@ class GDriveClient(object):
     _TOKEN_URL = "https://oauth2.googleapis.com/token"
     _API_URL = "https://www.googleapis.com/drive/v3"
 
-    def __init__(self, clientId, clientSecret, refreshToken, budget=None):
+    def __init__(self, clientId, clientSecret, refreshToken, budget=None, announce=None):
         self.clientId = clientId
         self.clientSecret = clientSecret
         self.refreshToken = refreshToken
@@ -72,6 +72,7 @@ class GDriveClient(object):
         self._accessTokenExpiresAt = 0
         self._session = requests.Session()
         self._budget = budget or http_retry.RunBudget()
+        self._announce = announce
 
     def _access_token(self):
         """
@@ -123,7 +124,7 @@ class GDriveClient(object):
         headers["Authorization"] = f"Bearer {self._access_token()}"
         response = http_retry.request_with_retry(
             self._session, method, f"{self._API_URL}{path}",
-            budget=self._budget, headers=headers, **kwargs,
+            budget=self._budget, announce=self._announce, headers=headers, **kwargs,
         )
         if not response.ok:
             raise GDriveApiError(

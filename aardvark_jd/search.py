@@ -169,9 +169,33 @@ class tree(object):
         self.log.debug("starting the ``get`` method")
 
         nodes = self._nodes()
-        lines = format_tree(nodes)
+        lines = self._drift_lines() + format_tree(nodes)
 
         self.log.debug("completed the ``get`` method")
+        return lines
+
+    def _drift_lines(self):
+        """
+        *a header naming any mirror whose last sync failed, or nothing when all are healthy*
+
+        Sync runs in a detached process with no terminal, so this listing -
+        the one command a user runs to see the state of their system - is
+        where a failure has to be legible rather than merely logged.
+
+        **Return:**
+
+        - ``lines`` -- zero or more ready-to-print strings
+        """
+        drifted = db.drifted_mirrors(self.dbConn)
+        if not drifted:
+            return []
+        lines = []
+        for row in drifted:
+            lines.append(
+                f"! {row['mirror']} is out of sync ({row['last_failure_class']}, "
+                f"last tried {row['last_failure_at']})"
+            )
+        lines.append("")
         return lines
 
     def _nodes(self):

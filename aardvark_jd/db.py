@@ -138,6 +138,21 @@ CREATE TABLE IF NOT EXISTS archived_entities (
 );
 CREATE INDEX IF NOT EXISTS idx_archived_entities_path ON archived_entities(archived_path);
 CREATE INDEX IF NOT EXISTS idx_archived_entities_code ON archived_entities(domain, code);
+
+-- ONE ROW PER MIRROR, RECORDING WHETHER ITS LAST SYNC SUCCEEDED. SYNC NOW
+-- RUNS IN A DETACHED PROCESS NOBODY IS WATCHING (SEE `background_sync` AND
+-- `docs/adr/0001-...`), SO A FAILURE HAS NO TERMINAL TO REPORT TO AND MUST
+-- BE RECORDED INSTEAD. PER-MIRROR RATHER THAN PER-SYSTEM BECAUSE PARTIAL
+-- FAILURE IS REAL - THE THREE RUN IN SEQUENCE, SO DRIVE CAN SUCCEED WHILE
+-- CRAFT IS RATE-LIMITED. NOT PER-ENTITY: THE CARRIER IS A WHOLE-TREE RUN
+-- THAT EITHER COMPLETES OR DOES NOT, SO PER-ENTITY MARKERS WOULD BE FICTION.
+CREATE TABLE IF NOT EXISTS sync_drift (
+    mirror              TEXT PRIMARY KEY CHECK (mirror IN ('gdrive','todoist','craft')),
+    last_success_at     TEXT,
+    last_failure_at     TEXT,
+    last_failure_reason TEXT,
+    last_failure_class  TEXT
+);
 """
 
 # `CREATE TRIGGER IF NOT EXISTS` NEVER UPDATES AN EXISTING TRIGGER'S BODY, SO
@@ -253,7 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_search_index_title ON search_index(title);
 # BUMP WHEN `_BASE_SCHEMA` CHANGES IN A WAY THAT AN ALREADY-INITIALISED
 # DATABASE CAN'T PICK UP VIA THE `IF NOT EXISTS` DDL ALONE (E.G. A WIDENED
 # `CHECK` CONSTRAINT), AND ADD THE ONE-OFF REBUILD TO `_migrate_schema`.
-_SCHEMA_VERSION = "5"
+_SCHEMA_VERSION = "6"
 
 
 def _migrate_schema(dbConn):
@@ -375,6 +390,23 @@ def _migrate_to_v5(dbConn):
     pass
 
 
+def _migrate_to_v6(dbConn):
+    """
+    *pick up the `sync_drift` table*
+
+    Additive, and declared in `_BASE_SCHEMA` with `CREATE TABLE IF NOT
+    EXISTS`, which `initialise_schema` runs on every call - so an existing
+    database has already grown it by the time this step is reached. Same
+    shape as `_migrate_to_v5`: nothing to do but exist, so the ladder has
+    a rung and the bump is recorded deliberately rather than by omission.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    """
+    pass
+
+
 # ORDERED LADDER OF ONE-OFF MIGRATIONS. A DATABASE STAMPED WITH VERSION `N`
 # RUNS EVERY ENTRY AFTER `N`, IN ORDER. ADD NEW STEPS TO THE END AND BUMP
 # `_SCHEMA_VERSION` TO MATCH.
@@ -382,6 +414,7 @@ _MIGRATIONS = (
     ("3", _migrate_to_v3),
     ("4", _migrate_to_v4),
     ("5", _migrate_to_v5),
+    ("6", _migrate_to_v6),
 )
 _MIGRATION_VERSIONS = [version for version, _migration in _MIGRATIONS]
 
@@ -1337,3 +1370,77 @@ def delete_dropbox_links_with_prefix(dbConn, pathPrefix):
         (pathPrefix, pathPrefix),
     )
     return cursor.rowcount
+
+
+# ---------------------------------------------------------------------- #
+# sync drift markers - see `background_sync` and `docs/adr/0001-...`
+# ---------------------------------------------------------------------- #
+
+MIRRORS = ("gdrive", "todoist", "craft")
+
+
+def record_sync_success(dbConn, mirror):
+    """
+    *mark a mirror as having synced cleanly, clearing any recorded failure*
+
+    A success clears the failure fields outright rather than leaving them
+    for history: the marker answers "is this mirror currently drifted?",
+    and a stale failure alongside a newer success would make every reader
+    compare timestamps to find out.
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``mirror`` -- one of `MIRRORS`
+    """
+    dbConn.execute(
+        "INSERT INTO sync_drift(mirror, last_success_at, last_failure_at, last_failure_reason, last_failure_class) "
+        "VALUES (?, strftime('%Y-%m-%d %H:%M:%S','now'), NULL, NULL, NULL) "
+        "ON CONFLICT(mirror) DO UPDATE SET "
+        "last_success_at = strftime('%Y-%m-%d %H:%M:%S','now'), "
+        "last_failure_at = NULL, last_failure_reason = NULL, last_failure_class = NULL",
+        (mirror,),
+    )
+    dbConn.commit()
+
+
+def record_sync_failure(dbConn, mirror, reason, failureClass):
+    """
+    *mark a mirror as drifted, keeping whatever last success it already had*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+    - ``mirror`` -- one of `MIRRORS`
+    - ``reason`` -- the failure message, as shown to the user
+    - ``failureClass`` -- a `background_sync` reason class: `rate-limited`, `auth`, `network` or `unknown`
+    """
+    dbConn.execute(
+        "INSERT INTO sync_drift(mirror, last_failure_at, last_failure_reason, last_failure_class) "
+        "VALUES (?, strftime('%Y-%m-%d %H:%M:%S','now'), ?, ?) "
+        "ON CONFLICT(mirror) DO UPDATE SET "
+        "last_failure_at = strftime('%Y-%m-%d %H:%M:%S','now'), "
+        "last_failure_reason = excluded.last_failure_reason, "
+        "last_failure_class = excluded.last_failure_class",
+        (mirror, reason, failureClass),
+    )
+    dbConn.commit()
+
+
+def drifted_mirrors(dbConn):
+    """
+    *every mirror whose last sync failed and has not since succeeded*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+
+    **Return:**
+
+    - ``drifted`` -- a list of `sqlite3.Row`, one per drifted mirror, ordered as `MIRRORS`
+    """
+    rows = dbConn.execute(
+        "SELECT * FROM sync_drift WHERE last_failure_at IS NOT NULL"
+    ).fetchall()
+    byMirror = {row["mirror"]: row for row in rows}
+    return [byMirror[mirror] for mirror in MIRRORS if mirror in byMirror]

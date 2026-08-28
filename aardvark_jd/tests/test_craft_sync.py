@@ -143,7 +143,7 @@ def craftSettings(dbConn):
 @pytest.fixture
 def fakeClient(monkeypatch):
     client = FakeCraftClient(apiUrl="https://connect.craft.do/links/abc123/api/v1", apiToken="fake-token")
-    monkeypatch.setattr(craft_sync_module, "CraftClient", lambda apiUrl, apiToken, budget=None: client)
+    monkeypatch.setattr(craft_sync_module, "CraftClient", lambda apiUrl, apiToken, budget=None, announce=None: client)
     return client
 
 

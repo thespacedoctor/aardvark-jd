@@ -49,6 +49,12 @@ class craft_sync(object):
     - ``dbConn`` -- an open SQLite connection
     - ``settings`` -- the aardvark settings dict; must have `craft.enabled: true`
       and both `craft.api_url` and `craft.api_token` set
+    - ``budget`` -- an `http_retry.RunBudget` shared with the other mirrors in the same
+      invocation, so one command's total backoff is bounded however many mirrors it runs.
+      Default `None`, meaning a budget of this engine's own.
+    - ``announce`` -- optional callable given a one-line retry message; the foreground
+      path prints it, the background path leaves it `None` so retries only reach the log.
+      Default `None`.
 
     **Usage:**
 
@@ -58,7 +64,7 @@ class craft_sync(object):
     ```
     """
 
-    def __init__(self, log, dbConn, settings):
+    def __init__(self, log, dbConn, settings, budget=None, announce=None):
         self.log = log
         self.dbConn = dbConn
 
@@ -72,8 +78,12 @@ class craft_sync(object):
 
         # ONE BACKOFF BUDGET FOR THE WHOLE RUN, SO A RATE-LIMITED RUN ABANDONS
         # AFTER A BOUNDED TOTAL RATHER THAN THE SUM OF EVERY REQUEST'S WORST CASE.
-        self.retryBudget = http_retry.RunBudget()
-        self.client = CraftClient(apiUrl=apiUrl, apiToken=apiToken, budget=self.retryBudget)
+        # SHARED ACROSS THE THREE MIRRORS WHEN THE CALLER PASSES ONE IN, BECAUSE
+        # ONE COMMAND RUNS ALL THREE IN SEQUENCE UNDER A SINGLE LOCK.
+        self.retryBudget = budget or http_retry.RunBudget()
+        self.client = CraftClient(
+            apiUrl=apiUrl, apiToken=apiToken, budget=self.retryBudget, announce=announce,
+        )
         self.foldersCreated = 0
         self.documentsCreated = 0
         self.indexesRefreshed = 0

@@ -102,3 +102,21 @@ def test_format_tree_draws_branch_connectors():
         "    ├── first",
         "    └── last",
     ]
+
+
+def test_the_tree_flags_a_drifted_mirror_at_the_top(seeded):
+    """*sync runs unwatched, so the listing is where a failure has to be legible*"""
+    db.record_sync_failure(seeded, "craft", "429 rate limited", "rate-limited")
+
+    lines = tree(log=log, dbConn=seeded).get()
+
+    assert lines[0].startswith("! craft is out of sync (rate-limited")
+    assert lines[1] == ""
+
+
+def test_the_tree_has_no_drift_header_when_every_mirror_is_healthy(seeded):
+    db.record_sync_success(seeded, "craft")
+
+    lines = tree(log=log, dbConn=seeded).get()
+
+    assert not any(line.startswith("!") for line in lines)
