@@ -87,3 +87,13 @@ This is a smaller change than it sounds, and that is worth stating: all three `_
 ### What is left
 
 One thing: **backoff**, now [Retry and backoff across the three mirrors](14-retry-and-backoff.md). It is the last item the destination explicitly requires that nothing has decided, and backgrounding sharpens it — a retry that nobody is watching is a different proposition from one that happens in front of a user.
+
+
+## Constraint from ticket 14 (2026-08-28)
+
+Two things this ticket left as free choices are now **determined** by [Retry and backoff across the three mirrors](14-retry-and-backoff.md):
+
+- **The stale-lock age cutoff is derived from ticket 14's per-run backoff budget** (5 minutes), not picked independently. It must exceed the longest legitimate run, or a healthy sync has its lock stolen mid-flight. Define it in terms of that constant rather than as a second magic number.
+- **The pending-flag loop only re-runs after a run that *completed*.** A run that abandons on budget exhaustion clears the flag and exits. Without that rule, a rate-limited sync loops on itself indefinitely in a detached process nobody is watching.
+
+Ticket 14 also found that none of the three clients sets an HTTP timeout, which means a hung connection would hold this ticket's lock forever with a live pid — defeating the liveness check. The timeout is what guarantees a background sync terminates at all.
