@@ -31,3 +31,16 @@ Decide:
 ## Why this blocks ticket 04
 
 Ticket 04 designs the scope interface for all three engines. Whether that interface needs to exist, and whether it needs to be fast or merely tidy, depends on whether the CLI is still waiting for it. Deciding the interface first would be designing for a requirement that may not survive this ticket.
+
+## Context from ticket 13 (2026-08-28)
+
+[What are Google Drive's 47 calls per run, and can they be cut?](13-gdrive-call-cost.md) resolved, and it **does not change this ticket's answer, only its arithmetic**.
+
+Drive has no content-comparison win available — it never had that bug, and is already 45 reads and zero writes on an unchanged run. It has a different win: one OR-ed `files.list` per tree level takes it from 45 calls and 13.8 s to about 5 calls and 2.5 s. Applied, `av add_project` goes from 30.7 s to roughly **19.8 s**.
+
+Against a 500 ms gate that is still forty times over, so **backgrounding remains the only mechanism that meets the gate as stated**, and the question below stands unchanged. Two things it does affect:
+
+- **The honest budget.** Even with both craft and Drive optimised as far as anyone has proposed, the floor is set by round trips to four services in sequence, and the sync order is fixed (`gdrive` -> `todoist` -> `craft`, because each embeds the previous one's URL). No call-count work reaches 500 ms while the CLI waits.
+- **The value of finishing sooner.** The Drive change is cheap, confined to two functions, and makes whatever runs in the background finish in a third of the time. If the answer here is backgrounding plus a drift marker, the marker's lifetime is what the user actually experiences, and that is the number the Drive change moves.
+
+So the last sub-question below — whether 500 ms is the right gate, or whether the honest target is "returns promptly and tells the truth about what is still happening" — is now the load-bearing one.
