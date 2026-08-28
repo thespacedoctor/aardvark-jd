@@ -19,12 +19,17 @@ log.addHandler(logging.NullHandler())
 class FakeCraftClient(object):
     """*records every folder/document/block created or deleted, without any HTTP calls*
 
-    Models the real API's read-delete-insert index refresh: `add_block`
-    appends to a per-document content list (each call its own block id,
-    same as a real multi-line `POST /blocks` splitting into siblings would
-    look from the caller's side), `get_block` reads that list back, and
-    `delete_blocks` removes matching ids from it - mirroring the empirical
-    probe against a real space.
+    Models the real API's read-delete-insert index refresh. `add_block`
+    splits multi-line markdown into **one block per line**, each with its
+    own id, because that is what a real `POST /blocks` does (confirmed
+    against the live space: a six-line index document comes back as six
+    sibling content items). `get_block` reads those per-line items back
+    with their markdown, `delete_blocks` removes matching ids, and a
+    document's content is therefore `[link row] + [one item per index
+    line]` - the shape `_write_index_content` compares against.
+
+    `blocksAdded` records one entry per `add_block` **call**, not per
+    resulting block, so it stays a count of API calls made.
     """
 
     def __init__(self, apiUrl, apiToken):
@@ -81,10 +86,17 @@ class FakeCraftClient(object):
         return f"https://craft.example/doc/{itemId}"
 
     def add_block(self, documentId, markdown, position="end"):
-        blockId = self._next_id("block")
-        self.blocksAdded.append((documentId, markdown, blockId))
-        self._documentContent.setdefault(documentId, []).append((blockId, markdown))
-        return blockId
+        # CRAFT STRIPS TRAILING WHITESPACE FROM A BLOCK'S MARKDOWN WHEN IT STORES
+        # IT - CONFIRMED AGAINST THE LIVE SPACE, WHERE A DESCRIPTION-LESS ENTRY
+        # SENT AS `... — ` COMES BACK AS `... —`.
+        items = [(self._next_id("block"), line.rstrip()) for line in markdown.split("\n")]
+        self.blocksAdded.append((documentId, markdown, items[0][0]))
+        existing = self._documentContent.setdefault(documentId, [])
+        if position == "start":
+            self._documentContent[documentId] = items + existing
+        else:
+            existing.extend(items)
+        return items[0][0]
 
     def get_block(self, blockId):
         content = self._documentContent.get(blockId, [])
@@ -313,6 +325,235 @@ def test_craft_sync_adopts_folders_already_in_the_space(dbConn, craftSettings, f
     assert "rekeyed-" in link["craft_url"]
 
 
+def _index_document_content(fakeClient, dbConn, folderKey):
+    """*the live content items of a reserved `.00_index` document, in document order*"""
+    link = db.get_craft_link(dbConn, "system_folder", folderKey)
+    return fakeClient.get_block(link["craft_document_id"])["content"]
+
+
+def test_craft_sync_skips_rewriting_an_unchanged_index_document(dbConn, craftSettings, fakeClient):
+    """*an unchanged index document costs its `GET` and nothing else - no delete, no insert*
+
+    This is the assertion ticket 09 exists for: it pins that the skip
+    *actually happens*, rather than that the output merely looks right. A
+    comparison normalised wrongly in the "safe" direction would still
+    produce correct content while silently rewriting all 28 index
+    documents every run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert fakeClient.blocksAdded == []
+    assert fakeClient.blocksDeleted == []
+    assert summary["indexes_refreshed"] == 0
+    assert summary["link_rows_written"] == 0
+
+
+def test_an_index_entry_with_no_description_still_converges(dbConn, craftSettings, fakeClient):
+    """*a child with an empty description does not rewrite its index document forever*
+
+    `add_project` always stores an empty description, and the listing
+    format puts the description after an em-dash, so such a child renders
+    as `- [code title](url) — ` with a **trailing space**. Craft strips
+    trailing whitespace when it stores a block, so the stored line never
+    equals the computed one and the document rewrites on every single run.
+    Observed live: two of the 28 index documents never converged until the
+    comparison normalised for it.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 0
+    assert fakeClient.blocksAdded == []
+    assert fakeClient.blocksDeleted == []
+
+
+def test_craft_sync_rewrites_an_index_document_when_a_child_is_added(dbConn, craftSettings, fakeClient):
+    """*a changed index document is rewritten, and its link row is force-rewritten with it*"""
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    bodyLines = [item["markdown"] for item in content]
+    assert any("A11.11 dermatologist" in line and "d4" in line for line in bodyLines)
+    # THE LINK ROW SURVIVES THE REWRITE, AND IS STILL THE DOCUMENT'S FIRST BLOCK.
+    assert "Finder" in bodyLines[0]
+
+
+def test_the_link_row_rewrite_is_coupled_to_the_content_rewrite(dbConn, craftSettings, fakeClient):
+    """*`forceRewrite` follows whether the body was actually wiped, in both directions*
+
+    Skipping the content rewrite while still forcing the link-row rewrite
+    would silently reintroduce most of the saving; forcing neither when the
+    content *did* change would leave `craft_links.craft_block_id` pointing
+    at a block that has just been deleted, and the link row would be lost.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    def link_row_block_id():
+        return db.get_craft_link(dbConn, "system_folder", "areas.11.00_index")["craft_block_id"]
+
+    # UNCHANGED: NO CONTENT REWRITE, SO NO FORCED LINK-ROW REWRITE EITHER - THE
+    # RECORDED BLOCK ID STILL POINTS AT A LIVE BLOCK, SO IT MUST NOT BE REPLACED.
+    blockIdBefore = link_row_block_id()
+    unchanged = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    assert unchanged["indexes_refreshed"] == 0
+    assert unchanged["link_rows_written"] == 0
+    assert link_row_block_id() == blockIdBefore
+
+    # CHANGED: THE BODY IS WIPED, SO THIS DOCUMENT'S LINK ROW MUST BE REWRITTEN -
+    # A NEW BLOCK ID IS THE PROOF THAT `forceRewrite` WAS PASSED THROUGH.
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    changed = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    assert changed["indexes_refreshed"] == 1
+    assert link_row_block_id() != blockIdBefore
+
+    # AND THE DOCUMENT IS NOT LEFT CORRUPT: LINK ROW FIRST, THEN THE BODY.
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert "Finder" in content[0]["markdown"]
+    assert all(item["markdown"].startswith("- ") for item in content[1:])
+
+
+def test_craft_sync_rewrites_an_index_document_when_a_child_is_removed(dbConn, craftSettings, fakeClient):
+    """*removing a child rewrites its parent index, and the link row is force-rewritten with it*"""
+    from aardvark_jd.archive import archive
+
+    archiveSettings = {"craft": {"enabled": False}, "system": craftSettings["system"]}
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    archive(log=log, dbConn=dbConn, ref="A11.10", settings=archiveSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    bodyLines = [item["markdown"] for item in content]
+    assert not any("cardiologist" in line for line in bodyLines)
+    assert any("dermatologist" in line for line in bodyLines)
+    # THE LINK ROW SURVIVES THE REWRITE, STILL THE DOCUMENT'S FIRST BLOCK.
+    assert "Finder" in bodyLines[0]
+
+
+def test_craft_sync_converges_an_empty_index_document(dbConn, craftSettings, fakeClient):
+    """*a childless index renders the placeholder and still converges to zero writes on resync*
+
+    The `*(nothing here yet)*` body is the `else` branch of the listing
+    builder, and it has to round-trip through the comparison the same way
+    a populated body does - otherwise every empty index document rewrites
+    on every run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    # NO ids ADDED, SO THE CATEGORY'S `.00_index` BODY IS THE PLACEHOLDER.
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert any("nothing here yet" in item["markdown"] for item in content)
+
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 0
+    assert fakeClient.blocksAdded == []
+    assert fakeClient.blocksDeleted == []
+
+
+def test_craft_sync_restores_a_hand_deleted_link_row(dbConn, craftSettings, fakeClient):
+    """*a link row deleted by hand is re-added on the next sync, though the body still matches*
+
+    The comparison must include the expected link row, not just the body.
+    An index document whose link row someone removed in Craft still has a
+    body that equals the computed listing exactly, so a body-only
+    comparison skips it and the row never heals. `develop`'s
+    unconditional rewrite restored it on every run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    link = db.get_craft_link(dbConn, "system_folder", "areas.11.00_index")
+    documentId = link["craft_document_id"]
+    assert "Finder" in fakeClient._documentContent[documentId][0][1]
+    # HAND-DELETE THE LINK-ROW BLOCK, LEAVING A BODY THAT STILL MATCHES THE LISTING.
+    fakeClient._documentContent[documentId] = fakeClient._documentContent[documentId][1:]
+
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    healed = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert "Finder" in healed[0]["markdown"]
+    assert all(item["markdown"].startswith("- ") for item in healed[1:])
+
+
+def test_index_comparison_is_exact_when_no_link_row_is_present(dbConn, craftSettings, fakeClient, monkeypatch):
+    """*with no link row, a removed first child is still detected and repaired*
+
+    Off Darwin, with no Dropbox or Drive link, `_write_link_row` writes
+    nothing and an index document is body-only. The earlier tail-only
+    comparison treated a body-only document's first block as a possible
+    link row, so dropping exactly the first child produced a tail that
+    lined up, the comparison returned a false match, and the removed
+    entry stayed in the document forever.
+    """
+    monkeypatch.setattr(craft_sync_module.doc_links, "hookmark_url", lambda folderPath: None)
+    from aardvark_jd.archive import archive
+
+    archiveSettings = {"craft": {"enabled": False}, "system": craftSettings["system"]}
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert "Finder" not in content[0]["markdown"]
+    assert "cardiologist" in content[0]["markdown"]
+
+    archive(log=log, dbConn=dbConn, ref="A11.10", settings=archiveSettings).get()
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert summary["indexes_refreshed"] == 1
+    healed = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    assert not any("cardiologist" in item["markdown"] for item in healed)
+
+
 def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
     add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
@@ -329,17 +570,15 @@ def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):
     assert len(fakeClient.documents) == documentsAfterFirst
     assert summary["folders_created"] == 0
     assert summary["documents_created"] == 0
-    assert summary["indexes_refreshed"] > 0
-    # every index refresh on the second run deletes its whole prior content and re-inserts
-    # fresh content, rather than updating a single block in place (there's no single block
-    # to address - see `_refresh_index`) - and since the link row lives in the same
-    # document, it's wiped and force-rewritten alongside the index content every time,
-    # so each refreshed index document contributes two deletes and two adds (content +
-    # link row), not one. The id documents' own link rows are untouched on this run -
-    # their folder paths are unchanged, so `_write_link_row` skips them entirely.
-    assert len(fakeClient.blocksDeleted) == 2 * summary["indexes_refreshed"]
-    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst + 2 * summary["indexes_refreshed"]
-    assert summary["link_rows_written"] == summary["indexes_refreshed"]
+    # nothing changed between the two runs, so the second one writes nothing at all:
+    # each index document is read, compared against the listing it already holds, and
+    # left alone - and because its content was never wiped, its link row keeps a valid
+    # recorded block id and is skipped too. A repair run over an unchanged tree is now
+    # reads only, which is what took the whole-tree walk back under Craft's rate limit.
+    assert summary["indexes_refreshed"] == 0
+    assert summary["link_rows_written"] == 0
+    assert fakeClient.blocksDeleted == []
+    assert len(fakeClient.blocksAdded) == blocksAddedAfterFirst
 
 
 def test_craft_sync_mirrors_the_projects_domain_like_areas_and_resources(dbConn, craftSettings, fakeClient):
