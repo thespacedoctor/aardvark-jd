@@ -93,3 +93,19 @@ def test_add_category_creates_its_ten_reserved_ids(dbConnWithArea):
 
     row = db.get_system_folder(dbConnWithArea, "areas.11.04_templates")
     assert row["folder_name"] == "A11.04_templates📐"
+
+
+def test_an_accepted_correction_reaches_the_category_folder_and_index(dbConnWithArea, monkeypatch):
+    """*the spell check runs before the write, so one title serves folder, index and mirrors*"""
+    rootPath = os.path.dirname(db.get_system_folder(dbConnWithArea, "root.areas")["folder_path"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    _code, folderPath = add_category(
+        log=log, dbConn=dbConnWithArea, domain="areas", areaRef="A10", title="Aadvark",
+        description="d", chosenEmoji="🐾", settings={"system": {"root_path": rootPath}},
+    ).get()
+
+    assert "aardvark" in os.path.basename(folderPath).lower()
+    row = dbConnWithArea.execute("SELECT title FROM categories WHERE title LIKE 'A%'").fetchone()
+    assert row["title"] == "Aardvark"

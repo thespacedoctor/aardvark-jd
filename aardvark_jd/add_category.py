@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import codes, db, emoji_picker, folders
+from aardvark_jd import codes, db, emoji_picker, folders, spell_check
 
 
 class add_category(object):
@@ -62,15 +62,17 @@ class add_category(object):
             raise ValueError(f"no area '{self.areaRef}' found in domain '{self.domain}'")
 
         acNumber = folders.next_category_number(self.dbConn, self.domain, area)
+        # SEE `add_area.get` - CHECKED BEFORE THE EMOJI PROMPT AND BEFORE ANY WRITE.
+        title = spell_check.checked_title(self.title, self.settings, self.log)
         pickedEmoji = emoji_picker.resolve_emoji(
-            self.title, self.description, chosenEmoji=self.chosenEmoji,
+            title, self.description, chosenEmoji=self.chosenEmoji,
             settings=self.settings, log=self.log,
         )
-        folderName = folders.category_folder_name(self.domain, acNumber, self.title, pickedEmoji)
+        folderName = folders.category_folder_name(self.domain, acNumber, title, pickedEmoji)
         folderPath = folders.make_folder(area["folder_path"], folderName)
 
         db.insert_category(
-            self.dbConn, area["area_id"], self.domain, acNumber, self.title, self.description,
+            self.dbConn, area["area_id"], self.domain, acNumber, title, self.description,
             pickedEmoji, folderName, folderPath,
         )
         code = codes.format_category_code(self.domain, acNumber)

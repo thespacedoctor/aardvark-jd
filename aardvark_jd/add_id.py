@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import codes, db, folders
+from aardvark_jd import codes, db, folders, spell_check
 
 
 class add_id(object):
@@ -35,13 +35,14 @@ class add_id(object):
     ```
     """
 
-    def __init__(self, log, dbConn, domain, categoryRef, title, description):
+    def __init__(self, log, dbConn, domain, categoryRef, title, description, settings=None):
         self.log = log
         self.dbConn = dbConn
         self.domain = codes.validate_domain(domain)
         self.categoryRef = categoryRef
         self.title = title
         self.description = description
+        self.settings = settings
 
     def get(self):
         """
@@ -59,13 +60,15 @@ class add_id(object):
         if category is None:
             raise ValueError(f"no category '{self.categoryRef}' found in domain '{self.domain}'")
 
+        # SEE `add_area.get` - CHECKED BEFORE ANY WRITE.
+        title = spell_check.checked_title(self.title, self.settings, self.log)
         itemNumber = folders.next_id_number(self.dbConn, self.domain, category)
-        folderName = folders.id_folder_name(self.domain, acNumber, itemNumber, self.title)
+        folderName = folders.id_folder_name(self.domain, acNumber, itemNumber, title)
         folderPath = folders.make_folder(category["folder_path"], folderName)
 
         db.insert_id(
             self.dbConn, category["category_id"], self.domain, acNumber, itemNumber,
-            self.title, self.description, folderName, folderPath,
+            title, self.description, folderName, folderPath,
         )
         code = codes.format_id_code(self.domain, acNumber, itemNumber)
 
