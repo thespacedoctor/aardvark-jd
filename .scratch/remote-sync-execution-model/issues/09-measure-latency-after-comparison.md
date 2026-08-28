@@ -1,7 +1,7 @@
 # Measure `av add_project` after content comparison lands
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: none
 
 ## Question
@@ -40,3 +40,56 @@ Record the measured numbers in the answer either way. They are the evidence the 
 ## Constraint from ticket 08 (2026-08-28)
 
 The concurrency contract requires that **a write must not hold a transaction open across network I/O**. The sync engines are handed `cl_utils`'s shared connection for the whole command, so the content-comparison change (and any scoped-sync work downstream) must commit local DB writes before making HTTP calls, keeping the SQLite write-lock window to local work rather than sync duration. `PRAGMA busy_timeout = 5000` is now set on both the writer and the completion reader.
+
+## Claimed for a dedicated implementation session (2026-08-28)
+
+Claimed for a fresh Opus session — this is a test-first code change plus a live
+measurement, not wayfinding. Resume by naming this ticket to `/wayfinder`
+(claim state is irrelevant when the ticket is named explicitly). Run against the
+live craft.do space; the user has approved live-service use.
+
+### Implementation plan (from the charting session)
+
+**Approach**
+
+- `craft_sync._write_index_content()` (`aardvark_jd/craft_sync.py:347`): before the
+  delete-and-rewrite, read the existing block via `self.client.get_block`, render it
+  to the same normalised form as the computed markdown, and return early when they
+  match.
+- When the content rewrite is skipped, also skip the forced `_write_link_row`
+  rewrite — drop the `forceRewrite=True` on that path. The two are coupled:
+  `_write_link_row` (line 446, fast path at line 487) only avoids a rewrite when the
+  document body was not wiped.
+- Per ticket 08: commit local DB writes before the HTTP calls, keeping the SQLite
+  write-lock window to local work.
+
+**Key risk**
+
+`get_block` returns structured content items; `_write_index_content` builds
+markdown. The comparison needs a like-for-like form. Getting the normalisation
+wrong in the "safe" direction means it never matches — silently retaining today's
+cost while looking correct. The test must assert the skip **actually happens** on
+an unchanged run (e.g. spy on the client, assert zero write calls), not merely
+that output is correct.
+
+**Checklist**
+
+1. RED: unchanged category -> `_write_index_content` issues no write call.
+2. RED: the content-skip / link-row-skip coupling, asserted both directions.
+3. GREEN: implement the comparison + early return.
+4. Refactor; coverage >= 80% on the changed code (`test-runner`).
+5. Live measurement, recorded in the answer:
+   - `av add_project` into an existing project category — wall-clock warm and cold,
+     and API-call count, before and after. Baseline ~114 calls (112 to `/blocks`).
+   - Whether any 429s occur on a normal single-project run.
+   - Full `av craft_sync` repair-run wall-clock.
+6. Resolve, and act on the gate:
+   - **Under 500 ms:** close [How do the three sync engines accept a scope?](04-sync-scope-interface.md),
+     rule it out of scope, record that the backgrounding fog collapses with it.
+   - **Over 500 ms:** ticket 04 goes live; the numbers say how far there is to go.
+
+**Note on the spell-check path.** Tickets 06 and 10 add a wordlist load (+12.3 ms,
+ticket 05) and an optional prompt to the `add_*` flow. The prompt is human
+think-time and does not count against the gate, but take the `add_project`
+measurement with the wordlist-load path present, or explicitly note it was measured
+without it.
