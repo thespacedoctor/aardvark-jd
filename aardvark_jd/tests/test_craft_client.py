@@ -1,9 +1,16 @@
 import pytest
 import requests
 
+from aardvark_jd import http_retry
 from aardvark_jd.craft_client import CraftApiError, CraftClient
 
 _API_URL = "https://connect.craft.do/links/abc123/api/v1"
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_sleep(monkeypatch):
+    """*run any retry loop without real backoff sleeps*"""
+    monkeypatch.setattr(http_retry, "_sleep", lambda seconds: None)
 
 _CONNECTION_RESPONSE = {
     "space": {"id": "space-1"},
@@ -258,6 +265,36 @@ def test_request_failure_raises_craft_api_error(monkeypatch):
 
     with pytest.raises(CraftApiError):
         CraftClient(apiUrl=_API_URL, apiToken="tok").create_folder("Areas")
+
+
+def test_a_transient_500_is_retried_then_succeeds(monkeypatch):
+    calls = []
+
+    def fakeRequest(self, method, url, **kwargs):
+        calls.append(url)
+        if len(calls) < 3:
+            return FakeResponse(status_code=500, text="transient")
+        return FakeResponse(json_body={"id": "folder-1"})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    folderId = CraftClient(apiUrl=_API_URL, apiToken="tok").create_folder("Areas")
+    assert folderId == "folder-1"
+    assert len(calls) == 3
+
+
+def test_a_persistent_429_is_retried_then_raises(monkeypatch):
+    calls = []
+
+    def fakeRequest(self, method, url, **kwargs):
+        calls.append(url)
+        return FakeResponse(status_code=429, text="slow down")
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    with pytest.raises(CraftApiError):
+        CraftClient(apiUrl=_API_URL, apiToken="tok").create_folder("Areas")
+    assert len(calls) == 5
 
 
 def test_authorization_header_carries_the_api_token():

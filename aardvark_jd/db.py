@@ -401,6 +401,12 @@ def get_connection(pathToDb):
     dbConn = sqlite3.connect(pathToDb)
     dbConn.row_factory = sqlite3.Row
     dbConn.execute("PRAGMA foreign_keys = ON")
+    # WAIT OUT A CONCURRENT WRITE LOCK RATHER THAN CRASHING WITH `SQLITE_BUSY`:
+    # TWO `aardvark` COMMANDS, OR A COMMAND AND A SHELL-COMPLETION READER, CAN
+    # OVERLAP. THE PYTHON 3.14 STDLIB ALREADY DEFAULTS THIS TO 5 s, BUT AARDVARK
+    # DEPENDS ON IT (TICKET 08's CONCURRENCY CONTRACT), SO IT IS SET EXPLICITLY
+    # HERE AND ON THE `mode=ro` COMPLETION PATH. WAL IS DELIBERATELY NOT ENABLED.
+    dbConn.execute("PRAGMA busy_timeout = 5000")
     return dbConn
 
 
@@ -860,7 +866,7 @@ def list_system_folders(dbConn):
 
 def upsert_craft_link(
     dbConn, entityType, entityKey, craftFolderId=None, craftDocumentId=None, craftBlockId=None, craftUrl=None,
-    linksMarkdown=None, clearBlockId=False,
+    linksMarkdown=None, clearBlockId=False, clearLinksMarkdown=False,
 ):
     """
     *record or refresh an entity's linked Craft folder/document/block*
@@ -874,7 +880,9 @@ def upsert_craft_link(
     `clearBlockId` bypasses the usual keep-if-`None` behaviour to actually
     null out `craft_block_id`, for the one case that needs it: the row's
     old block was deleted (e.g. a `.00_index` content rewrite) and no
-    replacement has been inserted yet.
+    replacement has been inserted yet. `clearLinksMarkdown` does the same
+    for `links_markdown`, for when every link source has become
+    unavailable and the row can no longer be written at all.
 
     **Key Arguments:**
 
@@ -888,11 +896,17 @@ def upsert_craft_link(
     - ``craftUrl`` -- the linked Craft folder/document's shareable URL, if any. Default `None`.
     - ``linksMarkdown`` -- the link row's last-written markdown, if any. Default `None`.
     - ``clearBlockId`` -- if `True`, null out `craft_block_id` regardless of the `craftBlockId` argument. Default `False`.
+    - ``clearLinksMarkdown`` -- if `True`, null out `links_markdown` regardless of the `linksMarkdown` argument. Default `False`.
     """
     # `excluded.craft_block_id` ALREADY CARRIES `blockIdValue` VIA THE INSERT
     # ROW BELOW - NO SEPARATE BINDING IS NEEDED FOR THE UPDATE CLAUSE.
     blockIdValue = None if clearBlockId else craftBlockId
     blockIdSql = "excluded.craft_block_id" if clearBlockId else "COALESCE(excluded.craft_block_id, craft_links.craft_block_id)"
+    linksMarkdownValue = None if clearLinksMarkdown else linksMarkdown
+    linksMarkdownSql = (
+        "excluded.links_markdown" if clearLinksMarkdown
+        else "COALESCE(excluded.links_markdown, craft_links.links_markdown)"
+    )
 
     dbConn.execute(
         "INSERT INTO craft_links(entity_type, entity_key, craft_folder_id, craft_document_id, craft_block_id, craft_url, links_markdown) "
@@ -902,9 +916,9 @@ def upsert_craft_link(
         "craft_document_id = COALESCE(excluded.craft_document_id, craft_links.craft_document_id), "
         f"craft_block_id = {blockIdSql}, "
         "craft_url = COALESCE(excluded.craft_url, craft_links.craft_url), "
-        "links_markdown = COALESCE(excluded.links_markdown, craft_links.links_markdown), "
+        f"links_markdown = {linksMarkdownSql}, "
         "synced_at = strftime('%Y-%m-%d %H:%M:%S','now')",
-        (entityType, entityKey, craftFolderId, craftDocumentId, blockIdValue, craftUrl, linksMarkdown),
+        (entityType, entityKey, craftFolderId, craftDocumentId, blockIdValue, craftUrl, linksMarkdownValue),
     )
     dbConn.commit()
 

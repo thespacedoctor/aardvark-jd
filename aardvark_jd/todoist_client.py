@@ -23,6 +23,8 @@ Author
 
 import requests
 
+from aardvark_jd import http_retry
+
 
 class TodoistApiError(Exception):
     pass
@@ -35,6 +37,7 @@ class TodoistClient(object):
     **Key Arguments:**
 
     - ``apiToken`` -- a personal API token, from Todoist's Integrations -> Developer settings
+    - ``budget`` -- the run's `http_retry.RunBudget`, shared with the other mirror clients. Default `None`, meaning a fresh per-client budget.
 
     **Usage:**
 
@@ -47,13 +50,14 @@ class TodoistClient(object):
 
     _API_URL = "https://api.todoist.com/api/v1"
 
-    def __init__(self, apiToken):
+    def __init__(self, apiToken, budget=None):
         self.apiToken = apiToken
         self._session = requests.Session()
         self._session.headers.update({
             "Authorization": f"Bearer {apiToken}",
             "Content-Type": "application/json",
         })
+        self._budget = budget or http_retry.RunBudget()
 
     def _request(self, method, path, **kwargs):
         """
@@ -68,7 +72,9 @@ class TodoistClient(object):
 
         - ``payload`` -- the parsed JSON response body
         """
-        response = self._session.request(method, f"{self._API_URL}{path}", **kwargs)
+        response = http_retry.request_with_retry(
+            self._session, method, f"{self._API_URL}{path}", budget=self._budget, **kwargs
+        )
         if not response.ok:
             raise TodoistApiError(f"todoist API {method} {path} failed ({response.status_code}): {response.text}")
         if not response.content:

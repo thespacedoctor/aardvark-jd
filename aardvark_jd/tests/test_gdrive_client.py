@@ -3,12 +3,19 @@ import logging
 import pytest
 import requests
 
+from aardvark_jd import http_retry
 from aardvark_jd.gdrive_client import GDriveApiError, GDriveClient
 
 log = logging.getLogger("test_gdrive_client")
 log.addHandler(logging.NullHandler())
 
 _FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_sleep(monkeypatch):
+    """*run any retry loop without real backoff sleeps*"""
+    monkeypatch.setattr(http_retry, "_sleep", lambda seconds: None)
 
 
 class FakeResponse:
@@ -106,6 +113,60 @@ def test_list_child_folders_follows_pagination(client, monkeypatch):
     assert [f["id"] for f in client.list_child_folders("parent-1")] == ["f1", "f2"]
 
 
+def test_list_child_folders_multi_ors_parents_into_one_query_and_demuxes_by_parent(client, monkeypatch):
+    _mock_token(monkeypatch)
+    captured = {}
+
+    def fakeRequest(self, method, url, **kwargs):
+        captured["params"] = kwargs.get("params")
+        return FakeResponse(json_body={"files": [
+            {"id": "c1", "name": "one", "parents": ["p1"]},
+            {"id": "c2", "name": "two", "parents": ["p2"]},
+            {"id": "c3", "name": "three", "parents": ["p1"]},
+        ]})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+    result = client.list_child_folders_multi(["p1", "p2", "p3"])
+
+    assert captured["params"]["q"] == (
+        f"('p1' in parents or 'p2' in parents or 'p3' in parents) "
+        f"and mimeType = '{_FOLDER_MIME}' and trashed = false"
+    )
+    assert "parents" in captured["params"]["fields"]
+    assert [f["id"] for f in result["p1"]] == ["c1", "c3"]
+    assert [f["id"] for f in result["p2"]] == ["c2"]
+    assert result["p3"] == []
+
+
+def test_list_child_folders_multi_chunks_large_parent_lists(client, monkeypatch):
+    _mock_token(monkeypatch)
+    queries = []
+
+    def fakeRequest(self, method, url, **kwargs):
+        queries.append(kwargs["params"]["q"])
+        return FakeResponse(json_body={"files": []})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+    client.list_child_folders_multi([f"p{n}" for n in range(120)])
+
+    assert len(queries) == 3  # 50 + 50 + 20
+
+
+def test_list_child_folders_multi_follows_pagination_within_a_chunk(client, monkeypatch):
+    _mock_token(monkeypatch)
+    pages = [
+        {"files": [{"id": "c1", "name": "one", "parents": ["p1"]}], "nextPageToken": "tok"},
+        {"files": [{"id": "c2", "name": "two", "parents": ["p1"]}]},
+    ]
+
+    def fakeRequest(self, method, url, **kwargs):
+        return FakeResponse(json_body=pages.pop(0))
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+    result = client.list_child_folders_multi(["p1"])
+    assert [f["id"] for f in result["p1"]] == ["c1", "c2"]
+
+
 def test_create_folder_sends_the_folder_mime_type_and_parent(client, monkeypatch):
     _mock_token(monkeypatch)
     captured = {}
@@ -166,6 +227,32 @@ def test_a_failed_request_raises(client, monkeypatch):
     )
     with pytest.raises(GDriveApiError):
         client.list_child_folders("parent-1")
+
+
+def test_a_rate_limit_403_is_retried_but_a_permission_403_is_not(client, monkeypatch):
+    _mock_token(monkeypatch)
+    calls = []
+    rateLimited = {"error": {"errors": [{"reason": "userRateLimitExceeded"}], "code": 403}}
+
+    def fakeRequest(self, method, url, **kwargs):
+        calls.append(url)
+        if len(calls) < 3:
+            return FakeResponse(status_code=403, json_body=rateLimited)
+        return FakeResponse(json_body={"files": [{"id": "f1", "name": "x"}]})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+    assert client.list_child_folders("parent-1") == [{"id": "f1", "name": "x"}]
+    assert len(calls) == 3
+
+    calls.clear()
+    permissionDenied = {"error": {"errors": [{"reason": "insufficientFilePermissions"}], "code": 403}}
+    monkeypatch.setattr(
+        requests.Session, "request",
+        lambda self, method, url, **kwargs: (calls.append(url), FakeResponse(status_code=403, json_body=permissionDenied))[1],
+    )
+    with pytest.raises(GDriveApiError):
+        client.list_child_folders("parent-1")
+    assert len(calls) == 1
 
 
 def test_folder_url_is_built_from_the_id():

@@ -383,6 +383,10 @@ def _with_connection(fn, words=()):
         dbPath = paths.find_db_path(rootPath)
         dbConn = sqlite3.connect(f"file:{dbPath}?mode=ro", uri=True)
         dbConn.row_factory = sqlite3.Row
+        # WAIT OUT A CONCURRENT MUTATING COMMAND RATHER THAN RETURNING NO
+        # SUGGESTIONS: A TAB PRESS CAN LAND DURING A WRITE. SAFE ON `mode=ro`,
+        # NOT A PERSISTENT HEADER CHANGE. SEE `db.get_connection`.
+        dbConn.execute("PRAGMA busy_timeout = 5000")
         try:
             return fn(dbConn)
         finally:

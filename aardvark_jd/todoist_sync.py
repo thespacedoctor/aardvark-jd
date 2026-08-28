@@ -31,7 +31,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import db, doc_links, dropbox_client, folders
+from aardvark_jd import db, doc_links, dropbox_client, folders, http_retry
 from aardvark_jd.dropbox_client import DropboxClient
 from aardvark_jd.todoist_client import TodoistClient
 
@@ -76,7 +76,9 @@ class todoist_sync(object):
         if not apiToken:
             raise ValueError("no todoist api_token configured - run `aardvark connect_todoist <apiToken>` first")
 
-        self.client = TodoistClient(apiToken=apiToken)
+        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`).
+        self.retryBudget = http_retry.RunBudget()
+        self.client = TodoistClient(apiToken=apiToken, budget=self.retryBudget)
         self.systemName = (settings.get("system") or {}).get("name") or "aardvark"
         self.projectsCreated = 0
         self.descriptionsUpdated = 0

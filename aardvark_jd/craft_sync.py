@@ -25,7 +25,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import db, doc_links, dropbox_client, folders, paths
+from aardvark_jd import db, doc_links, dropbox_client, folders, http_retry, paths
 from aardvark_jd.craft_client import CraftClient
 from aardvark_jd.dropbox_client import DropboxClient
 
@@ -70,7 +70,10 @@ class craft_sync(object):
         if not apiUrl or not apiToken:
             raise ValueError("no craft api_url/api_token configured - run `aardvark connect_craft <apiUrl> <apiToken>` first")
 
-        self.client = CraftClient(apiUrl=apiUrl, apiToken=apiToken)
+        # ONE BACKOFF BUDGET FOR THE WHOLE RUN, SO A RATE-LIMITED RUN ABANDONS
+        # AFTER A BOUNDED TOTAL RATHER THAN THE SUM OF EVERY REQUEST'S WORST CASE.
+        self.retryBudget = http_retry.RunBudget()
+        self.client = CraftClient(apiUrl=apiUrl, apiToken=apiToken, budget=self.retryBudget)
         self.foldersCreated = 0
         self.documentsCreated = 0
         self.indexesRefreshed = 0
@@ -399,8 +402,13 @@ class craft_sync(object):
         if self._index_content_matches(existingItems, markdown, linkRowMarkdown):
             return False
 
-        self.client.delete_blocks([item["id"] for item in existingItems])
+        # INSERT THE NEW BODY BEFORE DELETING THE OLD ONE. CRAFT HAS NO ATOMIC
+        # REPLACE, AND A RATE LIMIT LANDING BETWEEN THE TWO CALLS IS EXACTLY
+        # WHAT THIS SYNC EXISTS TO SURVIVE: DELETE-THEN-INSERT LEAVES THE
+        # DOCUMENT SILENTLY EMPTY, WHEREAS INSERT-THEN-DELETE LEAVES IT
+        # BRIEFLY HOLDING BOTH - UGLY AND SELF-HEALING ON THE NEXT RUN.
         self.client.add_block(documentId, markdown)
+        self.client.delete_blocks([item["id"] for item in existingItems])
 
         self.indexesRefreshed += 1
         return True
@@ -553,10 +561,21 @@ class craft_sync(object):
         gdriveLink = db.get_gdrive_link(self.dbConn, entityType.split(":")[0], entityKey)
         gdriveUrl = gdriveLink["gdrive_url"] if gdriveLink else None
         markdown = doc_links.link_row_markdown(hookmarkUrl, dropboxUrl, todoistUrl, driveUrl=gdriveUrl)
+        link = db.get_craft_link(self.dbConn, entityType, entityKey)
         if markdown is None:
+            # NO LINK SOURCE IS AVAILABLE (E.G. OFF DARWIN, NO DROPBOX/DRIVE).
+            # IF A ROW WAS WRITTEN HERE BEFORE, CLEAR ITS RECORD AND BLOCK -
+            # OTHERWISE `_write_index_content` COMPARES FOREVER AGAINST A LINK
+            # ROW NO LONGER IN THE DOCUMENT AND REWRITES IT ON EVERY RUN.
+            if link and link["links_markdown"]:
+                if link["craft_block_id"]:
+                    self.client.delete_blocks([link["craft_block_id"]])
+                db.upsert_craft_link(
+                    self.dbConn, entityType, entityKey,
+                    clearBlockId=True, clearLinksMarkdown=True,
+                )
             return
 
-        link = db.get_craft_link(self.dbConn, entityType, entityKey)
         existingBlockId = None if forceRewrite else (link["craft_block_id"] if link else None)
         if not forceRewrite and link and link["links_markdown"] == markdown and existingBlockId:
             return

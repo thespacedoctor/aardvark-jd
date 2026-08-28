@@ -59,6 +59,15 @@ def test_areas_complete_for_add_category(seeded):
     assert values == ["A10-19"]
 
 
+def test_completion_reader_waits_out_a_concurrent_write(seeded):
+    """*the read-only completion connection sets `busy_timeout`, so a TAB press waits rather than failing*"""
+    busyTimeout = completion._with_connection(
+        lambda conn: conn.execute("PRAGMA busy_timeout").fetchone()[0],
+        ["av", "add_category", "", "-s", seeded],
+    )
+    assert busyTimeout == 5000
+
+
 def test_categories_complete_for_add_id(seeded):
     values = _values(completion.candidates(["av", "add_id", "", "-s", seeded], 2))
     assert values == ["A11"]

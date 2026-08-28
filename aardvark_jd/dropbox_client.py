@@ -24,7 +24,7 @@ import os
 
 import requests
 
-from aardvark_jd import db
+from aardvark_jd import db, http_retry
 
 
 class DropboxApiError(Exception):
@@ -162,6 +162,7 @@ class DropboxClient(object):
                 "client_id": self.appKey,
                 "client_secret": self.appSecret,
             },
+            timeout=http_retry.HTTP_TIMEOUT,
         )
         if not response.ok:
             raise DropboxApiError(f"dropbox token refresh failed ({response.status_code}): {response.text}")
@@ -185,6 +186,7 @@ class DropboxClient(object):
             f"{self._API_URL}{path}",
             headers={"Authorization": f"Bearer {accessToken}"},
             json=jsonBody,
+            timeout=http_retry.HTTP_TIMEOUT,
         )
         if not response.ok:
             raise DropboxApiError(f"dropbox API {path} failed ({response.status_code}): {response.text}")
