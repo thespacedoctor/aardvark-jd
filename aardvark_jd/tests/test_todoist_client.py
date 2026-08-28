@@ -1,9 +1,16 @@
 import pytest
 import requests
 
+from aardvark_jd import http_retry
 from aardvark_jd.todoist_client import TodoistApiError, TodoistClient
 
 _API_URL = "https://api.todoist.com/api/v1"
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_sleep(monkeypatch):
+    """*run any retry loop without real backoff sleeps*"""
+    monkeypatch.setattr(http_retry, "_sleep", lambda seconds: None)
 
 
 class FakeResponse:
@@ -102,6 +109,22 @@ def test_request_failure_raises_todoist_api_error(monkeypatch):
 
     with pytest.raises(TodoistApiError):
         TodoistClient(apiToken="tok").create_project("Areas")
+
+
+def test_a_rate_limited_request_is_retried_then_succeeds(monkeypatch):
+    calls = []
+
+    def fakeRequest(self, method, url, **kwargs):
+        calls.append(url)
+        if len(calls) < 2:
+            return FakeResponse(status_code=429, text="slow down")
+        return FakeResponse(json_body={"id": "proj-1"})
+
+    monkeypatch.setattr(requests.Session, "request", fakeRequest)
+
+    projectId = TodoistClient(apiToken="tok").create_project("Areas")
+    assert projectId == "proj-1"
+    assert len(calls) == 2
 
 
 def test_authorization_header_carries_the_api_token():

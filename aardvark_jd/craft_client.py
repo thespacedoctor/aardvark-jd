@@ -37,6 +37,8 @@ from urllib.parse import quote
 
 import requests
 
+from aardvark_jd import http_retry
+
 
 class CraftApiError(Exception):
     pass
@@ -50,6 +52,7 @@ class CraftClient(object):
 
     - ``apiUrl`` -- the connection's unique API base URL, copied from Craft's Connections tab
     - ``apiToken`` -- the connection's API token, copied from the same screen
+    - ``budget`` -- the run's `http_retry.RunBudget`, shared with the other mirror clients in the same sync. Default `None`, meaning a fresh per-client budget.
 
     **Usage:**
 
@@ -60,7 +63,7 @@ class CraftClient(object):
     ```
     """
 
-    def __init__(self, apiUrl, apiToken):
+    def __init__(self, apiUrl, apiToken, budget=None):
         self.apiUrl = apiUrl
         self.apiToken = apiToken
         self.baseUrl = apiUrl.rstrip("/")
@@ -69,6 +72,7 @@ class CraftClient(object):
             "Authorization": f"Bearer {apiToken}",
             "Content-Type": "application/json",
         })
+        self._budget = budget or http_retry.RunBudget()
         self._connectionInfo = None
 
     def _request(self, method, path, **kwargs):
@@ -84,7 +88,9 @@ class CraftClient(object):
 
         - ``payload`` -- the parsed JSON response body
         """
-        response = self._session.request(method, f"{self.baseUrl}{path}", **kwargs)
+        response = http_retry.request_with_retry(
+            self._session, method, f"{self.baseUrl}{path}", budget=self._budget, **kwargs
+        )
         if not response.ok:
             raise CraftApiError(f"craft API {method} {path} failed ({response.status_code}): {response.text}")
         if not response.content:

@@ -9,6 +9,7 @@ from aardvark_jd import db, paths
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
+from aardvark_jd.craft_client import CraftApiError
 from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.initialiser import initialiser
 
@@ -142,7 +143,7 @@ def craftSettings(dbConn):
 @pytest.fixture
 def fakeClient(monkeypatch):
     client = FakeCraftClient(apiUrl="https://connect.craft.do/links/abc123/api/v1", apiToken="fake-token")
-    monkeypatch.setattr(craft_sync_module, "CraftClient", lambda apiUrl, apiToken: client)
+    monkeypatch.setattr(craft_sync_module, "CraftClient", lambda apiUrl, apiToken, budget=None: client)
     return client
 
 
@@ -552,6 +553,67 @@ def test_index_comparison_is_exact_when_no_link_row_is_present(dbConn, craftSett
     assert summary["indexes_refreshed"] == 1
     healed = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
     assert not any("cardiologist" in item["markdown"] for item in healed)
+
+
+def test_a_link_row_with_no_remaining_source_stops_churning_its_index(dbConn, craftSettings, fakeClient, monkeypatch):
+    """*when every link source is gone, the recorded row is cleared, not compared against forever*
+
+    Off Darwin with no Dropbox/Drive/Todoist link, `_write_link_row` can
+    write nothing. If it also left `craft_links.links_markdown` set, the
+    index-content comparison would expect a link row the document no
+    longer has and rewrite it on every single run.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    assert db.get_craft_link(dbConn, "system_folder", "areas.11.00_index")["links_markdown"]
+
+    # LOSE THE LAST LINK SOURCE, AND MAKE A CHANGE THAT REWRITES THE INDEX.
+    monkeypatch.setattr(craft_sync_module.doc_links, "hookmark_url", lambda folderPath: None)
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    assert not db.get_craft_link(dbConn, "system_folder", "areas.11.00_index")["links_markdown"]
+
+    fakeClient.blocksAdded.clear()
+    fakeClient.blocksDeleted.clear()
+    summary = craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    assert summary["indexes_refreshed"] == 0
+    assert fakeClient.blocksAdded == []
+    assert fakeClient.blocksDeleted == []
+
+
+def test_a_failed_index_rewrite_leaves_content_not_an_empty_document(dbConn, craftSettings, fakeClient):
+    """*a rate limit landing mid-rewrite leaves the document holding content, never empty*
+
+    `_write_index_content` inserts the new body before deleting the old
+    one, so a failure between the two calls leaves the document briefly
+    doubled rather than silently empty - which the next whole-tree repair
+    then reconciles.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
+
+    realDelete = fakeClient.delete_blocks
+
+    def deleteThatFails(blockIds):
+        raise CraftApiError("craft API DELETE /blocks failed (429): rate limited mid-rewrite")
+
+    fakeClient.delete_blocks = deleteThatFails
+    with pytest.raises(CraftApiError):
+        craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+    fakeClient.delete_blocks = realDelete
+
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    bodyText = " ".join(item["markdown"] for item in content)
+    assert content != []
+    # THE NEW BODY WAS INSERTED BEFORE THE DELETE FAILED.
+    assert "dermatologist" in bodyText
 
 
 def test_craft_sync_is_idempotent(dbConn, craftSettings, fakeClient):

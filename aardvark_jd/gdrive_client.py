@@ -23,7 +23,13 @@ import time
 
 import requests
 
+from aardvark_jd import http_retry
+
 _FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+
+# DRIVE PUBLISHES NO URL-LENGTH LIMIT FOR `files.list`, BUT A ~5,200-CHARACTER
+# `q` WAS OBSERVED WORKING; CHUNK PARENTS WELL BELOW THAT.
+_PARENTS_PER_QUERY = 50
 
 # REFRESH A LITTLE BEFORE THE STATED EXPIRY, SO A LONG SYNC CANNOT HAVE A
 # TOKEN GO STALE BETWEEN THE CHECK AND THE REQUEST IT AUTHORISES.
@@ -44,6 +50,7 @@ class GDriveClient(object):
     - ``clientId`` -- the Google Cloud OAuth "Desktop app" client ID
     - ``clientSecret`` -- the matching client secret
     - ``refreshToken`` -- a long-lived refresh token, from `connect_gdrive.py`'s loopback flow
+    - ``budget`` -- the run's `http_retry.RunBudget`, shared with the other mirror clients. Default `None`, meaning a fresh per-client budget.
 
     **Usage:**
 
@@ -57,13 +64,14 @@ class GDriveClient(object):
     _TOKEN_URL = "https://oauth2.googleapis.com/token"
     _API_URL = "https://www.googleapis.com/drive/v3"
 
-    def __init__(self, clientId, clientSecret, refreshToken):
+    def __init__(self, clientId, clientSecret, refreshToken, budget=None):
         self.clientId = clientId
         self.clientSecret = clientSecret
         self.refreshToken = refreshToken
         self._accessToken = None
         self._accessTokenExpiresAt = 0
         self._session = requests.Session()
+        self._budget = budget or http_retry.RunBudget()
 
     def _access_token(self):
         """
@@ -84,6 +92,7 @@ class GDriveClient(object):
                 "client_id": self.clientId,
                 "client_secret": self.clientSecret,
             },
+            timeout=http_retry.HTTP_TIMEOUT,
         )
         if not response.ok:
             raise GDriveApiError(
@@ -112,7 +121,10 @@ class GDriveClient(object):
         """
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = f"Bearer {self._access_token()}"
-        response = self._session.request(method, f"{self._API_URL}{path}", headers=headers, **kwargs)
+        response = http_retry.request_with_retry(
+            self._session, method, f"{self._API_URL}{path}",
+            budget=self._budget, headers=headers, **kwargs,
+        )
         if not response.ok:
             raise GDriveApiError(
                 f"google drive {method} {path} failed ({response.status_code}): {response.text}"
@@ -125,8 +137,9 @@ class GDriveClient(object):
         """
         *every non-trashed folder directly inside a Drive folder*
 
-        Drive has no cheap whole-tree listing, so the sync indexes one
-        parent at a time, on demand - see `gdrive_sync._children`.
+        The single-parent fallback for when a whole-tree prefetch has not
+        already cached a parent (see `gdrive_sync._children`); the prefetch
+        itself uses `list_child_folders_multi`.
 
         **Key Arguments:**
 
@@ -162,6 +175,50 @@ class GDriveClient(object):
             pageToken = payload.get("nextPageToken")
             if not pageToken:
                 return folders
+
+    def list_child_folders_multi(self, parentIds):
+        """
+        *every non-trashed folder directly inside any of several Drive folders, in one query per level*
+
+        Drive has no recursive query, but `files.list`'s `q` accepts `or`,
+        so a whole tree *level* lists in one call regardless of how many
+        parents it has - the basis of `gdrive_sync`'s whole-tree prefetch.
+        Parents are chunked (`_PARENTS_PER_QUERY`) because Drive publishes
+        no `q` length limit, and each chunk follows `nextPageToken`.
+
+        **Key Arguments:**
+
+        - ``parentIds`` -- the parent folder ids to list the children of
+
+        **Return:**
+
+        - ``childrenByParent`` -- a dict mapping each requested parent id to its list of child folder dicts (`id`, `name`, `webViewLink`, `parents`); a parent with no children maps to `[]`
+        """
+        childrenByParent = {parentId: [] for parentId in parentIds}
+        for start in range(0, len(parentIds), _PARENTS_PER_QUERY):
+            chunk = parentIds[start:start + _PARENTS_PER_QUERY]
+            parentClause = " or ".join(f"'{parentId}' in parents" for parentId in chunk)
+            query = f"({parentClause}) and mimeType = '{_FOLDER_MIME_TYPE}' and trashed = false"
+            pageToken = None
+            while True:
+                params = {
+                    "q": query,
+                    "fields": "nextPageToken,files(id,name,webViewLink,parents)",
+                    "pageSize": 1000,
+                    "supportsAllDrives": "true",
+                    "includeItemsFromAllDrives": "true",
+                }
+                if pageToken:
+                    params["pageToken"] = pageToken
+                payload = self._request("GET", "/files", params=params)
+                for child in payload.get("files") or []:
+                    for parentId in child.get("parents") or []:
+                        if parentId in childrenByParent:
+                            childrenByParent[parentId].append(child)
+                pageToken = payload.get("nextPageToken")
+                if not pageToken:
+                    break
+        return childrenByParent
 
     def create_folder(self, name, parentId=None):
         """

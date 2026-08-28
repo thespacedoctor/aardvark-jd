@@ -17,11 +17,12 @@ log.addHandler(logging.NullHandler())
 class FakeGDriveClient(object):
     """*an in-memory Drive, recording every folder created without any HTTP calls*"""
 
-    def __init__(self, clientId=None, clientSecret=None, refreshToken=None):
+    def __init__(self, clientId=None, clientSecret=None, refreshToken=None, budget=None):
         # folderId -> (name, parentId)
         self.folders = {}
         self.nextId = 1
         self.listCalls = 0
+        self.multiListCalls = 0
         self.moves = []
 
     def seed(self, name, parentId):
@@ -31,14 +32,21 @@ class FakeGDriveClient(object):
         self.folders[folderId] = (name, parentId)
         return folderId
 
-    def list_child_folders(self, parentId):
-        self.listCalls += 1
+    def _children_of(self, parentId):
         return [
-            {"id": folderId, "name": name,
+            {"id": folderId, "name": name, "parents": [parent],
              "webViewLink": f"https://drive.google.com/drive/folders/{folderId}"}
             for folderId, (name, parent) in self.folders.items()
             if parent == parentId
         ]
+
+    def list_child_folders(self, parentId):
+        self.listCalls += 1
+        return self._children_of(parentId)
+
+    def list_child_folders_multi(self, parentIds):
+        self.multiListCalls += 1
+        return {parentId: self._children_of(parentId) for parentId in parentIds}
 
     def create_folder(self, name, parentId=None):
         folderId = f"new-{self.nextId}"
@@ -73,7 +81,7 @@ def seeded(tmp_path, monkeypatch):
     client = FakeGDriveClient()
     monkeypatch.setattr(
         gdrive_sync_module, "GDriveClient",
-        lambda clientId, clientSecret, refreshToken: client,
+        lambda clientId, clientSecret, refreshToken, budget=None: client,
     )
     settings = {
         "system": {"name": "Test", "root_path": rootPath},
@@ -197,3 +205,32 @@ def test_each_parent_is_listed_at_most_once(seeded):
     gdrive_sync(log=log, dbConn=conn, settings=settings).get()
     parentsTouched = {parent for _name, parent in client.folders.values()}
     assert client.listCalls <= len(parentsTouched) + 1
+
+
+def test_the_existing_tree_is_prefetched_level_by_level_not_parent_by_parent(seeded):
+    """*the whole-tree walk costs one listing per depth, plus the one root probe*"""
+    conn, client, settings = seeded
+
+    gdrive_sync(log=log, dbConn=conn, settings=settings).get()
+
+    # THE TREE IS AT MOST SIX LEVELS DEEP (root > workspace > domain > area >
+    # category > id) and the prefetch stops when a level has no children.
+    assert client.multiListCalls <= 7
+    # THE ONLY PER-PARENT LISTING IS THE ONE THAT FINDS THE WORKSPACE FOLDER
+    # UNDER THE DRIVE ROOT, BEFORE THE PREFETCH CAN RUN.
+    assert client.listCalls == 1
+
+
+def test_a_second_run_lists_the_populated_tree_by_depth_not_by_folder(seeded):
+    conn, client, settings = seeded
+    gdrive_sync(log=log, dbConn=conn, settings=settings).get()
+    firstRunMultiCalls = client.multiListCalls
+
+    # THE SECOND RUN'S DRIVE IS FULLY POPULATED (~20 INTERIOR FOLDERS), SO
+    # THIS IS WHERE THE OLD ONE-CALL-PER-FOLDER WALK WOULD HAVE COST ~20.
+    gdrive_sync(log=log, dbConn=conn, settings=settings).get()
+
+    # STILL ONLY THE ROOT PROBE PER RUN - THE WALK ITSELF NEVER LISTS A PARENT.
+    assert client.listCalls == 2
+    # THE POPULATED-TREE PREFETCH COSTS ONE LISTING PER DEPTH, NOT PER FOLDER.
+    assert client.multiListCalls - firstRunMultiCalls <= 7

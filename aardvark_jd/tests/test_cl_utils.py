@@ -233,7 +233,7 @@ class FakeCraftClient(object):
 @pytest.fixture
 def fakeCraftClient(monkeypatch):
     client = FakeCraftClient(apiUrl=_CRAFT_API_URL, apiToken="fake-token")
-    monkeypatch.setattr("aardvark_jd.craft_sync.CraftClient", lambda apiUrl, apiToken: client)
+    monkeypatch.setattr("aardvark_jd.craft_sync.CraftClient", lambda apiUrl, apiToken, budget=None: client)
     return client
 
 

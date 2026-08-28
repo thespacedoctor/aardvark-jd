@@ -29,7 +29,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import codes, db, folders, paths
+from aardvark_jd import codes, db, folders, http_retry
 from aardvark_jd.gdrive_client import GDriveClient
 
 # `root.index` IS DELIBERATELY ABSENT - IT HOLDS `aardvark.db`.
@@ -71,9 +71,11 @@ class gdrive_sync(object):
         self.settings = settings or {}
         self.foldersCreated = 0
         self.linkRowsWritten = 0
-        # LAZY PER-PARENT INDEX OF WHAT IS ALREADY IN DRIVE, KEYED BY PARENT
-        # ID. DRIVE HAS NO CHEAP WHOLE-TREE LISTING, SO UNLIKE `craft_sync`
-        # THIS IS FILLED ONE PARENT AT A TIME, ONLY FOR PARENTS WE TOUCH.
+        # INDEX OF WHAT IS ALREADY IN DRIVE, KEYED BY PARENT ID. FILLED
+        # LEVEL-BY-LEVEL BY `_prefetch_existing_tree` at the start of a run
+        # (one `files.list` per tree level via an OR-ed `q`), then read by
+        # `_children`; any parent the prefetch missed falls back to a
+        # single-parent listing on demand.
         self.childIndex = {}
 
         gdriveSettings = self.settings.get("gdrive") or {}
@@ -87,10 +89,13 @@ class gdrive_sync(object):
                     f"google drive settings are incomplete (missing `gdrive.{key}`) - "
                     "re-run `aardvark connect_gdrive <clientId> <clientSecret>`"
                 )
+        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`).
+        self.retryBudget = http_retry.RunBudget()
         self.client = GDriveClient(
             clientId=gdriveSettings["client_id"],
             clientSecret=gdriveSettings["client_secret"],
             refreshToken=gdriveSettings["refresh_token"],
+            budget=self.retryBudget,
         )
 
     def get(self):
@@ -104,6 +109,7 @@ class gdrive_sync(object):
         self.log.debug("starting the ``get`` method")
 
         workspaceId = self._ensure_workspace_root()
+        self._prefetch_existing_tree(workspaceId)
         rootFolderIds = self._ensure_root_folders(workspaceId)
 
         for domain in codes.DOMAINS:
@@ -226,12 +232,47 @@ class gdrive_sync(object):
             name = folders.display_name(systemFolder["folder_name"])
             self._ensure_folder("system_folder", folderKey, name, containingId)
 
+    def _prefetch_existing_tree(self, rootId):
+        """
+        *populate `childIndex` for the whole existing subtree under `rootId`, one query per level*
+
+        A breadth-first walk of what Drive already holds: list every child
+        of the current level in a single OR-ed `files.list`, record them,
+        then descend to those children as the next level, until a level has
+        no children. This replaces the old one-`files.list`-per-interior-
+        folder walk (which scaled with the shape of the tree) with one per
+        depth - the 163-folder aardvark subtree drops from ~45 calls to ~5.
+
+        **Key Arguments:**
+
+        - ``rootId`` -- the Drive folder to prefetch beneath (the workspace root)
+        """
+        seen = {rootId}
+        level = [rootId]
+        while level:
+            childrenByParent = self.client.list_child_folders_multi(level)
+            nextLevel = []
+            for parentId in level:
+                children = childrenByParent.get(parentId, [])
+                # AN EMPTY DICT STILL COUNTS AS "PREFETCHED" - `_children` MUST
+                # NOT FALL BACK TO A PER-PARENT CALL FOR A CHILDLESS FOLDER.
+                self.childIndex.setdefault(parentId, {})
+                for child in children:
+                    url = child.get("webViewLink") or GDriveClient.folder_url(child["id"])
+                    self.childIndex[parentId][child["name"]] = (child["id"], url)
+                    # A HAND-MESSED TREE CAN FILE ONE FOLDER UNDER TWO PARENTS;
+                    # WALK ITS SUBTREE ONCE, NOT ONCE PER PARENT.
+                    if child["id"] not in seen:
+                        seen.add(child["id"])
+                        nextLevel.append(child["id"])
+            level = nextLevel
+
     def _children(self, parentId):
         """
         *the folders already inside a Drive folder, as a `{name: (id, url)}` index*
 
-        Cached per parent for the life of the sync, so each parent is
-        listed at most once however many children are checked against it.
+        Served from the whole-tree prefetch where possible; a parent the
+        prefetch did not reach is listed once, on demand, and cached.
 
         **Key Arguments:**
 
@@ -274,6 +315,10 @@ class gdrive_sync(object):
         else:
             folderId, url = self.client.create_folder(name, parentId=parentId)
             children[name] = (folderId, url)
+            # A FOLDER WE JUST CREATED HAS NO CHILDREN - RECORD THAT, SO
+            # `_children` SERVES IT FROM THE INDEX RATHER THAN FALLING BACK
+            # TO A PER-PARENT LISTING THE PREFETCH COULD NOT HAVE COVERED.
+            self.childIndex.setdefault(folderId, {})
             self.foldersCreated += 1
 
         db.upsert_gdrive_link(

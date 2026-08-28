@@ -29,6 +29,25 @@ def test_fts5_enabled_by_default(dbConn):
     assert db.fts5_enabled(dbConn) is True
 
 
+def test_get_connection_sets_a_busy_timeout():
+    """*two overlapping `aardvark` commands queue on the write lock instead of one crashing*"""
+    conn = db.get_connection(":memory:")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+    finally:
+        conn.close()
+
+
+def test_get_connection_leaves_journal_mode_at_the_default():
+    """*WAL is deliberately not enabled - a `mode=ro` completion reader depends on the default*"""
+    conn = db.get_connection(":memory:")
+    try:
+        # `:memory:` REPORTS `memory`; A FILE DB REPORTS `delete`. EITHER WAY, NOT `wal`.
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] != "wal"
+    finally:
+        conn.close()
+
+
 def test_fts5_fallback(monkeypatch):
     monkeypatch.setattr(db, "_FTS5_SEARCH_INDEX", "CREATE VIRTUAL TABLE search_index USING not_a_real_module();")
     conn = db.get_connection(":memory:")
