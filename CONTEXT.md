@@ -48,9 +48,27 @@ An external service the tree is reproduced into: craft.do, Todoist, Google Drive
 or Dropbox.
 
 **Sync**:
-Reconciling a mirror with the tree. A *fast-path* sync follows a single mutating
-command and touches only what that command changed; a *repair* sync
-(`craft_sync`, `todoist_sync`, `gdrive_sync`) re-walks the whole tree.
+Reconciling a mirror with the tree by re-walking the whole tree. There is only one
+kind: syncs differ in whether you wait for them, not in what they touch.
+_Avoid_: fast-path sync, incremental sync — no sync is scoped to what changed.
+
+**Background sync**:
+A sync a mutating command hands off and does not wait for. The seven mutating
+commands work this way, so they return without knowing whether the mirrors were
+reached.
+
+**Foreground sync**:
+A sync you wait for: an explicit `craft_sync`, `gdrive_sync` or `todoist_sync`, one
+of the `connect_*` commands' first backfill, or any command given `--wait`.
+
+**Drift**:
+A mirror disagreeing with the tree. Repaired by the next sync, since every sync
+re-walks the whole tree and rewrites what no longer matches.
+
+**Drift marker**:
+The per-mirror record of when each mirror last synced and last failed. Persistent,
+surfaced by the browse command, and the only way a background sync's failure
+becomes visible.
 
 **Index document**:
 The generated content page a mirror holds for a section or category, rewritten
