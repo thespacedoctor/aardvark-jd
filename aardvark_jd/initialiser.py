@@ -10,7 +10,7 @@ Author
 import os
 import zipfile
 
-from aardvark_jd import db, folders, paths, settings_writer
+from aardvark_jd import db, dropbox_ignore, folders, paths, settings_writer
 
 _BLANK_TEMPLATE_NAME = "blank_starter.zip"
 
@@ -59,6 +59,10 @@ class initialiser(object):
         os.makedirs(rootPath, exist_ok=True)
 
         createdPaths = self._create_skeleton_folders(rootPath)
+
+        # EXCLUDE THE INDEX DIRECTORY FROM DROPBOX SYNC BEFORE THE DATABASE
+        # (AND ANY `-wal`/`-shm` SIDECAR) IS CREATED INSIDE IT.
+        dropbox_ignore.assert_index_ignored(rootPath, self.log)
 
         indexFolderPath = createdPaths["root.index"][1]
         dbConn = db.get_connection(paths.get_db_path_in_folder(indexFolderPath))

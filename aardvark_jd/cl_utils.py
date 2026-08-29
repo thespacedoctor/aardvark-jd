@@ -80,7 +80,7 @@ import sys
 
 from fundamentals import tools, times
 
-from aardvark_jd import codes, completion, db, folders, help_text, paths, settings_writer
+from aardvark_jd import codes, completion, db, dropbox_ignore, folders, help_text, paths, settings_writer
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -174,6 +174,12 @@ def main(arguments=None):
             if not rootPath:
                 print("no aardvark system found - run `aardvark init <systemName> <parentPath>` first", file=sys.stderr)
                 sys.exit(1)
+
+            # RE-ASSERT THE DROPBOX IGNORE ON THE INDEX DIRECTORY BEFORE OPENING
+            # THE DATABASE, SO A MACHINE THAT CLONED THE TREE EXCLUDES THE INDEX
+            # (AND ANY `-wal`/`-shm` SIDECAR) ON ITS FIRST COMMAND. SELF-HEALING,
+            # IDEMPOTENT, NEVER FATAL.
+            dropbox_ignore.assert_index_ignored(rootPath, log)
 
             indexDbConn = db.get_connection(paths.find_db_path(rootPath))
             db.initialise_schema(indexDbConn)

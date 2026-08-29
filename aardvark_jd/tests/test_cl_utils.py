@@ -95,6 +95,23 @@ def test_main_reports_missing_system(isolatedHome, capsys):
     assert "run `aardvark init" in capsys.readouterr().err
 
 
+def test_a_normal_command_reasserts_the_dropbox_index_ignore(isolatedHome, monkeypatch):
+    """*every non-init command re-asserts the ignore, so a cloned tree self-heals on first use*"""
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+
+    calls = []
+    monkeypatch.setattr(
+        "aardvark_jd.dropbox_ignore.assert_index_ignored",
+        lambda rootPath, log: calls.append(rootPath),
+    )
+    cl_utils.main(docopt(doc, ["search", "anything"]))
+
+    assert calls == [f"{rootParent}/TestSystem"]
+
+
 def test_main_reports_clear_error_for_an_invalid_domain_letter(isolatedHome, capsys):
     rootParent = str(isolatedHome / "root_parent")
     os.makedirs(rootParent)
