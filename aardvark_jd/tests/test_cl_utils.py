@@ -250,7 +250,7 @@ class FakeCraftClient(object):
 @pytest.fixture
 def fakeCraftClient(monkeypatch):
     client = FakeCraftClient(apiUrl=_CRAFT_API_URL, apiToken="fake-token")
-    monkeypatch.setattr("aardvark_jd.craft_sync.CraftClient", lambda apiUrl, apiToken, budget=None: client)
+    monkeypatch.setattr("aardvark_jd.craft_sync.CraftClient", lambda apiUrl, apiToken, budget=None, announce=None: client)
     return client
 
 
@@ -301,7 +301,7 @@ def test_connect_craft_without_s_flag_still_persists_to_the_default_settings_fil
     # THE REAL REGRESSION TEST: A LATER COMMAND, ALSO RUN WITHOUT `-s`, MUST
     # PICK UP `craft.enabled` FROM THAT SAME DEFAULT FILE AND AUTO-PUSH.
     fakeCraftClient.folders.clear()
-    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
     capsys.readouterr()
     assert any(name.startswith("A10-19 health") for _id, name, _parent in fakeCraftClient.folders)
 
@@ -328,7 +328,9 @@ def test_add_area_auto_pushes_to_craft_once_connected(isolatedHome, fakeCraftCli
     cl_utils.main(docopt(doc, ["connect_craft", _CRAFT_API_URL, "my-token", "-s", settingsPath]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
+    # `--wait` FORCES THE FOREGROUND PATH; WITHOUT IT THE SYNC IS HANDED TO A
+    # DETACHED PROCESS AND THIS TEST'S FAKE CLIENT WOULD NEVER SEE IT.
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
     assert "A10-19" in capsys.readouterr().out
 
     # the craft folder mirrors the on-disk name (lowercased, emoji suffixed)
@@ -354,11 +356,11 @@ def test_repair_emoji_auto_pushes_to_craft_once_connected(isolatedHome, monkeypa
     cl_utils.main(docopt(doc, ["connect_craft", _CRAFT_API_URL, "my-token", "-s", settingsPath]))
     capsys.readouterr()
 
-    cl_utils.main(docopt(doc, ["set_emoji", "A10-19", "Y"]))
+    cl_utils.main(docopt(doc, ["set_emoji", "A10-19", "Y", "--wait"]))
     capsys.readouterr()
 
     blocksDeletedBefore = len(fakeCraftClient.blocksDeleted)
-    cl_utils.main(docopt(doc, ["repair_emoji"]))
+    cl_utils.main(docopt(doc, ["repair_emoji", "--wait"]))
     capsys.readouterr()
     assert len(fakeCraftClient.blocksDeleted) > blocksDeletedBefore
     assert any("A10-19 healthY" in body for body in fakeCraftClient.index_bodies())
@@ -382,3 +384,215 @@ def test_the_usage_docs_match_the_live_docopt_string():
     for line in doc.strip("\n").split("\n"):
         if line.strip():
             assert line.strip() in rendered, line.strip()
+
+
+# ---------------------------------------------------------------------- #
+# backgrounded sync - see `background_sync` and `docs/adr/0001-...`
+# ---------------------------------------------------------------------- #
+
+@pytest.fixture
+def connectedSystem(isolatedHome, fakeCraftClient, capsys):
+    """*an initialised system with craft connected, ready for a mutating command*"""
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    settingsPath = str(isolatedHome / ".config" / "aardvark" / "aardvark.yaml")
+    cl_utils.main(docopt(doc, ["connect_craft", _CRAFT_API_URL, "my-token", "-s", settingsPath]))
+    capsys.readouterr()
+    return f"{rootParent}/TestSystem"
+
+
+def test_a_mutating_command_hands_sync_to_a_detached_process_and_returns(
+    connectedSystem, monkeypatch, fakeCraftClient, capsys,
+):
+    """*the whole point: `add_area` must not wait for four services' round trips*"""
+    from aardvark_jd import background_sync
+
+    spawns = []
+    monkeypatch.setattr(
+        background_sync, "spawn_detached",
+        lambda pathToSettingsFile=None, log=None: spawns.append(pathToSettingsFile) or 4321,
+    )
+    foldersBefore = len(fakeCraftClient.folders)
+
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
+
+    assert "A10-19" in capsys.readouterr().out
+    assert len(spawns) == 1
+    # AND IT DID NOT SYNC IN THE FOREGROUND.
+    assert len(fakeCraftClient.folders) == foldersBefore
+
+
+def test_the_wait_flag_syncs_in_the_foreground_instead_of_spawning(
+    connectedSystem, monkeypatch, fakeCraftClient, capsys,
+):
+    from aardvark_jd import background_sync
+
+    spawns = []
+    monkeypatch.setattr(
+        background_sync, "spawn_detached",
+        lambda pathToSettingsFile=None, log=None: spawns.append(pathToSettingsFile) or 4321,
+    )
+
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
+
+    capsys.readouterr()
+    assert spawns == []
+    assert any(name.startswith("A10-19 health") for _id, name, _parent in fakeCraftClient.folders)
+
+
+def test_the_wait_flag_exits_non_zero_when_a_mirror_fails(connectedSystem, monkeypatch, capsys):
+    """*not "the command failed" - the entity exists and a mirror did not sync*"""
+    from aardvark_jd import background_sync
+
+    monkeypatch.setattr(
+        background_sync, "run_mirrors",
+        lambda log, dbConn, settings, announce=None: ([("craft", "429 rate limited", "rate-limited")], False),
+    )
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
+
+    assert excInfo.value.code == 1
+    assert "craft sync failed (rate-limited)" in capsys.readouterr().err
+
+
+def test_a_later_command_warns_that_the_last_sync_failed(connectedSystem, monkeypatch, capsys):
+    """*the drift marker is what makes a failure in a detached process visible at all*"""
+    from aardvark_jd import background_sync
+
+    monkeypatch.setattr(
+        background_sync, "spawn_detached", lambda pathToSettingsFile=None, log=None: 4321,
+    )
+    from aardvark_jd import db, paths
+
+    indexDbConn = db.get_connection(paths.find_db_path(connectedSystem))
+    db.record_sync_failure(indexDbConn, "craft", "429 rate limited", "rate-limited")
+    indexDbConn.close()
+
+    cl_utils.main(docopt(doc, ["search", "anything"]))
+
+    assert "last sync failed for craft" in capsys.readouterr().err
+
+
+def test_no_drift_warning_when_every_mirror_is_healthy(connectedSystem, monkeypatch, capsys):
+    from aardvark_jd import background_sync
+
+    monkeypatch.setattr(
+        background_sync, "spawn_detached", lambda pathToSettingsFile=None, log=None: 4321,
+    )
+    cl_utils.main(docopt(doc, ["search", "anything"]))
+
+    assert "last sync failed" not in capsys.readouterr().err
+
+
+def test_a_mutating_command_does_not_spawn_when_no_mirror_is_connected(isolatedHome, monkeypatch, capsys):
+    """*nothing to sync, so nothing to spawn - an unconnected system pays no subprocess cost*"""
+    from aardvark_jd import background_sync
+
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    capsys.readouterr()
+
+    spawns = []
+    monkeypatch.setattr(
+        background_sync, "spawn_detached",
+        lambda pathToSettingsFile=None, log=None: spawns.append(1) or 4321,
+    )
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
+
+    assert spawns == []
+
+
+def test_archive_also_hands_off_a_whole_tree_repair(connectedSystem, monkeypatch, capsys):
+    """*archive moves folders the mirrors adopt by name, so the index documents need reconciling*"""
+    from aardvark_jd import background_sync
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr(
+        background_sync, "spawn_detached", lambda pathToSettingsFile=None, log=None: 4321,
+    )
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc"]))
+    cl_utils.main(docopt(doc, ["add_category", "A10-19", "Doctors", "desc"]))
+    capsys.readouterr()
+
+    spawns = []
+    monkeypatch.setattr(
+        background_sync, "spawn_detached",
+        lambda pathToSettingsFile=None, log=None: spawns.append(1) or 4321,
+    )
+    cl_utils.main(docopt(doc, ["archive", "A11", "-y"]))
+
+    assert "archived A11" in capsys.readouterr().out
+    assert len(spawns) == 1
+
+
+def test_the_background_carrier_syncs_a_gdrive_only_system(isolatedHome, monkeypatch, capsys):
+    """*regression: the carrier must not self-gate on craft*
+
+    `spawn_detached` runs `aardvark craft_sync`. Gating that command on
+    `craft.enabled` made every background sync a silent no-op for anyone
+    who had connected only Google Drive - it exited 1 into `/dev/null`
+    before any mirror ran, so nothing synced and no drift marker was even
+    written.
+    """
+    import yaml
+    from aardvark_jd import background_sync
+
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    capsys.readouterr()
+    settingsPath = str(isolatedHome / ".config" / "aardvark" / "aardvark.yaml")
+
+    savedSettings = yaml.safe_load(open(settingsPath))
+    savedSettings["gdrive"] = {
+        "enabled": True, "client_id": "x", "client_secret": "y", "refresh_token": "z",
+    }
+    with open(settingsPath, "w") as stream:
+        yaml.safe_dump(savedSettings, stream)
+
+    ran = []
+    monkeypatch.setattr(
+        background_sync, "run_mirrors",
+        lambda log, dbConn, settings, announce=None: ran.append(settings) or ([], False),
+    )
+
+    cl_utils.main(docopt(doc, ["craft_sync", "-s", settingsPath]))
+
+    # THE CARRIER RAN THE MIRRORS INSTEAD OF DYING ON THE MISSING CRAFT.
+    assert len(ran) == 1
+    assert ran[0]["gdrive"]["enabled"] is True
+    assert "craft is not connected - syncing the other mirrors only" in capsys.readouterr().err
+
+
+def test_the_carrier_still_errors_when_nothing_at_all_is_connected(isolatedHome, capsys):
+    """*the original contract: `craft_sync` on an unconnected system is an error*"""
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["craft_sync"]))
+    assert excInfo.value.code == 1
+    assert "craft is not connected" in capsys.readouterr().err
+
+
+def test_a_mirror_failure_reason_cannot_smuggle_terminal_escapes(connectedSystem, monkeypatch, capsys):
+    """*the reason carries a remote API response body, and `--wait` prints it to a real terminal*"""
+    from aardvark_jd import background_sync
+
+    nasty = "rate limited \x1b[2J\x07 and cleared your screen"
+    monkeypatch.setattr(
+        background_sync, "run_mirrors",
+        lambda log, dbConn, settings, announce=None: ([("craft", nasty, "rate-limited")], False),
+    )
+
+    with pytest.raises(SystemExit):
+        cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "--wait"]))
+
+    err = capsys.readouterr().err
+    assert "\x1b" not in err and "\x07" not in err
+    assert "rate limited" in err and "cleared your screen" in err

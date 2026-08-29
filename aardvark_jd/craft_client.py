@@ -63,7 +63,7 @@ class CraftClient(object):
     ```
     """
 
-    def __init__(self, apiUrl, apiToken, budget=None):
+    def __init__(self, apiUrl, apiToken, budget=None, announce=None):
         self.apiUrl = apiUrl
         self.apiToken = apiToken
         self.baseUrl = apiUrl.rstrip("/")
@@ -73,6 +73,7 @@ class CraftClient(object):
             "Content-Type": "application/json",
         })
         self._budget = budget or http_retry.RunBudget()
+        self._announce = announce
         self._connectionInfo = None
 
     def _request(self, method, path, **kwargs):
@@ -89,7 +90,8 @@ class CraftClient(object):
         - ``payload`` -- the parsed JSON response body
         """
         response = http_retry.request_with_retry(
-            self._session, method, f"{self.baseUrl}{path}", budget=self._budget, **kwargs
+            self._session, method, f"{self.baseUrl}{path}",
+            budget=self._budget, announce=self._announce, **kwargs
         )
         if not response.ok:
             raise CraftApiError(f"craft API {method} {path} failed ({response.status_code}): {response.text}")

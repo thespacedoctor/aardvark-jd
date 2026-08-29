@@ -290,3 +290,53 @@ def test_todoist_link_round_trip(dbConn):
     assert row["todoist_project_id"] == "proj-1"
     count = dbConn.execute("SELECT COUNT(*) AS c FROM todoist_links").fetchone()["c"]
     assert count == 1
+
+
+# ---------------------------------------------------------------------- #
+# sync drift markers
+# ---------------------------------------------------------------------- #
+
+def test_sync_drift_starts_empty(dbConn):
+    assert db.drifted_mirrors(dbConn) == []
+
+
+def test_recording_a_failure_marks_the_mirror_drifted(dbConn):
+    db.record_sync_failure(dbConn, "craft", "429 rate limited", "rate-limited")
+
+    drifted = db.drifted_mirrors(dbConn)
+    assert [row["mirror"] for row in drifted] == ["craft"]
+    assert drifted[0]["last_failure_reason"] == "429 rate limited"
+    assert drifted[0]["last_failure_class"] == "rate-limited"
+
+
+def test_a_success_clears_a_previous_failure(dbConn):
+    db.record_sync_failure(dbConn, "craft", "429 rate limited", "rate-limited")
+    db.record_sync_success(dbConn, "craft")
+
+    assert db.drifted_mirrors(dbConn) == []
+    row = dbConn.execute("SELECT * FROM sync_drift WHERE mirror = 'craft'").fetchone()
+    assert row["last_success_at"] is not None
+    assert row["last_failure_at"] is None
+
+
+def test_a_failure_keeps_the_previous_success_timestamp(dbConn):
+    db.record_sync_success(dbConn, "gdrive")
+    successAt = dbConn.execute("SELECT last_success_at FROM sync_drift WHERE mirror = 'gdrive'").fetchone()[0]
+
+    db.record_sync_failure(dbConn, "gdrive", "network down", "network")
+
+    row = dbConn.execute("SELECT * FROM sync_drift WHERE mirror = 'gdrive'").fetchone()
+    assert row["last_success_at"] == successAt
+    assert row["last_failure_at"] is not None
+
+
+def test_drifted_mirrors_are_returned_in_sync_order(dbConn):
+    for mirror in ("craft", "gdrive", "todoist"):
+        db.record_sync_failure(dbConn, mirror, "boom", "unknown")
+
+    assert [row["mirror"] for row in db.drifted_mirrors(dbConn)] == list(db.MIRRORS)
+
+
+def test_an_unknown_mirror_name_is_rejected_by_the_schema(dbConn):
+    with pytest.raises(sqlite3.IntegrityError):
+        db.record_sync_failure(dbConn, "notion", "boom", "unknown")

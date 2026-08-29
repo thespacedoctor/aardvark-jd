@@ -50,7 +50,7 @@ class TodoistClient(object):
 
     _API_URL = "https://api.todoist.com/api/v1"
 
-    def __init__(self, apiToken, budget=None):
+    def __init__(self, apiToken, budget=None, announce=None):
         self.apiToken = apiToken
         self._session = requests.Session()
         self._session.headers.update({
@@ -58,6 +58,7 @@ class TodoistClient(object):
             "Content-Type": "application/json",
         })
         self._budget = budget or http_retry.RunBudget()
+        self._announce = announce
 
     def _request(self, method, path, **kwargs):
         """
@@ -73,7 +74,8 @@ class TodoistClient(object):
         - ``payload`` -- the parsed JSON response body
         """
         response = http_retry.request_with_retry(
-            self._session, method, f"{self._API_URL}{path}", budget=self._budget, **kwargs
+            self._session, method, f"{self._API_URL}{path}",
+            budget=self._budget, announce=self._announce, **kwargs
         )
         if not response.ok:
             raise TodoistApiError(f"todoist API {method} {path} failed ({response.status_code}): {response.text}")

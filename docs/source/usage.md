@@ -4,15 +4,15 @@
 
     Usage:
         aardvark init <systemName> <parentPath> [-s <pathToSettingsFile>]
-        aardvark add_area <domainLetter> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
-        aardvark add_category <area> <title> <description> [-e <emoji>] [-s <pathToSettingsFile>]
-        aardvark add_id <category> <title> <description> [-s <pathToSettingsFile>]
-        aardvark add_project <category> <projectTitle> [-t <templateName>] [-s <pathToSettingsFile>]
-        aardvark archive <ref> [-y] [-s <pathToSettingsFile>]
+        aardvark add_area <domainLetter> <title> <description> [-e <emoji>] [-w] [-s <pathToSettingsFile>]
+        aardvark add_category <area> <title> <description> [-e <emoji>] [-w] [-s <pathToSettingsFile>]
+        aardvark add_id <category> <title> <description> [-w] [-s <pathToSettingsFile>]
+        aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
+        aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
         aardvark search [<term>...] [-s <pathToSettingsFile>]
         aardvark open [<path>] [-s <pathToSettingsFile>]
-        aardvark set_emoji <ref> <emoji> [-s <pathToSettingsFile>]
-        aardvark repair_emoji [-s <pathToSettingsFile>]
+        aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
+        aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
         aardvark completion <shell>
         aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
         aardvark craft_sync [-s <pathToSettingsFile>]
@@ -71,6 +71,7 @@
         -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
         -t, --template <templateName>          the template to use, skipping the interactive picker
         -y, --yes                              skip the confirmation prompt
+        -w, --wait                             wait for the remote mirrors to sync, instead of syncing in the background
         -s, --settings <pathToSettingsFile>    the settings file
     
 ```

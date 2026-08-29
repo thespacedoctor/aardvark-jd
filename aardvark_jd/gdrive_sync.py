@@ -65,7 +65,7 @@ class gdrive_sync(object):
     ```
     """
 
-    def __init__(self, log, dbConn, settings):
+    def __init__(self, log, dbConn, settings, budget=None, announce=None):
         self.log = log
         self.dbConn = dbConn
         self.settings = settings or {}
@@ -89,13 +89,15 @@ class gdrive_sync(object):
                     f"google drive settings are incomplete (missing `gdrive.{key}`) - "
                     "re-run `aardvark connect_gdrive <clientId> <clientSecret>`"
                 )
-        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`).
-        self.retryBudget = http_retry.RunBudget()
+        # ONE BACKOFF BUDGET FOR THE WHOLE RUN (SEE `http_retry.RunBudget`),
+        # SHARED WITH THE OTHER MIRRORS WHEN THE CALLER PASSES ONE IN.
+        self.retryBudget = budget or http_retry.RunBudget()
         self.client = GDriveClient(
             clientId=gdriveSettings["client_id"],
             clientSecret=gdriveSettings["client_secret"],
             refreshToken=gdriveSettings["refresh_token"],
             budget=self.retryBudget,
+            announce=announce,
         )
 
     def get(self):

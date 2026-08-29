@@ -17,7 +17,7 @@ log.addHandler(logging.NullHandler())
 class FakeGDriveClient(object):
     """*an in-memory Drive, recording every folder created without any HTTP calls*"""
 
-    def __init__(self, clientId=None, clientSecret=None, refreshToken=None, budget=None):
+    def __init__(self, clientId=None, clientSecret=None, refreshToken=None, budget=None, announce=None):
         # folderId -> (name, parentId)
         self.folders = {}
         self.nextId = 1
@@ -81,7 +81,7 @@ def seeded(tmp_path, monkeypatch):
     client = FakeGDriveClient()
     monkeypatch.setattr(
         gdrive_sync_module, "GDriveClient",
-        lambda clientId, clientSecret, refreshToken, budget=None: client,
+        lambda clientId, clientSecret, refreshToken, budget=None, announce=None: client,
     )
     settings = {
         "system": {"name": "Test", "root_path": rootPath},
