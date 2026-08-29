@@ -130,7 +130,7 @@ class tree(object):
     """
     *render the whole index, or one Johnny Decimal subtree, as an indented tree*
 
-    Backs a bare `aardvark search` (the whole index) and `aardvark search
+    Backs a bare `aardvark fd` (the whole index) and `aardvark fd
     <ref>` (the subtree under a domain letter, area or category). An ID ref
     has no subtree, so the caller prints its path line instead.
 
@@ -326,7 +326,12 @@ def format_tree(nodes, prefix=""):
     for index, node in enumerate(nodes):
         isLast = index == len(nodes) - 1
         if prefix == "" and node["path"] is None:
-            # A DOMAIN HEADING SITS FLUSH LEFT WITH NO CONNECTOR ABOVE IT
+            # A DOMAIN HEADING SITS FLUSH LEFT WITH NO CONNECTOR ABOVE IT, AND
+            # IS SEPARATED FROM THE SECTION ABOVE IT SO THE THREE DOMAINS DO
+            # NOT RUN TOGETHER. NOT BEFORE THE FIRST ONE - THAT WOULD PUT A
+            # BLANK LINE AT THE TOP OF EVERY LISTING.
+            if lines:
+                lines.append("")
             lines.append(node["label"])
             lines.extend(format_tree(node["children"], ""))
             continue

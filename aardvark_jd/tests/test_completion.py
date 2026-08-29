@@ -43,7 +43,7 @@ def test_subcommands_are_filtered_by_prefix():
 
 
 def test_bare_program_name_completes_subcommands():
-    assert "search" in _values(completion.candidates(["av"], 1))
+    assert "fd" in _values(completion.candidates(["av"], 1))
 
 
 def test_domain_letters_complete_for_add_area():
@@ -84,7 +84,7 @@ def test_refs_are_filtered_by_prefix(seeded):
 
 
 def test_search_also_offers_bare_domain_letters(seeded):
-    values = _values(completion.candidates(["av", "search", "", "-s", seeded], 2))
+    values = _values(completion.candidates(["av", "fd", "", "-s", seeded], 2))
     assert values[:3] == ["A", "R", "P"]
 
 
@@ -141,3 +141,66 @@ def test_script_is_returned_for_each_supported_shell(shell):
 def test_script_rejects_an_unknown_shell():
     with pytest.raises(ValueError):
         completion.script("fish")
+
+
+@pytest.fixture
+def seededAllDomains(tmp_path):
+    """*an area and category in each of the three domains*"""
+    settingsPath = str(tmp_path / "settings.yaml")
+    with open(settingsPath, "w") as stream:
+        yaml.safe_dump({"version": 1, "system": {"name": None, "root_path": None}}, stream)
+    rootPath = initialiser(
+        log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
+    ).get()
+    conn = db.get_connection(paths.find_db_path(rootPath))
+    for domain, letter in (("areas", "A"), ("resources", "R"), ("projects", "P")):
+        add_area(log=log, dbConn=conn, domain=domain, title="Things", description="d").get()
+        add_category(
+            log=log, dbConn=conn, domain=domain, areaRef=f"{letter}10",
+            title="Stuff", description="d",
+        ).get()
+    conn.close()
+    yield settingsPath
+
+
+def test_add_project_completes_only_project_categories(seededAllDomains):
+    """*a project always lands in the projects domain, so offering `A11` proposes a failure*"""
+    values = _values(completion.candidates(["av", "add_project", "", "-s", seededAllDomains], 2))
+
+    assert values == ["P11"]
+
+
+def test_add_id_still_completes_categories_in_every_domain(seededAllDomains):
+    """*an ID can be added to any domain's category - this one must not be narrowed*"""
+    values = _values(completion.candidates(["av", "add_id", "", "-s", seededAllDomains], 2))
+
+    assert sorted(values) == ["A11", "P11", "R11"]
+
+
+def test_add_category_still_completes_areas_in_every_domain(seededAllDomains):
+    """*`add_category` derives its domain from the area ref, so every area is valid*"""
+    values = _values(completion.candidates(["av", "add_category", "", "-s", seededAllDomains], 2))
+
+    assert sorted(values) == ["A10-19", "P10-19", "R10-19"]
+
+
+def test_area_and_category_completions_show_their_emoji(seeded):
+    """*the emoji is what makes a folder recognisable at a glance in the picker*"""
+    areaPairs = completion.candidates(["av", "add_category", "", "-s", seeded], 2)
+    areaDescription = dict(areaPairs)["A10-19"]
+
+    categoryPairs = completion.candidates(["av", "add_id", "", "-s", seeded], 2)
+    categoryDescription = dict(categoryPairs)["A11"]
+
+    # THE VALUE STAYS THE BARE CODE - ONLY THE DESCRIPTION GAINS THE EMOJI.
+    assert areaDescription.endswith("Health")
+    assert areaDescription != "Health"
+    assert categoryDescription.endswith("Doctors")
+    assert categoryDescription != "Doctors"
+
+
+def test_id_completions_are_unchanged_because_ids_carry_no_emoji(seeded):
+    """*`ids` has no emoji column - an ID's folder name never carries one*"""
+    pairs = completion.candidates(["av", "archive", "A11.", "-s", seeded], 2)
+
+    assert dict(pairs)["A11.10"] == "Cardiologist"

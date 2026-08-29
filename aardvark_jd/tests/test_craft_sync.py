@@ -717,3 +717,33 @@ def test_a_craft_api_without_document_listing_still_creates(dbConn, craftSetting
     craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
 
     assert len(fakeClient.documents) > documentsAfterFirstSync
+
+
+def test_an_entry_with_no_description_has_no_dangling_em_dash(dbConn, craftSettings, fakeClient):
+    """*`add_project` always stores an empty description, so every project rendered as `... —`*
+
+    Surfaced while diagnosing the trailing-whitespace comparison failure:
+    the listing format put the description after an em-dash unconditionally.
+    """
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    entry = next(item["markdown"] for item in content if "cardiologist" in item["markdown"])
+    assert not entry.rstrip().endswith("—")
+    assert "cardiologist" in entry
+
+
+def test_an_entry_with_a_description_still_shows_it_after_an_em_dash(dbConn, craftSettings, fakeClient):
+    add_area(log=log, dbConn=dbConn, domain="areas", title="Health", description="d1").get()
+    add_category(log=log, dbConn=dbConn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    add_id(log=log, dbConn=dbConn, domain="areas", categoryRef="A11", title="Cardiologist", description="heart stuff").get()
+
+    craft_sync(log=log, dbConn=dbConn, settings=craftSettings).get()
+
+    content = _index_document_content(fakeClient, dbConn, "areas.11.00_index")
+    entry = next(item["markdown"] for item in content if "cardiologist" in item["markdown"])
+    assert "— heart stuff" in entry

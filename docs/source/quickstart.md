@@ -109,13 +109,13 @@ Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder
 A plain term does a keyword search:
 
 ```bash
-aardvark search cardio
+aardvark fd cardio
 ```
 
 Run `search` with no argument to print the whole index as a tree, reserved `.00`-`.09` system IDs excluded:
 
 ```bash
-aardvark search
+aardvark fd
 ```
 
 ```

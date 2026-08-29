@@ -9,7 +9,7 @@
         aardvark add_id <category> <title> <description> [-w] [-s <pathToSettingsFile>]
         aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
         aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
-        aardvark search [<term>...] [-s <pathToSettingsFile>]
+        aardvark fd [<term>...] [-s <pathToSettingsFile>]
         aardvark open [<path>] [-s <pathToSettingsFile>]
         aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
         aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
@@ -29,7 +29,7 @@
         add_id                                 add a new Johnny Decimal ID to an existing category
         add_project                            create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank
         archive                                retire an area, category or ID to the nearest archive folder, freeing its number
-        search                                 browse the index as a tree, or search it by Johnny Decimal ref, keyword or phrase
+        fd                                     browse the index as a tree, or find in it by Johnny Decimal ref, keyword or phrase
         open                                   open the mirrored entities for a path, or pick one interactively
         set_emoji                              change the emoji on an existing folder, moving it and repointing the index
         repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
