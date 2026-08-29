@@ -78,3 +78,44 @@ def test_add_area_creates_its_own_ten_reserved_ids(dbConn):
 
     row = db.get_system_folder(dbConn, "areas.10.02_llm")
     assert row["folder_name"] == "A10.02_llm🤖"
+
+
+def test_an_accepted_correction_reaches_the_folder_name_and_the_index(dbConn, tmp_path, monkeypatch):
+    """*checking before creation is what makes one corrected title serve everything downstream*
+
+    The folder on disk, the index row and every mirror are built from the
+    same value, so there is no post-creation rename and no mirror repoint.
+    """
+    import os
+    from aardvark_jd import db as dbModule
+
+    rootPath = os.path.dirname(dbModule.get_system_folder(dbConn, "root.areas")["folder_path"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    code, folderPath = add_area(
+        log=log, dbConn=dbConn, domain="areas", title="Aadvark", description="d",
+        chosenEmoji="🐾", settings={"system": {"root_path": rootPath}},
+    ).get()
+
+    assert "aardvark" in os.path.basename(folderPath).lower()
+    assert os.path.isdir(folderPath)
+    row = dbConn.execute("SELECT title FROM areas WHERE decade_start = 10").fetchone()
+    assert row["title"] == "Aardvark"
+
+
+def test_a_declined_correction_leaves_the_title_as_typed_and_is_remembered(dbConn, tmp_path, monkeypatch):
+    import os
+    from aardvark_jd import db as dbModule, vocabulary
+
+    rootPath = os.path.dirname(dbModule.get_system_folder(dbConn, "root.areas")["folder_path"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+
+    _code, folderPath = add_area(
+        log=log, dbConn=dbConn, domain="areas", title="Aadvark", description="d",
+        chosenEmoji="🐾", settings={"system": {"root_path": rootPath}},
+    ).get()
+
+    assert "aadvark" in os.path.basename(folderPath).lower()
+    assert "aadvark" in vocabulary.load(rootPath)

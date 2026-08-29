@@ -672,3 +672,24 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+
+================================================================================
+THIRD-PARTY COMPONENTS
+================================================================================
+
+aardvark_jd/resources/wordlists/en_GB-ise.txt
+
+    A British English word list derived from SCOWL (Spell Checker Oriented
+    Word Lists), "mk-list british 60", normalised to lowercase ASCII.
+
+    Copyright 2000-2018 by Kevin Atkinson, and the other copyright holders
+    named in the notice shipped alongside it at
+    aardvark_jd/resources/wordlists/COPYRIGHT-scowl.txt, which must be kept
+    with the word list and is reproduced in full there.
+
+    Used under the SCOWL permissive attribution grant, which is compatible
+    with the GPL-3.0-or-later terms above. Size 60 is below the size-80
+    threshold at which the UK Advanced Cryptics Dictionary notice attaches,
+    and is not Australian English, so neither of SCOWL's conditional
+    copyrights applies.

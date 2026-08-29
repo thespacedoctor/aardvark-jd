@@ -84,3 +84,30 @@ def test_add_id_exhaustion_surfaces_clear_error(dbConnWithCategory):
             log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
             title="Overflow", description="",
         ).get()
+
+
+def test_an_accepted_correction_reaches_the_id_folder_and_index(dbConnWithCategory, monkeypatch):
+    """*`add_id` gained a `settings` param purely so it can find the learned vocabulary*"""
+    rootPath = os.path.dirname(db.get_system_folder(dbConnWithCategory, "root.areas")["folder_path"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    _code, folderPath = add_id(
+        log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
+        title="Aadvark", description="d", settings={"system": {"root_path": rootPath}},
+    ).get()
+
+    assert "aardvark" in os.path.basename(folderPath).lower()
+    row = dbConnWithCategory.execute("SELECT title FROM ids WHERE title LIKE 'A%'").fetchone()
+    assert row["title"] == "Aardvark"
+
+
+def test_add_id_still_works_with_no_settings_at_all(dbConnWithCategory):
+    """*`settings` is optional - an omitted one must not break the command*"""
+    code, folderPath = add_id(
+        log=log, dbConn=dbConnWithCategory, domain="areas", categoryRef="A11",
+        title="Cardiologist", description="d",
+    ).get()
+
+    assert code == "A11.10"
+    assert os.path.isdir(folderPath)
