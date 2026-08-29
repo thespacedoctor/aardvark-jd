@@ -43,7 +43,7 @@ def test_subcommands_are_filtered_by_prefix():
 
 
 def test_bare_program_name_completes_subcommands():
-    assert "search" in _values(completion.candidates(["av"], 1))
+    assert "fd" in _values(completion.candidates(["av"], 1))
 
 
 def test_domain_letters_complete_for_add_area():
@@ -84,7 +84,7 @@ def test_refs_are_filtered_by_prefix(seeded):
 
 
 def test_search_also_offers_bare_domain_letters(seeded):
-    values = _values(completion.candidates(["av", "search", "", "-s", seeded], 2))
+    values = _values(completion.candidates(["av", "fd", "", "-s", seeded], 2))
     assert values[:3] == ["A", "R", "P"]
 
 
@@ -182,3 +182,25 @@ def test_add_category_still_completes_areas_in_every_domain(seededAllDomains):
     values = _values(completion.candidates(["av", "add_category", "", "-s", seededAllDomains], 2))
 
     assert sorted(values) == ["A10-19", "P10-19", "R10-19"]
+
+
+def test_area_and_category_completions_show_their_emoji(seeded):
+    """*the emoji is what makes a folder recognisable at a glance in the picker*"""
+    areaPairs = completion.candidates(["av", "add_category", "", "-s", seeded], 2)
+    areaDescription = dict(areaPairs)["A10-19"]
+
+    categoryPairs = completion.candidates(["av", "add_id", "", "-s", seeded], 2)
+    categoryDescription = dict(categoryPairs)["A11"]
+
+    # THE VALUE STAYS THE BARE CODE - ONLY THE DESCRIPTION GAINS THE EMOJI.
+    assert areaDescription.endswith("Health")
+    assert areaDescription != "Health"
+    assert categoryDescription.endswith("Doctors")
+    assert categoryDescription != "Doctors"
+
+
+def test_id_completions_are_unchanged_because_ids_carry_no_emoji(seeded):
+    """*`ids` has no emoji column - an ID's folder name never carries one*"""
+    pairs = completion.candidates(["av", "archive", "A11.", "-s", seeded], 2)
+
+    assert dict(pairs)["A11.10"] == "Cardiologist"

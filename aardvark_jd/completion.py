@@ -222,9 +222,30 @@ def _from_index(dbConn, completer, prefix):
     return _filter(pairs, prefix)
 
 
+def _labelled(emoji, title):
+    """
+    *a completion description carrying the entity's emoji, when it has one*
+
+    Only the **description** half of the pair - the value stays the bare
+    Johnny Decimal code, because that is what the shell inserts on the
+    command line. `ids` has no `emoji` column (an ID's folder name never
+    carries one), so IDs are labelled by title alone.
+
+    **Key Arguments:**
+
+    - ``emoji`` -- the entity's emoji, possibly empty
+    - ``title`` -- the entity's title
+
+    **Return:**
+
+    - ``label`` -- the description to show beside the code
+    """
+    return f"{emoji} {title}" if emoji else title
+
+
 def _areas(dbConn):
     """
-    *every live area, as `(code, title)` pairs*
+    *every live area, as `(code, label)` pairs*
 
     **Key Arguments:**
 
@@ -235,10 +256,13 @@ def _areas(dbConn):
     - ``areas`` -- a list of `(code, title)` pairs
     """
     rows = dbConn.execute(
-        "SELECT domain, decade_start, decade_end, title FROM areas ORDER BY domain, decade_start"
+        "SELECT domain, decade_start, decade_end, title, emoji FROM areas ORDER BY domain, decade_start"
     ).fetchall()
     return [
-        (codes.format_area_code(row["domain"], row["decade_start"], row["decade_end"]), row["title"])
+        (
+            codes.format_area_code(row["domain"], row["decade_start"], row["decade_end"]),
+            _labelled(row["emoji"], row["title"]),
+        )
         for row in rows
     ]
 
@@ -258,14 +282,20 @@ def _categories(dbConn, domain=None):
     """
     if domain:
         rows = dbConn.execute(
-            "SELECT domain, ac_number, title FROM categories WHERE domain = ? ORDER BY ac_number",
+            "SELECT domain, ac_number, title, emoji FROM categories WHERE domain = ? ORDER BY ac_number",
             (domain,),
         ).fetchall()
     else:
         rows = dbConn.execute(
-            "SELECT domain, ac_number, title FROM categories ORDER BY domain, ac_number"
+            "SELECT domain, ac_number, title, emoji FROM categories ORDER BY domain, ac_number"
         ).fetchall()
-    return [(codes.format_category_code(row["domain"], row["ac_number"]), row["title"]) for row in rows]
+    return [
+        (
+            codes.format_category_code(row["domain"], row["ac_number"]),
+            _labelled(row["emoji"], row["title"]),
+        )
+        for row in rows
+    ]
 
 
 def _ids(dbConn):

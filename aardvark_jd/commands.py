@@ -44,7 +44,7 @@ COMMANDS = (
      ("projectCategory", COMPLETER_FREE)),
     ("archive", COMMON, "retire an area, category or ID to the nearest archive folder, freeing its number",
      ("ref",)),
-    ("search", COMMON, "browse the index as a tree, or search it by Johnny Decimal ref, keyword or phrase",
+    ("fd", COMMON, "browse the index as a tree, or find in it by Johnny Decimal ref, keyword or phrase",
      ("refOrTerm",)),
     ("open", COMMON, "open the mirrored entities for a path, or pick one interactively",
      (COMPLETER_PATH,)),

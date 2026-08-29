@@ -18,7 +18,7 @@ doc = cl_utils.__doc__
     ("add_id A11 Cardiologist desc", "add_id"),
     ("set_emoji A10-19 X", "set_emoji"),
     ("repair_emoji", "repair_emoji"),
-    ("search cardio", "search"),
+    ("fd cardio", "fd"),
     ("connect_craft https://connect.craft.do/links/abc/api/v1 my-token", "connect_craft"),
     ("craft_sync", "craft_sync"),
     ("connect_todoist my-token", "connect_todoist"),
@@ -27,7 +27,7 @@ doc = cl_utils.__doc__
     ("gdrive_sync", "gdrive_sync"),
     ("archive A11.10", "archive"),
     ("archive A11.10 -y", "archive"),
-    ("search", "search"),
+    ("fd", "fd"),
     ("open", "open"),
     ("completion zsh", "completion"),
 ])
@@ -84,13 +84,13 @@ def test_main_end_to_end(isolatedHome, monkeypatch, capsys):
     cl_utils.main(docopt(doc, ["add_project", "P11", "Relaunch"]))
     assert "P11.10" in capsys.readouterr().out
 
-    cl_utils.main(docopt(doc, ["search", "cardiologist"]))
+    cl_utils.main(docopt(doc, ["fd", "cardiologist"]))
     assert "A11.10" in capsys.readouterr().out
 
 
 def test_main_reports_missing_system(isolatedHome, capsys):
     with pytest.raises(SystemExit) as excInfo:
-        cl_utils.main(docopt(doc, ["search", "anything"]))
+        cl_utils.main(docopt(doc, ["fd", "anything"]))
     assert excInfo.value.code == 1
     assert "run `aardvark init" in capsys.readouterr().err
 
@@ -107,7 +107,7 @@ def test_a_normal_command_reasserts_the_dropbox_index_ignore(isolatedHome, monke
         "aardvark_jd.dropbox_ignore.assert_index_ignored",
         lambda rootPath, log: calls.append(rootPath),
     )
-    cl_utils.main(docopt(doc, ["search", "anything"]))
+    cl_utils.main(docopt(doc, ["fd", "anything"]))
 
     assert calls == [f"{rootParent}/TestSystem"]
 
@@ -470,7 +470,7 @@ def test_a_later_command_warns_that_the_last_sync_failed(connectedSystem, monkey
     db.record_sync_failure(indexDbConn, "craft", "429 rate limited", "rate-limited")
     indexDbConn.close()
 
-    cl_utils.main(docopt(doc, ["search", "anything"]))
+    cl_utils.main(docopt(doc, ["fd", "anything"]))
 
     assert "last sync failed for craft" in capsys.readouterr().err
 
@@ -481,7 +481,7 @@ def test_no_drift_warning_when_every_mirror_is_healthy(connectedSystem, monkeypa
     monkeypatch.setattr(
         background_sync, "spawn_detached", lambda pathToSettingsFile=None, log=None: 4321,
     )
-    cl_utils.main(docopt(doc, ["search", "anything"]))
+    cl_utils.main(docopt(doc, ["fd", "anything"]))
 
     assert "last sync failed" not in capsys.readouterr().err
 

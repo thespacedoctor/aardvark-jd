@@ -35,7 +35,7 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 * `connect_craft` / `craft_sync` to mirror the whole index into a craft.do space, with a Finder link (and, once `connect_dropbox` is set up, a Dropbox share link) on every synced document
 * `connect_gdrive` / `gdrive_sync` to mirror the folder structure into Google Drive as well, linked alongside Craft and Todoist
 * `open [<path>]` to jump straight from a filesystem path back to its mirrored Craft folder/document/Todoist project/Drive folder (defaults to the current directory)
-* every command is also available under the shorter `av` alias, e.g. `av open`, `av search cardio`
+* every command is also available under the shorter `av` alias, e.g. `av open`, `av fd cardio`
 * `aardvark --help-all` lists every command, including the less commonly used setup/connection commands hidden from the default `--help` screen
 
 

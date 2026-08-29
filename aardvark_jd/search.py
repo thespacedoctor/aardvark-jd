@@ -130,7 +130,7 @@ class tree(object):
     """
     *render the whole index, or one Johnny Decimal subtree, as an indented tree*
 
-    Backs a bare `aardvark search` (the whole index) and `aardvark search
+    Backs a bare `aardvark fd` (the whole index) and `aardvark fd
     <ref>` (the subtree under a domain letter, area or category). An ID ref
     has no subtree, so the caller prints its path line instead.
 

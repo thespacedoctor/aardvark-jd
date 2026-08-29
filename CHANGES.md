@@ -3,6 +3,9 @@
 
 **Unreleased**
 
+- **REFACTOR:** the `search` command is renamed **`fd`** - `aardvark fd cardio`, `av fd`. A hard rename with no deprecation shim, agreed while wayfinding: `aardvark search` now exits non-zero. The `search` module, class and `search_index` table keep their names; only the command changes.
+- **ENHANCEMENT:** area and category completions show the entity's emoji beside its title, so a folder is recognisable at a glance in the picker. Only the description half of the completion changes - the value stays the bare Johnny Decimal code. IDs are unchanged: `ids` has no `emoji` column, because an ID's folder name never carries one.
+
 - **FIXED:** `aardvark add_project <TAB>` no longer offers categories from the `areas` and `resources` domains. A project is always created in the `projects` domain, so completing `A11` proposed a command that could not succeed. `add_id` and `add_category` are deliberately **not** narrowed - both take their domain from the ref they are given, so every domain is valid there.
 - **FIXED:** an index entry with no description no longer renders with a dangling em-dash. The listing format appended `— {description}` unconditionally, and `add_project` always stores an empty description, so every project showed as `- [P11.10 relaunch](url) —`.
 - **ENHANCEMENT:** `aardvark search` separates the three domain sections with a blank line, instead of running the flush-left headings together. No leading blank line, and none before the first heading when a sync-drift warning is showing above it.
