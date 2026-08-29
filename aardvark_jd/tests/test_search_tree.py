@@ -120,3 +120,20 @@ def test_the_tree_has_no_drift_header_when_every_mirror_is_healthy(seeded):
     lines = tree(log=log, dbConn=seeded).get()
 
     assert not any(line.startswith("!") for line in lines)
+
+
+def test_domain_sections_are_separated_by_a_blank_line(seeded):
+    """*three flush-left headings ran together with no visual break between them*"""
+    lines = tree(log=log, dbConn=seeded).get()
+
+    headingIndexes = [i for i, line in enumerate(lines) if line and not line[0].isspace()
+                      and "──" not in line and not line.startswith("!")]
+    assert len(headingIndexes) == 3
+
+    # EVERY HEADING BUT THE FIRST IS PRECEDED BY A BLANK LINE.
+    for index in headingIndexes[1:]:
+        assert lines[index - 1] == "", f"no blank line before {lines[index]!r}"
+
+    # AND THE LISTING NEITHER STARTS NOR ENDS WITH ONE.
+    assert lines[0] != ""
+    assert lines[-1] != ""

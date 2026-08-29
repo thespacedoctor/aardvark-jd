@@ -398,10 +398,15 @@ class craft_sync(object):
         lines = []
         for codeOrTitle, title, description, url in children:
             linkText = f"{codeOrTitle} {title}" if codeOrTitle else title
-            if url:
-                lines.append(f"- [{linkText}]({url}) — {description}")
-            else:
-                lines.append(f"- {linkText} — {description}")
+            entry = f"- [{linkText}]({url})" if url else f"- {linkText}"
+            # THE EM-DASH INTRODUCES A DESCRIPTION, SO IT ONLY BELONGS WHERE
+            # THERE IS ONE. `add_project` ALWAYS STORES AN EMPTY DESCRIPTION,
+            # SO EVERY PROJECT USED TO RENDER WITH A TRAILING `—` AND NOTHING
+            # AFTER IT - AND, BEFORE THE COMPARISON `rstrip`ped, TO REWRITE ITS
+            # INDEX DOCUMENT ON EVERY RUN.
+            if description:
+                entry = f"{entry} — {description}"
+            lines.append(entry)
         markdown = "\n".join(lines) if lines else "*(nothing here yet)*"
 
         link = db.get_craft_link(self.dbConn, linkEntityType, linkEntityKey)

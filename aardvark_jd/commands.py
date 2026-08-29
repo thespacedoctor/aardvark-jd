@@ -41,7 +41,7 @@ COMMANDS = (
     ("add_id", COMMON, "add a new Johnny Decimal ID to an existing category",
      ("category", COMPLETER_FREE, COMPLETER_FREE)),
     ("add_project", COMMON, "create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank",
-     ("category", COMPLETER_FREE)),
+     ("projectCategory", COMPLETER_FREE)),
     ("archive", COMMON, "retire an area, category or ID to the nearest archive folder, freeing its number",
      ("ref",)),
     ("search", COMMON, "browse the index as a tree, or search it by Johnny Decimal ref, keyword or phrase",

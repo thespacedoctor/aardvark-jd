@@ -197,7 +197,7 @@ def _from_index(dbConn, completer, prefix):
     **Key Arguments:**
 
     - ``dbConn`` -- a read-only SQLite connection to the active system's index
-    - ``completer`` -- `"area"`, `"category"`, `"ref"` or `"refOrTerm"`
+    - ``completer`` -- `"area"`, `"category"`, `"projectCategory"`, `"ref"` or `"refOrTerm"`
     - ``prefix`` -- the partially-typed word
 
     **Return:**
@@ -209,6 +209,12 @@ def _from_index(dbConn, completer, prefix):
         pairs = _areas(dbConn)
     elif completer == "category":
         pairs = _categories(dbConn)
+    elif completer == "projectCategory":
+        # `add_project` ALWAYS CREATES IN THE `projects` DOMAIN, SO OFFERING A
+        # CATEGORY FROM ANOTHER ONE PROPOSES A COMMAND THAT CANNOT SUCCEED.
+        # `add_id` AND `add_category` ARE NOT NARROWED: BOTH TAKE THEIR DOMAIN
+        # FROM THE REF THEY ARE GIVEN, SO EVERY DOMAIN IS VALID THERE.
+        pairs = _categories(dbConn, domain="projects")
     elif completer == "ref":
         pairs = _areas(dbConn) + _categories(dbConn) + _ids(dbConn)
     elif completer == "refOrTerm":
@@ -237,21 +243,28 @@ def _areas(dbConn):
     ]
 
 
-def _categories(dbConn):
+def _categories(dbConn, domain=None):
     """
-    *every live category, as `(code, title)` pairs*
+    *every live category, as `(code, title)` pairs, optionally in one domain only*
 
     **Key Arguments:**
 
     - ``dbConn`` -- a read-only SQLite connection
+    - ``domain`` -- restrict to `areas`, `resources` or `projects`. Default `None`, meaning all three.
 
     **Return:**
 
     - ``categories`` -- a list of `(code, title)` pairs
     """
-    rows = dbConn.execute(
-        "SELECT domain, ac_number, title FROM categories ORDER BY domain, ac_number"
-    ).fetchall()
+    if domain:
+        rows = dbConn.execute(
+            "SELECT domain, ac_number, title FROM categories WHERE domain = ? ORDER BY ac_number",
+            (domain,),
+        ).fetchall()
+    else:
+        rows = dbConn.execute(
+            "SELECT domain, ac_number, title FROM categories ORDER BY domain, ac_number"
+        ).fetchall()
     return [(codes.format_category_code(row["domain"], row["ac_number"]), row["title"]) for row in rows]
 
 

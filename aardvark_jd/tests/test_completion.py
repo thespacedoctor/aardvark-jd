@@ -141,3 +141,44 @@ def test_script_is_returned_for_each_supported_shell(shell):
 def test_script_rejects_an_unknown_shell():
     with pytest.raises(ValueError):
         completion.script("fish")
+
+
+@pytest.fixture
+def seededAllDomains(tmp_path):
+    """*an area and category in each of the three domains*"""
+    settingsPath = str(tmp_path / "settings.yaml")
+    with open(settingsPath, "w") as stream:
+        yaml.safe_dump({"version": 1, "system": {"name": None, "root_path": None}}, stream)
+    rootPath = initialiser(
+        log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
+    ).get()
+    conn = db.get_connection(paths.find_db_path(rootPath))
+    for domain, letter in (("areas", "A"), ("resources", "R"), ("projects", "P")):
+        add_area(log=log, dbConn=conn, domain=domain, title="Things", description="d").get()
+        add_category(
+            log=log, dbConn=conn, domain=domain, areaRef=f"{letter}10",
+            title="Stuff", description="d",
+        ).get()
+    conn.close()
+    yield settingsPath
+
+
+def test_add_project_completes_only_project_categories(seededAllDomains):
+    """*a project always lands in the projects domain, so offering `A11` proposes a failure*"""
+    values = _values(completion.candidates(["av", "add_project", "", "-s", seededAllDomains], 2))
+
+    assert values == ["P11"]
+
+
+def test_add_id_still_completes_categories_in_every_domain(seededAllDomains):
+    """*an ID can be added to any domain's category - this one must not be narrowed*"""
+    values = _values(completion.candidates(["av", "add_id", "", "-s", seededAllDomains], 2))
+
+    assert sorted(values) == ["A11", "P11", "R11"]
+
+
+def test_add_category_still_completes_areas_in_every_domain(seededAllDomains):
+    """*`add_category` derives its domain from the area ref, so every area is valid*"""
+    values = _values(completion.candidates(["av", "add_category", "", "-s", seededAllDomains], 2))
+
+    assert sorted(values) == ["A10-19", "P10-19", "R10-19"]
