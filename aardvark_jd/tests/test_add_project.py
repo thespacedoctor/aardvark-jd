@@ -121,3 +121,20 @@ def test_category_without_templates_scaffolding_defaults_to_blank(dbConnWithProj
     ).get()
     assert templateUsed == "blank"
     assert os.path.isfile(f"{folderPath}/README.md")
+
+
+def test_an_accepted_correction_reaches_the_project_folder_and_title(
+    dbConnWithProjectCategory, monkeypatch,
+):
+    conn, _ = dbConnWithProjectCategory
+    rootPath = os.path.dirname(db.get_system_folder(conn, "root.projects")["folder_path"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
+    _code, title, folderPath, _templateUsed = add_project(
+        log=log, dbConn=conn, categoryRef="P11", templateName="blank",
+        projectTitle="Aadvark", settings={"system": {"root_path": rootPath}},
+    ).get()
+
+    assert title == "Aardvark"
+    assert "aardvark" in os.path.basename(folderPath).lower()

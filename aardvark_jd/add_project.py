@@ -13,7 +13,7 @@ import shutil
 import sys
 import zipfile
 
-from aardvark_jd import codes, db, folders, paths
+from aardvark_jd import codes, db, folders, paths, spell_check
 
 BLANK_CHOICE = "blank"
 
@@ -83,7 +83,8 @@ class add_project(object):
             templateZips = []
 
         templateChoice = self._resolve_template_choice(templateZips)
-        title = self.projectTitle
+        # SEE `add_area.get` - CHECKED BEFORE ANY WRITE.
+        title = spell_check.checked_title(self.projectTitle, self.settings, self.log)
 
         itemNumber = folders.next_id_number(self.dbConn, "projects", category)
         folderName = folders.id_folder_name("projects", acNumber, itemNumber, title)

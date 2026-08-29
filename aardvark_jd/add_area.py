@@ -7,7 +7,7 @@ Author
 : David Young
 """
 
-from aardvark_jd import codes, db, emoji_picker, folders, paths
+from aardvark_jd import codes, db, emoji_picker, folders, paths, spell_check
 
 
 class add_area(object):
@@ -55,16 +55,20 @@ class add_area(object):
         self.log.debug("starting the ``get`` method")
 
         decadeStart, decadeEnd = folders.next_area_decade(self.dbConn, self.domain)
+        # BEFORE THE EMOJI PROMPT: ACCEPTING A CORRECTION CHANGES THE TITLE THE
+        # EMOJI IS DERIVED FROM, AND BEFORE ANY WRITE, SO THE CORRECTED TITLE IS
+        # THE ONE VALUE THE FOLDER, THE INDEX ROW AND EVERY MIRROR ARE BUILT FROM.
+        title = spell_check.checked_title(self.title, self.settings, self.log)
         pickedEmoji = emoji_picker.resolve_emoji(
-            self.title, self.description, chosenEmoji=self.chosenEmoji,
+            title, self.description, chosenEmoji=self.chosenEmoji,
             settings=self.settings, log=self.log,
         )
-        folderName = folders.area_folder_name(self.domain, decadeStart, decadeEnd, self.title, pickedEmoji)
+        folderName = folders.area_folder_name(self.domain, decadeStart, decadeEnd, title, pickedEmoji)
         parentPath = paths.resolve(self.dbConn, f"root.{self.domain}")
         folderPath = folders.make_folder(parentPath, folderName)
 
         db.insert_area(
-            self.dbConn, self.domain, decadeStart, decadeEnd, self.title, self.description,
+            self.dbConn, self.domain, decadeStart, decadeEnd, title, self.description,
             pickedEmoji, folderName, folderPath,
         )
         code = codes.format_area_code(self.domain, decadeStart, decadeEnd)

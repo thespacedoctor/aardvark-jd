@@ -9,6 +9,16 @@ emoji:
     # search whenever the API is unreachable. set to false to stay offline.
     use_llm: true
 
+spell_check:
+    # offer to correct a suspected typo in a new folder's title, before
+    # anything is created. only tokens of six characters or more are
+    # checked, and only when a dictionary word one edit away exists.
+    # declining a suggestion records that word in
+    # `<root>/.aardvark-vocabulary` and it is never offered again, so the
+    # check goes quiet on your own jargon as you use it. set to false to
+    # switch it off entirely.
+    enabled: true
+
 craft:
     # mirror the aardvark folder tree into a craft.do space. set up with
     # `aardvark connect_craft <apiUrl> <apiToken>`, both copied from the

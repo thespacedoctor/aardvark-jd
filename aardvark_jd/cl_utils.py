@@ -578,7 +578,7 @@ def _dispatch(a, log, indexDbConn, settings):
         domain, _ = codes.split_category_ref(a["category"])
         code, folderPath = add_id(
             log=log, dbConn=indexDbConn, domain=domain, categoryRef=a["category"],
-            title=a["title"], description=a["description"],
+            title=a["title"], description=a["description"], settings=settings,
         ).get()
         print(f"{code}  {folderPath}")
         _hand_off_sync(a, log, indexDbConn, settings)
