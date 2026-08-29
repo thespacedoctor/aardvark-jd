@@ -1,11 +1,12 @@
 import logging
 import os
+import sys
 import zipfile
 
 import pytest
 import yaml
 
-from aardvark_jd import db, paths
+from aardvark_jd import db, dropbox_ignore, paths
 from aardvark_jd.initialiser import initialiser
 
 log = logging.getLogger("test_initialiser")
@@ -18,6 +19,33 @@ def settingsFile(tmp_path):
     with open(settingsPath, "w") as stream:
         yaml.safe_dump({"version": 1, "system": {"name": None, "root_path": None}}, stream)
     return settingsPath
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="com.dropbox.ignored is a macOS mechanism")
+def test_init_excludes_the_index_directory_from_dropbox_when_inside_a_dropbox_tree(
+    tmp_path, settingsFile, monkeypatch,
+):
+    monkeypatch.setattr(
+        "aardvark_jd.dropbox_client.local_dropbox_roots", lambda: [str(tmp_path)],
+    )
+
+    rootPath = initialiser(
+        log=log, systemName="My Life", parentPath=str(tmp_path), pathToSettingsFile=settingsFile
+    ).get()
+
+    indexDir = os.path.dirname(paths.find_db_path(rootPath))
+    assert dropbox_ignore.is_ignored(indexDir) is True
+
+
+def test_init_does_not_touch_dropbox_state_outside_a_dropbox_tree(tmp_path, settingsFile, monkeypatch):
+    monkeypatch.setattr("aardvark_jd.dropbox_client.local_dropbox_roots", lambda: [])
+
+    rootPath = initialiser(
+        log=log, systemName="My Life", parentPath=str(tmp_path), pathToSettingsFile=settingsFile
+    ).get()
+
+    indexDir = os.path.dirname(paths.find_db_path(rootPath))
+    assert dropbox_ignore.is_ignored(indexDir) is False
 
 
 def test_init_creates_full_skeleton(tmp_path, settingsFile):
