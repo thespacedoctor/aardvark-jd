@@ -28,8 +28,10 @@ doc = cl_utils.__doc__
     ("archive A11.10", "archive"),
     ("archive A11.10 -y", "archive"),
     ("fd", "fd"),
+    ("cd A11.10", "cd"),
     ("open", "open"),
     ("completion zsh", "completion"),
+    ("shell_init zsh", "shell_init"),
 ])
 def test_docopt_parses_each_subcommand(command, expectedKey):
     args = docopt(doc, command.split(" "))

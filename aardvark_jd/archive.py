@@ -38,7 +38,7 @@ Author
 import os
 from datetime import datetime
 
-from aardvark_jd import codes, db, folders, paths
+from aardvark_jd import codes, db, folders, paths, refs
 
 
 class archive(object):
@@ -121,36 +121,7 @@ class archive(object):
 
         - ``ValueError`` -- if the ref is not a Johnny Decimal ref, or does not resolve
         """
-        ref = (self.ref or "").strip().upper()
-        if not (codes.is_jd_ref(ref) or codes.is_id_ref(ref)):
-            raise ValueError(
-                f"'{self.ref}' is not a Johnny Decimal reference - archive takes an area "
-                "(\"A10-19\"), a category (\"A11\") or an ID (\"A11.10\")"
-            )
-
-        # RESOLVE AN ID FIRST - `domain_from_ref` ONLY UNDERSTANDS AREA AND
-        # CATEGORY SHAPES, AND WOULD REJECT AN ID REF OUTRIGHT.
-        if codes.is_id_ref(ref):
-            domain, acNumber, itemNumber = codes.split_id_ref(ref)
-            row = db.get_id(self.dbConn, domain, acNumber, itemNumber)
-            if not row:
-                raise ValueError(f"no ID '{ref}' in the index")
-            return "id", domain, row
-
-        domain = codes.domain_from_ref(ref)
-
-        if codes.parse_area_ref_is_area(ref):
-            decadeStart = codes.parse_area_ref(ref)
-            row = db.get_area(self.dbConn, domain, decadeStart)
-            if not row:
-                raise ValueError(f"no area '{ref}' in the index")
-            return "area", domain, row
-
-        acNumber = codes.parse_category_ref(ref)
-        row = db.get_category(self.dbConn, domain, acNumber)
-        if not row:
-            raise ValueError(f"no category '{ref}' in the index")
-        return "category", domain, row
+        return refs.resolve_ref(self.dbConn, self.ref, "archive")
 
     def _code_for(self, entityType, domain, row):
         """

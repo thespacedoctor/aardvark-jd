@@ -3,7 +3,7 @@ import logging
 import pytest
 import yaml
 
-from aardvark_jd import completion, db, paths
+from aardvark_jd import completion, db, paths, readonly
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -60,8 +60,8 @@ def test_areas_complete_for_add_category(seeded):
 
 
 def test_completion_reader_waits_out_a_concurrent_write(seeded):
-    """*the read-only completion connection sets `busy_timeout`, so a TAB press waits rather than failing*"""
-    busyTimeout = completion._with_connection(
+    """*the read-only index connection sets `busy_timeout`, so a TAB press waits rather than failing*"""
+    busyTimeout = readonly.with_connection(
         lambda conn: conn.execute("PRAGMA busy_timeout").fetchone()[0],
         ["av", "add_category", "", "-s", seeded],
     )
@@ -127,8 +127,8 @@ def test_emit_never_raises_on_garbage(capsys):
 
 
 def test_settings_path_is_read_from_the_command_line(seeded):
-    assert completion._settings_path_from(["av", "add_id", "-s", seeded]) == seeded
-    assert completion._settings_path_from(["av", "add_id"]).endswith("aardvark.yaml")
+    assert readonly.settings_path_from(["av", "add_id", "-s", seeded]) == seeded
+    assert readonly.settings_path_from(["av", "add_id"]).endswith("aardvark.yaml")
 
 
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
@@ -141,6 +141,36 @@ def test_script_is_returned_for_each_supported_shell(shell):
 def test_script_rejects_an_unknown_shell():
     with pytest.raises(ValueError):
         completion.script("fish")
+
+
+def test_cd_offers_the_same_candidates_as_fd(seeded):
+    """*`cd` shares `fd`'s `refOrTerm` completer - they must never drift apart*"""
+    fdValues = _values(completion.candidates(["av", "fd", "", "-s", seeded], 2))
+    cdValues = _values(completion.candidates(["av", "cd", "", "-s", seeded], 2))
+    assert cdValues == fdValues
+    assert cdValues[:3] == ["A", "R", "P"]
+
+
+def test_cd_candidates_are_filtered_by_prefix(seeded):
+    values = _values(completion.candidates(["av", "cd", "A11.", "-s", seeded], 2))
+    assert values == ["A11.10"]
+
+
+def test_shell_names_complete_for_shell_init():
+    assert _values(completion.candidates(["av", "shell_init", ""], 2)) == ["bash", "zsh"]
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_shell_init_script_wraps_the_completion_script(shell):
+    text = completion.shell_init_script(shell)
+    assert "builtin cd" in text
+    assert "__complete" in text
+    assert text.endswith(completion.script(shell))
+
+
+def test_shell_init_script_rejects_an_unknown_shell():
+    with pytest.raises(ValueError):
+        completion.shell_init_script("fish")
 
 
 @pytest.fixture

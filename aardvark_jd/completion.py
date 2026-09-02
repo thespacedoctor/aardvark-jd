@@ -29,10 +29,9 @@ Author
 """
 
 import os
-import sqlite3
 import sys
 
-from aardvark_jd import codes, commands, paths
+from aardvark_jd import codes, commands, readonly
 
 COMPLETION_COMMAND = "__complete"
 
@@ -106,7 +105,7 @@ def candidates(words, cword):
     previousWord = words[cword - 1] if 0 < cword <= len(words) else ""
     if previousWord in commands.FLAGS_TAKING_A_VALUE:
         if previousWord in ("-t", "--template"):
-            return _with_connection(lambda dbConn: _templates(dbConn, words, prefix), words) or []
+            return readonly.with_connection(lambda dbConn: _templates(dbConn, words, prefix), words) or []
         # `--settings` AND `--emoji` HAVE NOTHING USEFUL TO SUGGEST; RETURNING
         # NOTHING LETS THE SHELL FALL BACK TO ITS OWN FILENAME COMPLETION.
         return []
@@ -126,7 +125,7 @@ def candidates(words, cword):
     if completer == "shell":
         return _filter([(shell, f"the {shell} completion script") for shell in _SHELLS], prefix)
 
-    return _with_connection(lambda dbConn: _from_index(dbConn, completer, prefix), words) or []
+    return readonly.with_connection(lambda dbConn: _from_index(dbConn, completer, prefix), words) or []
 
 
 def _positional_slot(words, cword):
@@ -218,6 +217,9 @@ def _from_index(dbConn, completer, prefix):
     elif completer == "ref":
         pairs = _areas(dbConn) + _categories(dbConn) + _ids(dbConn)
     elif completer == "refOrTerm":
+        # SHARED BY `fd` (WHERE A BARE DOMAIN LETTER BROWSES THE WHOLE
+        # DOMAIN) AND `cd` (WHERE IT JUMPS TO THE DOMAIN'S ROOT FOLDER) -
+        # BOTH WANT THE SAME CANDIDATE LIST.
         pairs = _domain_letters() + _areas(dbConn) + _categories(dbConn) + _ids(dbConn)
     return _filter(pairs, prefix)
 
@@ -376,68 +378,6 @@ def _filter(pairs, prefix):
     return [(value, description) for value, description in pairs if value.lower().startswith(lowered)]
 
 
-def _settings_path_from(words):
-    """
-    *the settings file the command line points at, or the default one*
-
-    A user completing `aardvark add_id -s other.yaml <TAB>` means the
-    areas in *that* system, not the one recorded in the default config -
-    so the flag is honoured here rather than silently ignored.
-
-    **Key Arguments:**
-
-    - ``words`` -- the full command line as a word list
-
-    **Return:**
-
-    - ``settingsPath`` -- the path to read settings from
-    """
-    for index, word in enumerate(words):
-        if word in ("-s", "--settings") and index + 1 < len(words):
-            return os.path.expanduser(words[index + 1])
-    return os.path.expanduser("~/.config/aardvark/aardvark.yaml")
-
-
-def _with_connection(fn, words=()):
-    """
-    *run `fn` against a read-only connection to the active system's index, or return None*
-
-    Read-only (`mode=ro`) is deliberate: completion must never create,
-    migrate or write to the index, and must not fail if the system is
-    missing or the settings file is unreadable.
-
-    **Key Arguments:**
-
-    - ``fn`` -- a callable taking the open connection
-    - ``words`` -- the full command line, so an explicit `-s` is honoured. Default *()*.
-
-    **Return:**
-
-    - ``result`` -- whatever `fn` returns, or `None` if no index could be opened
-    """
-    from aardvark_jd import settings_writer
-
-    try:
-        settingsPath = _settings_path_from(words)
-        settings = settings_writer.read_settings(settingsPath) or {}
-        rootPath = (settings.get("system") or {}).get("root_path")
-        if not rootPath:
-            return None
-        dbPath = paths.find_db_path(rootPath)
-        dbConn = sqlite3.connect(f"file:{dbPath}?mode=ro", uri=True)
-        dbConn.row_factory = sqlite3.Row
-        # WAIT OUT A CONCURRENT MUTATING COMMAND RATHER THAN RETURNING NO
-        # SUGGESTIONS: A TAB PRESS CAN LAND DURING A WRITE. SAFE ON `mode=ro`,
-        # NOT A PERSISTENT HEADER CHANGE. SEE `db.get_connection`.
-        dbConn.execute("PRAGMA busy_timeout = 5000")
-        try:
-            return fn(dbConn)
-        finally:
-            dbConn.close()
-    except Exception:
-        return None
-
-
 def script(shell):
     """
     *the completion script for the named shell, ready to `eval` or write to an fpath file*
@@ -462,3 +402,38 @@ def script(shell):
     scriptPath = os.path.dirname(__file__) + f"/resources/completions/aardvark.{shell}"
     with open(scriptPath, encoding="utf-8") as scriptFile:
         return scriptFile.read().rstrip("\n")
+
+
+def shell_init_script(shell):
+    """
+    *the shell integration script for the named shell, ready to `eval`*
+
+    A subprocess cannot change its parent shell's working directory, so
+    `av cd <target>` on its own only prints the resolved path.
+    `shell_init_script` is what turns that into an actual `cd`: it wraps
+    `aardvark`/`av` in a shell function that intercepts the `cd`
+    subcommand and calls `builtin cd` on the printed path, then appends
+    `script(shell)` so one `eval` installs both the wrapper and
+    completion.
+
+    **Key Arguments:**
+
+    - ``shell`` -- `"bash"` or `"zsh"`
+
+    **Return:**
+
+    - ``script`` -- the wrapper function followed by the completion script
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import completion
+    print(completion.shell_init_script("zsh"))
+    ```
+    """
+    if shell not in _SHELLS:
+        raise ValueError(f"unknown shell '{shell}' - choose one of: {', '.join(_SHELLS)}")
+    scriptPath = os.path.dirname(__file__) + f"/resources/completions/shell_init.{shell}"
+    with open(scriptPath, encoding="utf-8") as scriptFile:
+        wrapper = scriptFile.read().rstrip("\n")
+    return f"{wrapper}\n{script(shell)}"

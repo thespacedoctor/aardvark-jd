@@ -12,14 +12,16 @@ This creates the full folder tree (`00_INDEX`, `01_INBOX`, `02_PROJECTS`, `03_AR
 
 ## Shell completion
 
-Enable tab completion for `aardvark`/`av`, its commands, and Johnny Decimal references by evaluating the generated script from your shell's startup file:
+Enable tab completion for `aardvark`/`av`, its commands, and Johnny Decimal references, plus a working `aardvark cd`/`av cd`, by evaluating the generated script from your shell's startup file:
 
 ```bash
-eval "$(aardvark completion zsh)"    # ~/.zshrc
-eval "$(aardvark completion bash)"   # ~/.bashrc
+eval "$(aardvark shell_init zsh)"    # ~/.zshrc
+eval "$(aardvark shell_init bash)"   # ~/.bashrc
 ```
 
 With this loaded, `aardvark add_category A<TAB>` lists existing areas, `aardvark archive <TAB>` lists archivable references, and `aardvark <TAB>` lists the commands themselves. `aardvark --help-all` also lists every command, including the setup/connection commands that the default `--help` screen hides to keep the everyday ones easy to find.
+
+`aardvark cd <target>`/`av cd <target>` moves the shell straight into a domain's, area's, category's or ID's folder - `aardvark cd A11.10<TAB>` completes the same references `fd` does. A plain subprocess cannot change its parent shell's working directory, which is why `shell_init` - not `completion` - is the recommended install line: it wraps `aardvark`/`av` in a shell function that does the `cd` for you and still emits the same completion script underneath. `aardvark completion zsh|bash` remains available on its own for the `~/.zsh/completions/_aardvark` fpath-cache route, but that route does not include the `cd` wrapper.
 
 ## Folder emoji
 
