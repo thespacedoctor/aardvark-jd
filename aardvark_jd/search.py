@@ -9,7 +9,7 @@ Author
 
 import sqlite3
 
-from aardvark_jd import codes, db
+from aardvark_jd import codes, db, labels
 
 # FTS5 COLUMN ORDER: entity_type, code, title, description, path - WEIGHT
 # TITLE MATCHES ABOVE DESCRIPTION MATCHES, IGNORE THE UNINDEXED COLUMNS
@@ -58,8 +58,58 @@ class search(object):
         else:
             rows = self._search_like(" ".join(terms))
 
+        results = self._with_emoji([dict(row) for row in rows])
+
         self.log.debug("completed the ``get`` method")
-        return [dict(row) for row in rows]
+        return results
+
+    def _with_emoji(self, results):
+        """
+        *attach each area/category result's emoji, looked up from the row that owns it*
+
+        `search_index` stores no emoji: it is a display detail nothing is
+        ever searched on, and denormalising it into the FTS5 table would
+        cost a schema rebuild and six trigger rewrites to keep in step.
+        Looking it up here instead is two queries over two small tables -
+        Johnny Decimal caps a system at 9 areas and 90 categories per
+        domain - against a result set already capped at 50 rows.
+
+        **Key Arguments:**
+
+        - ``results`` -- the search result dicts
+
+        **Return:**
+
+        - ``results`` -- the same results, each area/category carrying an `emoji`
+        """
+        if not any(row["entity_type"] in ("area", "category") for row in results):
+            return results
+
+        emojiByCode = self._emoji_by_code()
+        return [
+            dict(row, emoji=emojiByCode.get((row["entity_type"], row["code"]), ""))
+            if row["entity_type"] in ("area", "category") else row
+            for row in results
+        ]
+
+    def _emoji_by_code(self):
+        """
+        *every area's and category's emoji, keyed by entity type and Johnny Decimal code*
+
+        **Return:**
+
+        - ``emojiByCode`` -- a dict of `(entityType, code)` to emoji
+        """
+        emojiByCode = {}
+        for row in self.dbConn.execute(
+            "SELECT domain, decade_start, decade_end, emoji FROM areas"
+        ):
+            code = codes.format_area_code(row["domain"], row["decade_start"], row["decade_end"])
+            emojiByCode[("area", code)] = row["emoji"]
+        for row in self.dbConn.execute("SELECT domain, ac_number, emoji FROM categories"):
+            code = codes.format_category_code(row["domain"], row["ac_number"])
+            emojiByCode[("category", code)] = row["emoji"]
+        return emojiByCode
 
     def _search_fts5(self, terms):
         """
@@ -114,16 +164,19 @@ def format_result(row):
     """
     *format a single search result row for display*
 
+    The label's parts are single-spaced, but the path is held off by two -
+    a path can itself contain spaces, so the wider gutter is the only thing
+    marking where the title ends.
+
     **Key Arguments:**
 
-    - ``row`` -- a result dict with keys `code`, `title`, `path`
+    - ``row`` -- a result dict with keys `entity_type`, `code`, `title` and `path`, and optionally `emoji`
 
     **Return:**
 
-    - ``line`` -- the formatted `<code>  <title>  <path>` display line
+    - ``line`` -- the formatted `<label>  <path>` display line
     """
-    code = row["code"] or ""
-    return f"{code}  {row['title']}  {row['path']}"
+    return f"{labels.result_label(row)}  {row['path']}"
 
 
 class tree(object):
@@ -248,7 +301,7 @@ class tree(object):
         """
         children = [self._area_node(domain, area) for area in db.list_areas(self.dbConn, domain)]
         return [{
-            "label": f"{codes.DOMAIN_LETTER[domain]}  {domain}",
+            "label": labels.domain_label(domain),
             "path": None,
             "children": children,
         }]
@@ -266,12 +319,15 @@ class tree(object):
 
         - ``node`` -- the display node
         """
-        code = codes.format_area_code(domain, area["decade_start"], area["decade_end"])
         children = [
             self._category_node(domain, category)
             for category in db.list_categories(self.dbConn, domain, areaId=area["area_id"])
         ]
-        return {"label": f"{code}  {area['title']}", "path": area["folder_path"], "children": children}
+        return {
+            "label": labels.area_label(domain, area),
+            "path": area["folder_path"],
+            "children": children,
+        }
 
     def _category_node(self, domain, category):
         """
@@ -286,17 +342,16 @@ class tree(object):
 
         - ``node`` -- the display node
         """
-        code = codes.format_category_code(domain, category["ac_number"])
         children = [
             {
-                "label": f"{codes.format_id_code(domain, row['ac_number'], row['item_number'])}  {row['title']}",
+                "label": labels.id_label(domain, row),
                 "path": row["folder_path"],
                 "children": [],
             }
             for row in db.list_ids(self.dbConn, domain, category["category_id"])
         ]
         return {
-            "label": f"{code}  {category['title']}",
+            "label": labels.category_label(domain, category),
             "path": category["folder_path"],
             "children": children,
         }

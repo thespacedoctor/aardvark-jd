@@ -38,6 +38,34 @@ reproduce. _Avoid_: object, record, node.
 The fixed `00-09` scaffolding slots (`01_inbox`, `04_templates`, `09_archive`, …)
 created automatically alongside every system, domain and category.
 
+**Code**:
+The canonical Johnny Decimal identifier of an entity: `A10-19`, `A11`, `A11.10`.
+_Avoid_: number, key.
+
+**Ref**:
+What the user typed to name an entity on the command line, before it is resolved
+— shorter or differently cased than the code it resolves to (`a10` → `A10-19`).
+_Avoid_: using "code" for user input; a ref is what was typed, a code is canonical.
+
+**Emoji**:
+The single character an area or category owns. Held in the index and repeated at
+the end of the folder name. An ID has none — not a blank one, none at all.
+
+**Folder name**:
+An entity's exact on-disk name: slugified title, emoji-suffixed for areas and
+categories (`A10_19_health🏥`). _Avoid_: path (that is the whole absolute path).
+
+**Label**:
+The one line printed to describe an entity — `A10-19 🏥 Health` — built from its
+code, emoji and title. Never the same string as the folder name: the label is
+title-cased and space-separated, the folder name slugified. Shared by the `fd`
+tree, the `fd` search results and the `open` picker.
+_Avoid_: name, display name.
+
+**Title**:
+The human-readable name the user gave an entity, before slugification.
+_Avoid_: name.
+
 **The index**:
 `aardvark.db`, the SQLite store inside `00_INDEX🗂️`. Authoritative for entity
 descriptions; for everything else a per-machine, unsynced derived artefact.

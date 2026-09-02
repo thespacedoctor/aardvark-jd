@@ -3,6 +3,8 @@
 
 **Unreleased**
 
+- **ENHANCEMENT:** `aardvark fd` and the `aardvark open` picker now show an area's or category's emoji between its Johnny Decimal code and its title - `A10-19 🏥 Health` - so a branch is recognisable at a glance. IDs and domain headings are unchanged bar their spacing: neither owns an emoji, and the label's parts are now single-spaced throughout (search results keep a two-space gutter before the path, which can itself contain spaces). An area or category whose stored emoji is blank shows the 📁 fallback, marking the gap rather than hiding it. The one format now lives in the new `labels` module, so the tree, the search results and the picker cannot drift apart. No schema change: `search_index` stores no emoji, and the search results look theirs up from the owning row at display time.
+- **DOCS:** the README, the quickstart and `cl_utils`' own docstring no longer call the command `search`. It has been `fd` since the rename below; `aardvark search cardio` exits non-zero, so the examples could not be run as written.
 - **REFACTOR:** the `search` command is renamed **`fd`** - `aardvark fd cardio`, `av fd`. A hard rename with no deprecation shim, agreed while wayfinding: `aardvark search` now exits non-zero. The `search` module, class and `search_index` table keep their names; only the command changes.
 - **ENHANCEMENT:** area and category completions show the entity's emoji beside its title, so a folder is recognisable at a glance in the picker. Only the description half of the completion changes - the value stays the bare Johnny Decimal code. IDs are unchanged: `ids` has no `emoji` column, because an ID's folder name never carries one.
 

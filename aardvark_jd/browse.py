@@ -20,7 +20,7 @@ Author
 import os
 import sqlite3
 
-from aardvark_jd import codes, db, folders, locate, picker
+from aardvark_jd import codes, db, folders, labels, locate, picker
 
 _OPEN_THIS_LEVEL = "__open__"
 _GO_BACK = "__up__"
@@ -121,7 +121,7 @@ class browse(object):
         """
         while True:
             options = [
-                (domain, f"{codes.DOMAIN_LETTER[domain]}  {domain}")
+                (domain, labels.domain_label(domain))
                 for domain in codes.DOMAINS
             ]
             chosen = picker.select_one(
@@ -150,7 +150,7 @@ class browse(object):
         while True:
             options = [(_GO_BACK, "← back")]
             options += [
-                (row, f"{codes.format_area_code(domain, row['decade_start'], row['decade_end'])}  {row['title']}")
+                (row, labels.area_label(domain, row))
                 for row in rows
             ]
             chosen = picker.select_one(
@@ -183,7 +183,7 @@ class browse(object):
                 (_GO_BACK, "← back"),
             ]
             options += [
-                (row, f"{codes.format_category_code(domain, row['ac_number'])}  {row['title']}")
+                (row, labels.category_label(domain, row))
                 for row in rows
             ]
             chosen = picker.select_one(
@@ -217,7 +217,7 @@ class browse(object):
             (_GO_BACK, "← back"),
         ]
         options += [
-            (row, f"{codes.format_id_code(domain, row['ac_number'], row['item_number'])}  {row['title']}")
+            (row, labels.id_label(domain, row))
             for row in rows
         ]
         chosen = picker.select_one(

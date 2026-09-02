@@ -106,29 +106,43 @@ Lists any zip templates found in category `P11`'s own `P11.04_templates/` folder
 
 ## Searching the index
 
-A plain term does a keyword search:
+A plain term does a keyword search. Each result is the entity's Johnny Decimal code, its emoji, its title, and its
+folder path:
 
 ```bash
-aardvark fd cardio
+aardvark fd doctors
 ```
 
-Run `search` with no argument to print the whole index as a tree, reserved `.00`-`.09` system IDs excluded:
+```
+A11 🩺 Doctors  /Users/you/My Life/03_AREAS🧭/A10_19_health🏥/A11_doctors🩺
+A10-19 🏥 Health  /Users/you/My Life/03_AREAS🧭/A10_19_health🏥
+```
+
+Areas and categories own an emoji, so they show one; IDs never do.
+
+Run `fd` with no argument to print the whole index as a tree, reserved `.00`-`.09` system IDs excluded:
 
 ```bash
 aardvark fd
 ```
 
 ```
-03 AREAS🧭
-└── A10-19 health🏥
-    └── A11 doctors🩺
-        └── A11.10 cardiologist
+A areas
+└── A10-19 🏥 Health
+    └── A11 🩺 Doctors
+        └── A11.10 Cardiologist
+
+R resources
+
+P projects
 ```
 
+The three domain headings are always listed, empty or not.
+
 Pass a Johnny Decimal reference instead of a term to jump straight to that branch - `A` or `A10-19` prints the subtree
-for that area, `A11` the subtree for that category, and `A11.10` the single matching entry, the same line `search
+for that area, `A11` the subtree for that category, and `A11.10` the single matching entry, the same line `fd
 cardio` would have printed for it. A reference-shaped term that doesn't actually resolve falls back to an ordinary
-keyword search, so `search A11` never errors just because you meant the letter "A" followed by "11".
+keyword search, so `fd A11` never errors just because you meant the letter "A" followed by "11".
 
 ## Opening a folder interactively
 
@@ -247,7 +261,7 @@ aardvark archive A11.10
 This moves the folder on disk to the nearest `09_archive` folder above it (an ID moves into its own category's
 `AC.09_archive🗄️`; a category into its area's `A0.09_archive🗄️`; an area into the domain's root
 `09_ARCHIVE🗄️`), does the same move in Google Drive if connected, flags the entry archived in the database -
-removing it from `search` and freeing its number for the next `add_area`/`add_category`/`add_id`/`add_project`
+removing it from the index and freeing its number for the next `add_area`/`add_category`/`add_id`/`add_project`
 - and archives (not deletes) its mirrored Todoist project. The archived folder name carries a date suffix so that,
 once a number is reused, the old and new occupants never collide inside the same archive folder.
 

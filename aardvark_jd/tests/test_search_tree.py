@@ -23,8 +23,12 @@ def seeded(tmp_path):
         log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
-    add_area(log=log, dbConn=conn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    # EXPLICIT EMOJI, SO THE RENDERED LABELS ARE EXACT RATHER THAN WHATEVER THE
+    # SUGGESTER HAPPENS TO PICK FOR "HEALTH" ON THE DAY.
+    add_area(log=log, dbConn=conn, domain="areas", title="Health", description="d1",
+             chosenEmoji="🏥").get()
+    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors",
+                 description="d2", chosenEmoji="🩺").get()
     add_id(log=log, dbConn=conn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3").get()
     add_id(log=log, dbConn=conn, domain="areas", categoryRef="A11", title="Dermatologist", description="d4").get()
     yield conn
@@ -34,37 +38,77 @@ def seeded(tmp_path):
 def test_the_whole_index_lists_all_three_domains(seeded):
     lines = tree(log=log, dbConn=seeded).get()
     joined = "\n".join(lines)
-    assert "A  areas" in joined
-    assert "R  resources" in joined
-    assert "P  projects" in joined
+    assert "A areas" in joined
+    assert "R resources" in joined
+    assert "P projects" in joined
 
 
 def test_the_whole_index_nests_area_category_and_ids(seeded):
     lines = tree(log=log, dbConn=seeded).get()
     joined = "\n".join(lines)
-    assert "A10-19  Health" in joined
-    assert "A11  Doctors" in joined
-    assert "A11.10  Cardiologist" in joined
-    assert "A11.11  Dermatologist" in joined
+    assert "A10-19 🏥 Health" in joined
+    assert "A11 🩺 Doctors" in joined
+    assert "A11.10 Cardiologist" in joined
+    assert "A11.11 Dermatologist" in joined
+
+
+def test_an_area_and_category_carry_their_emoji_between_code_and_title(seeded):
+    """*the emoji is the fastest way to recognise a branch, so it belongs in the listing*"""
+    joined = "\n".join(tree(log=log, dbConn=seeded).get())
+    assert "A10-19 🏥 Health" in joined
+    assert "A11 🩺 Doctors" in joined
+
+
+def test_an_id_line_carries_no_emoji(seeded):
+    """*IDs have no emoji column, and their folders are never emoji-suffixed*"""
+    joined = "\n".join(tree(log=log, dbConn=seeded).get())
+    assert "A11.10 Cardiologist" in joined
+    assert "A11.10 📁" not in joined
+
+
+def test_a_domain_heading_carries_no_emoji(seeded):
+    """*domain headings come from the code table, not from a row that owns an emoji*"""
+    joined = "\n".join(tree(log=log, dbConn=seeded).get())
+    assert "A areas" in joined
+    assert "📁 areas" not in joined
+
+
+def test_an_area_with_a_blank_emoji_falls_back_to_the_folder_emoji(seeded):
+    """*a blank emoji is drifted data - flag it rather than silently closing the gap*"""
+    seeded.execute("UPDATE areas SET emoji = '' WHERE decade_start = 10 AND domain = 'areas'")
+    seeded.commit()
+
+    joined = "\n".join(tree(log=log, dbConn=seeded).get())
+
+    assert "A10-19 📁 Health" in joined
+
+
+def test_a_category_with_a_blank_emoji_falls_back_to_the_folder_emoji(seeded):
+    seeded.execute("UPDATE categories SET emoji = '' WHERE ac_number = 11 AND domain = 'areas'")
+    seeded.commit()
+
+    joined = "\n".join(tree(log=log, dbConn=seeded).get())
+
+    assert "A11 📁 Doctors" in joined
 
 
 def test_a_domain_letter_scopes_to_that_domain(seeded):
     joined = "\n".join(tree(log=log, dbConn=seeded, ref="A").get())
-    assert "A10-19  Health" in joined
+    assert "A10-19 🏥 Health" in joined
     assert "resources" not in joined
 
 
 def test_an_area_ref_scopes_to_that_area(seeded):
     joined = "\n".join(tree(log=log, dbConn=seeded, ref="A10-19").get())
-    assert "A10-19  Health" in joined
-    assert "A11.10  Cardiologist" in joined
+    assert "A10-19 🏥 Health" in joined
+    assert "A11.10 Cardiologist" in joined
     assert "areas" not in joined
 
 
 def test_a_category_ref_scopes_to_that_category(seeded):
     lines = tree(log=log, dbConn=seeded, ref="A11").get()
     joined = "\n".join(lines)
-    assert "A11  Doctors" in joined
+    assert "A11 🩺 Doctors" in joined
     assert "A10-19" not in joined
 
 
@@ -87,7 +131,7 @@ def test_an_unknown_category_raises(seeded):
 
 def test_an_empty_domain_still_renders_its_heading(seeded):
     joined = "\n".join(tree(log=log, dbConn=seeded, ref="P").get())
-    assert joined.strip() == "P  projects"
+    assert joined.strip() == "P projects"
 
 
 def test_format_tree_draws_branch_connectors():
