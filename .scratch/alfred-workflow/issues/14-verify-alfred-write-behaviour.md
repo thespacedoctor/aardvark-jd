@@ -18,3 +18,5 @@ Build a throwaway workflow — a bundle id that cannot collide, one Script Filte
 Record what was done, the resulting facts, and clean up the throwaway workflow afterwards. Then confirm whether [Is `info.plist` committed, or generated?](04-version-controlling-info-plist.md) and [What does `aardvark install_alfred` do?](10-install-alfred-command.md) still have the shape they have now.
 
 **This touches the user's live Alfred installation and a Dropbox-synced preferences folder.** Confirm with the user before running it, and take a copy of anything that will be written to.
+
+> **Go-ahead given in principle, 2026-09-03.** Dave has approved this ticket being worked. That covers taking the ticket, not any particular command: still show the exact steps and confirm before the first write, and still take a copy of the preferences folder first. Approval in principle is not approval of a plan he has not seen.
