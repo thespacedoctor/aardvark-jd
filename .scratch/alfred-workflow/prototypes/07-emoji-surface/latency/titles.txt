@@ -1,0 +1,37 @@
+# PROTOTYPE - wayfinder ticket 07. THROWAWAY.
+# One folder per line: "title | description". Description is optional.
+# These are area- and category-level names for a one-person PARA + Johnny
+# Decimal system - the folders that actually get an emoji (add_area,
+# add_category, set_emoji). IDs are excluded: they carry no emoji.
+Health | doctors, dentists, prescriptions, test results
+Doctors | GP and specialist contacts and letters
+Finances | accounts, budgets, statements
+Mortgage | statements, overpayments, remortgage paperwork
+Home Maintenance | repairs, servicing, tradespeople
+Vehicles | tax, insurance, MOT, servicing
+Career | CV, references, appraisals
+Professional Development | courses, certifications, conference notes
+Photography | shoots, gear, editing presets
+Woodworking | plans, jigs, timber orders
+Travel | trips, itineraries, loyalty schemes
+Recipes | tried and tested, meal plans
+Fitness | training plans, parkrun times
+Mental Health | therapy notes, journalling prompts
+Insurance | home, life, travel, gadget policies
+Taxes | self assessment, receipts, HMRC correspondence
+Pets | vet records, insurance, feeding notes
+Gardening | planting plans, seed orders
+Music Production | project files, sample packs, mixing notes
+Reading List | to read, finished, book notes
+Home Automation | HomeKit scenes, device manuals
+Kids School | term dates, permission slips, reports
+Genealogy | family tree research, certificates
+Legal Documents | wills, deeds, powers of attorney
+Subscriptions | renewal dates, cancellation notes
+Meeting Notes | one to ones, project standups
+Software Licences | keys, invoices, renewal dates
+Warranties | receipts, expiry dates, claim forms
+Camping Gear | inventory, maintenance, trip checklists
+Language Learning | Anki decks, grammar notes
+Cycling | maintenance log, route GPX files
+Correspondence | letters sent and received
