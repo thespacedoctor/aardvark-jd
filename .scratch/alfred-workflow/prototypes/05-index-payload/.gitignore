@@ -1,0 +1,3 @@
+workflow/payload-*.json
+AardvarkPayloadProbe.alfredworkflow
+__pycache__/

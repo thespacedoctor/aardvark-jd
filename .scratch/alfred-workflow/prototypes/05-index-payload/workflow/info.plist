@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>dev.thespacedoctor.aardvark.ticket05probe</string>
+	<key>name</key>
+	<string>Aardvark Payload Probe (ticket 05, THROWAWAY)</string>
+	<key>description</key>
+	<string>Throwaway wayfinder ticket 05 probe: feed Alfred a synthetic whole-index payload at a chosen scale and feel the keystroke latency and match quality. Delete after the ticket closes.</string>
+	<key>createdby</key>
+	<string>wayfinder ticket 05</string>
+	<key>version</key>
+	<string>0.0.1</string>
+	<key>webaddress</key>
+	<string></string>
+	<key>readme</key>
+	<string>Keyword: `probe`. Set SCALE (1000/5000/15000/25000) and FORM (fat/lean) in this workflow's configuration. The script cats payload-$SCALE-$FORM.json from the workflow directory. "Alfred Filters Results" is ON, match mode "Word matching - Any order". No cache block in the served payload, so every `probe` invocation pays the full parse. To test the cache path, point the script at a *-cached.json file.</string>
+	<key>uidata</key>
+	<dict>
+		<key>A1B2C3D4-0000-0000-0000-000000000001</key>
+		<dict>
+			<key>xpos</key>
+			<real>120</real>
+			<key>ypos</key>
+			<real>120</real>
+		</dict>
+	</dict>
+	<key>connections</key>
+	<dict/>
+	<key>userconfigurationconfig</key>
+	<array>
+		<dict>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>SCALE</string>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<integer>1</integer>
+				<key>pairs</key>
+				<array>
+					<array><string>1000</string><string>1000</string></array>
+					<array><string>5000</string><string>5000</string></array>
+					<array><string>15000</string><string>15000</string></array>
+					<array><string>25000</string><string>25000</string></array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>synthetic entity count</string>
+		</dict>
+		<dict>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>FORM</string>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<integer>0</integer>
+				<key>pairs</key>
+				<array>
+					<array><string>fat (per-mod URL blocks)</string><string>fat</string></array>
+					<array><string>lean (one urls object)</string><string>lean</string></array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>payload shape</string>
+		</dict>
+	</array>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>uid</key>
+			<string>A1B2C3D4-0000-0000-0000-000000000001</string>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>version</key>
+			<integer>3</integer>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<true/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>2</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>keyword</key>
+				<string>probe</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>parsing the synthetic index…</string>
+				<key>script</key>
+				<string>cat "payload-${SCALE:-5000}-${FORM:-fat}.json"</string>
+				<key>scriptargtype</key>
+				<integer>0</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string>ticket 05 probe — SCALE=${SCALE} FORM=${FORM}</string>
+				<key>title</key>
+				<string>Aardvark index probe</string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+		</dict>
+	</array>
+	<key>variables</key>
+	<dict/>
+	<key>variablesdontexport</key>
+	<array/>
+</dict>
+</plist>
