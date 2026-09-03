@@ -61,7 +61,6 @@ class add_area(object):
         title = spell_check.checked_title(self.title, self.settings, self.log)
         pickedEmoji = emoji_picker.resolve_emoji(
             title, self.description, chosenEmoji=self.chosenEmoji,
-            settings=self.settings, log=self.log,
         )
         folderName = folders.area_folder_name(self.domain, decadeStart, decadeEnd, title, pickedEmoji)
         parentPath = paths.resolve(self.dbConn, f"root.{self.domain}")

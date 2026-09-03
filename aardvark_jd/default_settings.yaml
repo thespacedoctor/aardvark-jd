@@ -4,11 +4,6 @@ system:
     name: null
     root_path: null
 
-emoji:
-    # ask Claude to suggest folder emoji, falling back to an offline keyword
-    # search whenever the API is unreachable. set to false to stay offline.
-    use_llm: true
-
 spell_check:
     # offer to correct a suspected typo in a new folder's title, before
     # anything is created. only tokens of six characters or more are

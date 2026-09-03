@@ -66,7 +66,6 @@ class add_category(object):
         title = spell_check.checked_title(self.title, self.settings, self.log)
         pickedEmoji = emoji_picker.resolve_emoji(
             title, self.description, chosenEmoji=self.chosenEmoji,
-            settings=self.settings, log=self.log,
         )
         folderName = folders.category_folder_name(self.domain, acNumber, title, pickedEmoji)
         folderPath = folders.make_folder(area["folder_path"], folderName)

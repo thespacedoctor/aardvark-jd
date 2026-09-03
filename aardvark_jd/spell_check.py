@@ -85,7 +85,7 @@ def enabled(settings):
 
     The clean "always off" exit for someone who creates many folders full
     of fresh proper nouns, where self-silencing on recurring jargon does
-    not help. Mirrors the existing `emoji.use_llm` toggle.
+    not help.
 
     **Key Arguments:**
 

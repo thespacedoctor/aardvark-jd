@@ -83,10 +83,11 @@ calls `_hand_off_sync`.
 - `folders.py` — next-number allocation, `slugify`, folder creation, exhaustion errors.
 - `paths.py` — the fixed root skeleton (`SYSTEM_SKELETON`) and path resolution against the
   `system_folders` table.
-- Every non-ID folder name ends with an emoji. `emoji_picker.resolve_emoji` tries an
-  offline keyword index built from `emoji.EMOJI_DATA` first, then optionally asks Claude
-  (`claude-opus-5`, `low` effort, 15 s timeout, 0 retries, falls back to `📁`). Uses the
-  `anthropic` SDK — needs `ANTHROPIC_API_KEY`.
+- Every non-ID folder name ends with an emoji. `emoji_picker.resolve_emoji` uses an
+  explicit `--emoji` if given; otherwise `pick_emoji` looks the title (then the
+  description) up in an offline keyword index built from `emoji.EMOJI_DATA`, falling back
+  to `📁`. That pick is the prompt default in an interactive session and is accepted
+  silently in a non-interactive one. No network call, no API key.
 - `spell_check.checked_title` runs *before* the emoji step (accepting a correction changes
   the title the emoji and folder name derive from). Ships a British English wordlist in
   `aardvark_jd/resources/wordlists/`, checks only tokens >= 6 chars at edit distance 1,
