@@ -25,23 +25,23 @@ With this loaded, `aardvark add_category A<TAB>` lists existing areas, `aardvark
 
 ## Folder emoji
 
-Areas, categories and projects get an emoji suggested from their title and description. Suggestions come from the Claude API, so make credentials available the way the [Anthropic SDK expects](https://platform.claude.com/docs/en/api/overview) - typically an `ANTHROPIC_API_KEY` environment variable. Without them aardvark quietly falls back to an offline keyword search, which is thinner: it has no entry for "doctor" or "finance", so those land on the generic 📁.
+Areas, categories and projects get an emoji suggested from their title, then their description, by an offline keyword search of the `emoji` package's data. It is deliberately thin - it has no entry for "doctor" or "finance", so those land on the generic 📁 - and it makes no network call.
 
-In an interactive session the suggestion is shown for you to accept or replace:
+In an interactive session the suggestion is the prompt default; press Enter to take it or type the emoji you want:
 
 ```bash
-aardvark add_area A "Doctors" "GP and specialists"
-# Suggested emoji for 'Doctors': 🩺
+aardvark add_area A "Health" "Doctors, dentists, prescriptions"
+# Suggested emoji for 'Health': 🏥
 # Press Enter to accept, or type a replacement emoji:
 ```
 
-Pass `--emoji` to skip both the API call and the prompt:
+In a non-interactive session the offline pick is used as-is. Either way, pass `--emoji` to set it outright and skip the prompt:
 
 ```bash
 aardvark add_area A "Taxes" "Self assessment and receipts" --emoji 🧾
 ```
 
-To stay offline permanently, set `use_llm: false` under `emoji:` in your settings file.
+If the pick is wrong, `set_emoji` changes it later.
 
 ### Changing an emoji later
 

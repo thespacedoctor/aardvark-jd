@@ -32,7 +32,7 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 * `archive <ref>` to retire an area, category or project ID - the folder moves to its nearest `09_archive` folder on disk (and in Google Drive, best-effort in Craft/Todoist), the entry is flagged archived in the database, and its Johnny Decimal number becomes free for reuse
 * `open` with no argument launches an arrow-key picker through Areas/Resources/Projects down to an ID, seeded from the current directory when it resolves to one
 * shell tab completion for commands, references and flag values, and (via `aardvark shell_init zsh|bash`) a working `cd` - see Shell completion below
-* every non-ID folder is suffixed with a relevant emoji, suggested by Claude and confirmable at the prompt (or set outright with `--emoji`)
+* every non-ID folder is suffixed with a relevant emoji, suggested offline from the title and confirmable at the prompt (or set outright with `--emoji`)
 * `set_emoji` / `repair_emoji` to change an emoji after the fact, moving the folder and repointing the index together
 * `connect_craft` / `craft_sync` to mirror the whole index into a craft.do space, with a Finder link (and, once `connect_dropbox` is set up, a Dropbox share link) on every synced document
 * `connect_gdrive` / `gdrive_sync` to mirror the folder structure into Google Drive as well, linked alongside Craft and Todoist

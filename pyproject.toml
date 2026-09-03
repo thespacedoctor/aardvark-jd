@@ -24,7 +24,6 @@ dependencies = [
     'fundamentals',
     'docopt',
     'emoji',
-    'anthropic',
     'requests'
 ]
 

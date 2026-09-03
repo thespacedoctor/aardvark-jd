@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>dev.thespacedoctor.aardvark.ticket07probe</string>
+	<key>name</key>
+	<string>Aardvark Emoji Probe (ticket 07, THROWAWAY)</string>
+	<key>description</key>
+	<string>Throwaway wayfinder ticket 07 probe: feel the emoji suggestion step on Alfred's interactive path - offline picks shown instantly, the Claude suggestion slotted in at the top via rerun when it lands. Calls the real Claude API. Delete after the ticket closes.</string>
+	<key>createdby</key>
+	<string>wayfinder ticket 07</string>
+	<key>version</key>
+	<string>0.0.1</string>
+	<key>webaddress</key>
+	<string></string>
+	<key>disabled</key>
+	<false/>
+	<key>readme</key>
+	<string>PREREQ: run ./setup.sh in the prototype directory, put your Anthropic key in ~/.aardvark-proto-key (chmod 600), then ./regen.sh and import this file.
+
+Keyword: `avemoji`. Type a folder title (or `title | description`). The offline emoji candidates appear at once; "Asking Claude…" sits at the top with a live wait counter; when the API answers, its pick jumps to the top tagged with how long it took. Pick any row to fire a notification showing the chosen emoji and its source.
+
+Re-feel it against several titles. `rm -rf` the PROTO_CACHE dir (printed by setup.sh) to force fresh calls - a second entry of the same title is served from cache instantly, which is itself a finding.
+
+What to watch: does the wait feel blocking or does showing offline-first hide it? Is the rerun swap jarring? On a slow or failed call, does the fallback read as broken?</string>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>uid</key>
+			<string>07AAAAAA-0000-0000-0000-000000000001</string>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>version</key>
+			<integer>3</integer>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>127</integer>
+				<key>keyword</key>
+				<string>avemoji</string>
+				<key>queuedelaycustom</key>
+				<integer>1</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>picking an emoji…</string>
+				<key>script</key>
+				<string>source ./scripts/env.sh
+exec "$AARDVARK_PY" ./scripts/sf_emoji.py "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string>ticket 07 probe — type a new folder title</string>
+				<key>title</key>
+				<string>Emoji for a new folder</string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+		</dict>
+		<dict>
+			<key>uid</key>
+			<string>07AAAAAA-0000-0000-0000-000000000002</string>
+			<key>type</key>
+			<string>alfred.workflow.output.notification</string>
+			<key>version</key>
+			<integer>1</integer>
+			<key>config</key>
+			<dict>
+				<key>lastpathcomponent</key>
+				<false/>
+				<key>onlyshowifquerypopulated</key>
+				<false/>
+				<key>removeextension</key>
+				<false/>
+				<key>text</key>
+				<string>picked {var:EMOJI}   ·   source: {var:EMOJI_SOURCE}</string>
+				<key>title</key>
+				<string>Aardvark ticket 07 probe</string>
+			</dict>
+		</dict>
+	</array>
+	<key>connections</key>
+	<dict>
+		<key>07AAAAAA-0000-0000-0000-000000000001</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>07AAAAAA-0000-0000-0000-000000000002</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+	</dict>
+	<key>uidata</key>
+	<dict>
+		<key>07AAAAAA-0000-0000-0000-000000000001</key>
+		<dict>
+			<key>xpos</key>
+			<real>110</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+		<key>07AAAAAA-0000-0000-0000-000000000002</key>
+		<dict>
+			<key>xpos</key>
+			<real>360</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+	</dict>
+	<key>variables</key>
+	<dict/>
+	<key>variablesdontexport</key>
+	<array/>
+</dict>
+</plist>

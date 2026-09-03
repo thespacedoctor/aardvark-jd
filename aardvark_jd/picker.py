@@ -5,8 +5,8 @@
 
 Written against `termios`/`tty` directly rather than pulling in curses or a
 third-party prompt library: aardvark's only runtime dependencies are
-`pyyaml`, `fundamentals`, `docopt`, `emoji`, `anthropic` and `requests`,
-and a one-screen chooser does not justify adding to that list.
+`pyyaml`, `fundamentals`, `docopt`, `emoji` and `requests`, and a
+one-screen chooser does not justify adding to that list.
 
 The menu is drawn to **stderr**, not stdout, so a caller's real output
 stays pipeable while the chooser is on screen. The terminal is always

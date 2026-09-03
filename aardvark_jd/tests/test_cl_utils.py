@@ -150,15 +150,15 @@ def test_main_set_emoji_and_repair_emoji_end_to_end(isolatedHome, monkeypatch, c
     assert "root.areas" in capsys.readouterr().out
 
 
-def test_main_emoji_flag_skips_the_suggester(isolatedHome, monkeypatch, capsys):
+def test_main_emoji_flag_skips_the_picker(isolatedHome, monkeypatch, capsys):
     from aardvark_jd import emoji_picker
 
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
     def boom(*args, **kwargs):
-        raise AssertionError("--emoji must bypass the Claude API entirely")
+        raise AssertionError("--emoji must bypass the emoji picker entirely")
 
-    monkeypatch.setattr(emoji_picker, "_suggest_via_claude", boom)
+    monkeypatch.setattr(emoji_picker, "pick_emoji", boom)
 
     rootParent = str(isolatedHome / "root_parent")
     os.makedirs(rootParent)
