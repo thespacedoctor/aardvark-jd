@@ -1,7 +1,7 @@
 # Can the emoji suggestion survive being on the interactive path in Alfred?
 
 Type: prototype
-Status: claimed
+Status: resolved
 Blocked by: 06
 
 ## Question
@@ -20,16 +20,20 @@ Build the emoji step as a real Script Filter and answer:
 
 Note that ID folders are never emoji-suffixed, so this step does not exist for `add_id` — it applies to `add_area`, `add_category` and `set_emoji`.
 
-## Progress (2026-09-03)
+## Answer (2026-09-03)
 
-Prototype built on branch `prototype/ticket-07-emoji-surface`, in `.scratch/alfred-workflow/prototypes/07-emoji-surface/`. Not yet resolved — it needs two hands-on measurements from Dave.
+**The question is moot: the Claude emoji call was removed from the CLI entirely.** Dave's call, taken before the prototype was run — the API cost, the `anthropic` dependency, the `ANTHROPIC_API_KEY` requirement and the tail latency were not worth a one-character result when the offline pick plus a manual prompt is the honest interaction.
 
-- **Part A — latency harness** (`latency/run_latency.py`): calls the real `claude-opus-5` request shape over 32 realistic new-folder titles, 3 passes, and reports median / p90 / max / fallback rate / output-token counts. Dave runs it with his key; the median decides whether the interactive path is viable.
-- **Part B — Alfred fragment** (`AardvarkEmojiProbe.alfredworkflow`, keyword `avemoji`): implements the "offline candidates instantly, detached Claude call, `rerun: 0.3` poll, swap the suggestion in at the top when it lands" pattern, plus a visible fallback path and a `/`-triggered free-text emoji search. Dave imports it and feels it against the titles in the probe README.
+- `emoji_picker.pick_emoji` — the offline keyword search — is now the whole suggester. It is the default at the interactive prompt, the silent pick in a non-interactive run, and `--emoji` overrides it. No network call.
+- Recorded as [ADR 0002](../../docs/adr/0002-drop-the-claude-emoji-suggester.md), implemented on branch `feature/drop-claude-emoji-suggester` (test suite green, coverage 96%). `emoji_picker` loses `suggest_emoji`, `llm_enabled`, `_suggest_via_claude`, `_validate_single_emoji`, the `CLAUDE_*` constants and the system prompt; the `emoji: use_llm` setting is gone; `anthropic` leaves `pyproject.toml`.
 
-Design notes already surfaced, for ticket 13:
+**For the Alfred surface:** the emoji step is now a plain offline pick plus manual entry — show the `pick_emoji` result as the default, let the user accept it or type/search an emoji (Alfred's built-in emoji picker or a free-text search over the `emoji` index). No latency to hide, no `rerun` dance, no key to plumb into Alfred's `no-rcs` environment. Failure is not a concept here — there is nothing to fail.
 
-- `rerun` (0.1–5.0 s, full-replacement) is the mechanism and it works; there is no partial/streaming update.
-- Alfred runs scripts under `/bin/zsh --no-rcs`, so **neither the interpreter path nor `ANTHROPIC_API_KEY` reaches the script from the login shell** — both have to be supplied by the workflow. This widens ticket 10 (`install_alfred`) beyond the binary path: it has to make the key visible too.
-- The offline picker (`emoji_picker.pick_emoji`) returns the bare `📁` fallback for most area/category-style titles ("Photography", "Cycling", "Genealogy", "Mortgage"…), so "show offline instantly" often means "show 📁 instantly". That raises the stakes on either the Claude call landing fast or the `/` search / Alfred's own emoji picker carrying the load.
-- Even the instant offline path pays the ~0.3–0.5 s `import aardvark_jd` cost per invocation. A slim standalone emoji index may be worth it for the Alfred entry point.
+**Findings that survive, handed to ticket 13:**
+
+- Alfred runs scripts under `/bin/zsh --no-rcs`, so the interpreter path does not reach a script from the login shell — it must be supplied by the workflow (feeds tickets 10 and 12). `ANTHROPIC_API_KEY` no longer matters.
+- `emoji_picker.pick_emoji` returns the bare `📁` fallback for most area/category-style titles ("Photography", "Cycling", "Genealogy", "Mortgage"…), so the Alfred default will often be `📁` and the manual entry / emoji search carries the real load. Worth making that path prominent.
+- The offline pick pays the ~0.3–0.5 s `import aardvark_jd` cost per invocation; a slim standalone emoji index may be worth it for the Alfred entry point.
+- Ticket 03's mutating-result `emoji_source` field loses its `claude` value (now `offline` / `chosen` / `deferred`).
+
+**Superseded prototype:** `.scratch/alfred-workflow/prototypes/07-emoji-surface/` (branch `prototype/ticket-07-emoji-surface`) built the `rerun`/swap-in machinery and a latency harness. Both are now dead — the harness and worker call `emoji_picker` functions that no longer exist. Kept as a record of the approach considered; its README carries a SUPERSEDED banner.

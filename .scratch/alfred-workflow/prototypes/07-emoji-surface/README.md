@@ -1,5 +1,13 @@
 # Ticket 07 probe — the emoji surface
 
+> **SUPERSEDED (2026-09-03).** Before this probe was run, the decision went the
+> other way: the Claude emoji call was removed from the CLI entirely
+> ([ADR 0002](../../../../docs/adr/0002-drop-the-claude-emoji-suggester.md)).
+> There is no API latency left to hide, so this prototype is not needed.
+> `emoji_worker.py` and `latency/run_latency.py` call `emoji_picker` functions
+> that no longer exist and will raise `AttributeError`. Kept as a record of the
+> approach that was considered. See ticket 07's `## Answer`.
+
 Throwaway. Answers [issues/07-emoji-surface.md](../../issues/07-emoji-surface.md):
 can the Claude emoji suggestion sit on Alfred's interactive path without
 making the workflow feel bad?
