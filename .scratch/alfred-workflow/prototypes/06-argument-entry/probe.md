@@ -103,16 +103,27 @@ For each, does this exact shape fit, need a variant, or need a different flow?
 
 ## Verdict
 
-_To be filled in after the hands-on run._
+* Don't add the path to in the Alfred description 
+* Adding the Code in the second step risks the user adding the code to the actual title.
+
 
 | Sub-question | Finding |
 | --- | --- |
-| One action or two? | |
-| Going back to change the category | |
-| The separator | |
-| What the second step shows | |
-| Preview / confirmation before commit | |
-| Where emoji (07) and spell-check (08) slot in | |
-| Does the shape stretch to the other commands? | |
+| One action or two? | It is fast. 2 prompts are appearing not one.  |
+| Going back to change the category | I can't go back to change the catagory. Don't know what key to use. |
+| The separator | , |
+| What the second step shows | The raw parse is useful, just keep title = <> and desciription = <> ... KISS |
+| Preview / confirmation before commit | Give me a confirmation step. |
+| Where emoji (07) and spell-check (08) slot in | Spellcheck and emoji before preview |
+| Does the shape stretch to the other commands? | yes |
 
-**Decision:** _…_
+**Decision:** Build the mutating half on the two-step hybrid, with four
+corrections. Separator is `,` (comma, split on the first one). Step 2 shows only
+the parsed `title = «…»` / `description = «…»` — no JD code (it invites typing
+the code into the title), no folder path. The final Return does not commit: an
+explicit confirmation screen does. Spell-check (08) and emoji (07) sit after
+step 2, before that confirmation — and `add_id` has no emoji step at all, since
+IDs carry no emoji. The flow reads as two prompts rather than one; accepted,
+the speed is the point. Going back to the category list needs an explicit
+affordance with a visible key hint — handed to ticket 13. The shape stretches
+to every other mutating command. Full write-up in the ticket's `## Answer`.
