@@ -34,12 +34,14 @@ A throwaway Alfred workflow for `add_id` was built on branch `prototype/ticket-0
 
 **Spell-check (08) and emoji (07) sit after step 2, before the confirmation.** Order: category → `title, description` → spell-check → emoji → confirm → run. `add_id` has no emoji step at all, because IDs are never emoji-suffixed, so for `add_id` specifically it is category → `title, description` → spell-check → confirm → run. The emoji step appears only for `add_area` and `add_category`.
 
+> **Superseded 2026-09-03 by [ticket 08](08-spell-check-surface.md).** There is no spell-check step. Measured at a 1.4 per cent per-title fire rate, the suspect-token correction became alternate rows *on* the confirmation screen rather than a step before it. The order is now category → `title, description` → emoji → confirm → run, and for `add_id` simply category → `title, description` → confirm → run. The confirmation screen carries the correction rows on the rare titles that fire, with "Create as typed" first and default.
+
 **Going back to change the category needs an explicit affordance.** In the prototype there was no way back to the category list from step 2 and no visible key hint. Handed to ticket 13 as a spec requirement: a documented key to return, with a hint shown in the step-2 subtitle, or a first row in step 2 that returns to step 1.
 
 **The shape stretches to every other mutating command** without a structural change: `add_project` inserts a template pick as an extra list step before `title, description`; `add_area` / `add_category` add the emoji step; `set_emoji` and `archive` are a reference pick plus one field or a confirmation. No command justifies a different flow.
 
 ### Handoffs
 
-- **Ticket 07 (emoji surface):** the emoji step sits between spell-check and the confirmation screen, and only for `add_area` / `add_category` — never `add_id`.
-- **Ticket 08 (spell-check surface):** the spell-check step sits immediately after `title, description`, before emoji and confirmation.
+- **Ticket 07 (emoji surface):** the emoji step sits between spell-check and the confirmation screen, and only for `add_area` / `add_category` — never `add_id`. *Resolved: the step is now immediately after `title, description`, since the spell-check step it followed no longer exists.*
+- **Ticket 08 (spell-check surface):** the spell-check step sits immediately after `title, description`, before emoji and confirmation. *Resolved the other way: there is no spell-check step. The corrections are rows on the confirmation screen. See the supersession note above.*
 - **Ticket 13 (assemble the spec):** separator is `,`, split on the first; step 2 is parse-only with no JD code and no path; a mandatory confirmation screen replaces commit-on-Return; step 2 needs an explicit "back to category" affordance with a visible key hint.
