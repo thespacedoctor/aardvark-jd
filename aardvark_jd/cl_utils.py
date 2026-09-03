@@ -89,7 +89,7 @@ import sys
 from fundamentals import tools, times
 
 from aardvark_jd import (
-    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text, labels
+    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text, labels,
     paths, settings_writer,
 )
 from aardvark_jd.add_area import add_area
