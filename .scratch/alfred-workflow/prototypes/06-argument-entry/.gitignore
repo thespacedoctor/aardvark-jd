@@ -1,0 +1,4 @@
+# THROWAWAY BUILD ARTEFACTS - regen.sh and setup.sh rebuild them.
+AardvarkArgEntryProbe.alfredworkflow
+workflow/scripts/env.sh
+**/__pycache__/

@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>dev.thespacedoctor.aardvark.ticket06probe</string>
+	<key>name</key>
+	<string>Aardvark Arg Entry Probe (ticket 06, THROWAWAY)</string>
+	<key>description</key>
+	<string>Throwaway wayfinder ticket 06 probe: feel the two-step add_id entry flow (category pick, then "title :: description"). Writes into a throwaway aardvark system only. Delete after the ticket closes.</string>
+	<key>createdby</key>
+	<string>wayfinder ticket 06</string>
+	<key>version</key>
+	<string>0.0.1</string>
+	<key>webaddress</key>
+	<string></string>
+	<key>disabled</key>
+	<false/>
+	<key>readme</key>
+	<string>PREREQ: run ./setup.sh then ./regen.sh in the prototype directory, then import this file.
+
+Keyword: `avid`. Step 1 is a Script Filter listing the throwaway system's categories (Alfred filters the list). Return descends to step 2, a keyword-less Script Filter that takes one free-text field parsed as `title {SEP} description` and shows a live preview. Return on the preview row runs `aardvark add_id` against the throwaway system, reveals the new folder in Finder, and posts a notification.
+
+SEP is set in this workflow's configuration (default `::`). Change it and re-feel the flow against the seeded titles - several contain hyphens and one contains ` :: ` on purpose.
+
+The connection from step 1 to step 2 has "Don't close Alfred" ticked (vitoclose) so the window does not flicker between steps. If step 2 does not auto-run when you press Return on a category, open the workflow in Alfred and confirm that connection exists.</string>
+	<key>userconfigurationconfig</key>
+	<array>
+		<dict>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>SEP</string>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<integer>0</integer>
+				<key>pairs</key>
+				<array>
+					<array><string>:: (double colon)</string><string>::</string></array>
+					<array><string>/ (slash)</string><string>/</string></array>
+					<array><string>&#8212; (em dash)</string><string>&#8212;</string></array>
+					<array><string>" - " (spaced hyphen)</string><string> - </string></array>
+					<array><string>&gt; (greater-than)</string><string>&gt;</string></array>
+					<array><string>, (comma)</string><string>,</string></array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>separator between title and description in step 2</string>
+		</dict>
+	</array>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>uid</key>
+			<string>06AAAAAA-0000-0000-0000-000000000001</string>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>version</key>
+			<integer>3</integer>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<true/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>2</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>127</integer>
+				<key>keyword</key>
+				<string>avid</string>
+				<key>queuedelaycustom</key>
+				<integer>1</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>reading the throwaway index…</string>
+				<key>script</key>
+				<string>source ./scripts/env.sh
+exec "$AARDVARK_PY" ./scripts/sf_category.py "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string>ticket 06 probe — which category does the new ID go in?</string>
+				<key>title</key>
+				<string>Add ID — pick a category</string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+		</dict>
+		<dict>
+			<key>uid</key>
+			<string>06AAAAAA-0000-0000-0000-000000000002</string>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>version</key>
+			<integer>3</integer>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>127</integer>
+				<key>keyword</key>
+				<string></string>
+				<key>queuedelaycustom</key>
+				<integer>1</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>source ./scripts/env.sh
+exec "$AARDVARK_PY" ./scripts/sf_entry.py "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string>title  {var:SEP}  description   ·   into {var:CATEGORY_LABEL}</string>
+				<key>title</key>
+				<string>Add ID — title, then description</string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+		</dict>
+		<dict>
+			<key>uid</key>
+			<string>06AAAAAA-0000-0000-0000-000000000003</string>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>version</key>
+			<integer>2</integer>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>127</integer>
+				<key>script</key>
+				<string>source ./scripts/env.sh
+exec bash ./scripts/commit.sh</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>0</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>uid</key>
+			<string>06AAAAAA-0000-0000-0000-000000000004</string>
+			<key>type</key>
+			<string>alfred.workflow.output.notification</string>
+			<key>version</key>
+			<integer>1</integer>
+			<key>config</key>
+			<dict>
+				<key>lastpathcomponent</key>
+				<false/>
+				<key>onlyshowifquerypopulated</key>
+				<false/>
+				<key>removeextension</key>
+				<false/>
+				<key>text</key>
+				<string>{query}</string>
+				<key>title</key>
+				<string>Aardvark ticket 06 probe</string>
+			</dict>
+		</dict>
+	</array>
+	<key>connections</key>
+	<dict>
+		<key>06AAAAAA-0000-0000-0000-000000000001</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>06AAAAAA-0000-0000-0000-000000000002</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+		</array>
+		<key>06AAAAAA-0000-0000-0000-000000000002</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>06AAAAAA-0000-0000-0000-000000000003</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>06AAAAAA-0000-0000-0000-000000000003</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>06AAAAAA-0000-0000-0000-000000000004</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+	</dict>
+	<key>uidata</key>
+	<dict>
+		<key>06AAAAAA-0000-0000-0000-000000000001</key>
+		<dict>
+			<key>xpos</key>
+			<real>110</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+		<key>06AAAAAA-0000-0000-0000-000000000002</key>
+		<dict>
+			<key>xpos</key>
+			<real>330</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+		<key>06AAAAAA-0000-0000-0000-000000000003</key>
+		<dict>
+			<key>xpos</key>
+			<real>560</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+		<key>06AAAAAA-0000-0000-0000-000000000004</key>
+		<dict>
+			<key>xpos</key>
+			<real>780</real>
+			<key>ypos</key>
+			<real>110</real>
+		</dict>
+	</dict>
+	<key>variables</key>
+	<dict>
+		<key>SEP</key>
+		<string>::</string>
+	</dict>
+	<key>variablesdontexport</key>
+	<array/>
+</dict>
+</plist>
