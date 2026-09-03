@@ -89,7 +89,7 @@ import sys
 from fundamentals import tools, times
 
 from aardvark_jd import (
-    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text,
+    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text, labels
     paths, settings_writer,
 )
 from aardvark_jd.add_area import add_area
@@ -661,7 +661,7 @@ def _search(a, log, indexDbConn):
     treated as one: a domain letter, area or category prints its subtree,
     and an ID prints its path line. Anything else - including a ref-shaped
     term that matches nothing - falls through to the existing keyword
-    search, so `search A` can still find the word "A" if that is genuinely
+    search, so `fd A` can still find the word "A" if that is genuinely
     what the user meant.
 
     **Key Arguments:**
@@ -684,7 +684,7 @@ def _search(a, log, indexDbConn):
                 normalised = ref.upper()
                 idRow = _id_row_for_ref(indexDbConn, normalised)
                 if idRow is not None:
-                    print(f"{normalised}  {idRow['title']}  {idRow['folder_path']}")
+                    print(f"{labels.id_label(idRow['domain'], idRow)}  {idRow['folder_path']}")
                     return
                 for line in tree(log=log, dbConn=indexDbConn, ref=normalised).get():
                     print(line)

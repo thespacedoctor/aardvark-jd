@@ -598,3 +598,35 @@ def test_a_mirror_failure_reason_cannot_smuggle_terminal_escapes(connectedSystem
     err = capsys.readouterr().err
     assert "\x1b" not in err and "\x07" not in err
     assert "rate limited" in err and "cleared your screen" in err
+
+
+def test_fd_on_an_id_ref_prints_a_bare_label_and_a_wide_path_gutter(isolatedHome, capsys):
+    """*an ID owns no emoji, so its one-line output stays `code title  path`*"""
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "-e", "\N{HOSPITAL}"]))
+    cl_utils.main(docopt(doc, ["add_category", "A10-19", "Doctors", "desc", "-e", "\N{STETHOSCOPE}"]))
+    cl_utils.main(docopt(doc, ["add_id", "A11", "Cardiologist", "desc"]))
+    capsys.readouterr()
+
+    cl_utils.main(docopt(doc, ["fd", "A11.10"]))
+    line = capsys.readouterr().out.strip()
+
+    assert line.startswith("A11.10 Cardiologist  /")
+    assert "\N{FILE FOLDER}" not in line
+
+
+def test_fd_on_a_category_ref_prints_the_emoji_in_the_tree(isolatedHome, capsys):
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "desc", "-e", "\N{HOSPITAL}"]))
+    cl_utils.main(docopt(doc, ["add_category", "A10-19", "Doctors", "desc", "-e", "\N{STETHOSCOPE}"]))
+    capsys.readouterr()
+
+    cl_utils.main(docopt(doc, ["fd", "A11"]))
+
+    assert "A11 \N{STETHOSCOPE} Doctors" in capsys.readouterr().out

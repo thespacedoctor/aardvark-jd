@@ -23,8 +23,12 @@ def seeded(tmp_path):
         log=log, systemName="Test", parentPath=str(tmp_path), pathToSettingsFile=settingsPath
     ).get()
     conn = db.get_connection(paths.find_db_path(rootPath))
-    add_area(log=log, dbConn=conn, domain="areas", title="Health", description="d1").get()
-    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors", description="d2").get()
+    # EXPLICIT EMOJI, SO THE RENDERED LABELS ARE EXACT RATHER THAN WHATEVER THE
+    # SUGGESTER HAPPENS TO PICK FOR "HEALTH" ON THE DAY.
+    add_area(log=log, dbConn=conn, domain="areas", title="Health", description="d1",
+             chosenEmoji="🏥").get()
+    add_category(log=log, dbConn=conn, domain="areas", areaRef="A10", title="Doctors", description="d2",
+                 chosenEmoji="🩺").get()
     _code, idFolderPath = add_id(
         log=log, dbConn=conn, domain="areas", categoryRef="A11", title="Cardiologist", description="d3"
     ).get()
@@ -51,20 +55,20 @@ def _scripted(monkeypatch, *labels):
 
 def test_drilling_all_the_way_down_returns_the_id_folder(seeded, monkeypatch):
     conn, settings, idFolderPath = seeded
-    _scripted(monkeypatch, "A  areas", "A10-19", "A11", "A11.10")
+    _scripted(monkeypatch, "A areas", "A10-19", "A11", "A11.10")
     assert browse(log=log, dbConn=conn, settings=settings).get() == idFolderPath
 
 
 def test_stopping_at_the_category_returns_the_category_folder(seeded, monkeypatch):
     conn, settings, _idFolderPath = seeded
-    _scripted(monkeypatch, "A  areas", "A10-19", "A11", "→ open")
+    _scripted(monkeypatch, "A areas", "A10-19", "A11", "→ open")
     folderPath = browse(log=log, dbConn=conn, settings=settings).get()
     assert "A11_doctors" in folderPath
 
 
 def test_stopping_at_the_area_returns_the_area_folder(seeded, monkeypatch):
     conn, settings, _idFolderPath = seeded
-    _scripted(monkeypatch, "A  areas", "A10-19", "→ open")
+    _scripted(monkeypatch, "A areas", "A10-19", "→ open")
     folderPath = browse(log=log, dbConn=conn, settings=settings).get()
     assert "A10_19_health" in folderPath
 
@@ -82,7 +86,7 @@ def test_going_back_from_an_area_returns_to_the_domain_list(seeded, monkeypatch)
     def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
         calls.append(title)
         if len(calls) == 1:
-            return next(v for v, label in options if label.startswith("A  areas"))
+            return next(v for v, label in options if label.startswith("A areas"))
         if len(calls) == 2:
             return next(v for v, label in options if label == "← back")
         return None
@@ -100,7 +104,7 @@ def test_an_empty_domain_still_offers_a_way_back(seeded, monkeypatch):
     def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
         labels.append([label for _value, label in options])
         if len(labels) == 1:
-            return next(v for v, label in options if label.startswith("P  projects"))
+            return next(v for v, label in options if label.startswith("P projects"))
         return None
 
     monkeypatch.setattr(picker, "select_one", fakeSelect)
@@ -134,16 +138,16 @@ def _capture_indexes(monkeypatch, *labels):
 
 def test_the_domain_holding_the_starting_path_is_pre_selected(seeded, monkeypatch):
     conn, settings, idFolderPath = seeded
-    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "A11", "A11.10")
+    indexes = _capture_indexes(monkeypatch, "A areas", "A10-19", "A11", "A11.10")
     browse(log=log, dbConn=conn, settings=settings, startPath=idFolderPath).get()
     # "areas" IS THE FIRST DOMAIN, AND THE ID LIVES INSIDE IT
     domainIndex, domainLabels = indexes[0]
-    assert domainLabels[domainIndex].startswith("A  areas")
+    assert domainLabels[domainIndex].startswith("A areas")
 
 
 def test_the_area_category_and_id_holding_the_starting_path_are_pre_selected(seeded, monkeypatch):
     conn, settings, idFolderPath = seeded
-    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "A11", "A11.10")
+    indexes = _capture_indexes(monkeypatch, "A areas", "A10-19", "A11", "A11.10")
     browse(log=log, dbConn=conn, settings=settings, startPath=idFolderPath).get()
 
     for level, expectedPrefix in ((1, "A10-19"), (2, "A11 "), (3, "A11.10")):
@@ -153,7 +157,7 @@ def test_the_area_category_and_id_holding_the_starting_path_are_pre_selected(see
 
 def test_a_starting_path_outside_the_system_falls_back_to_the_first_option(seeded, monkeypatch, tmp_path):
     conn, settings, _idFolderPath = seeded
-    indexes = _capture_indexes(monkeypatch, "A  areas", "← back")
+    indexes = _capture_indexes(monkeypatch, "A areas", "← back")
     browse(log=log, dbConn=conn, settings=settings, startPath=str(tmp_path)).get()
     assert indexes[0][0] == 0
     # BELOW THE TOP LEVEL THE FALLBACK IS THE FIRST REAL ROW, PAST "open"/"back"
@@ -163,7 +167,63 @@ def test_a_starting_path_outside_the_system_falls_back_to_the_first_option(seede
 def test_an_area_starting_path_pre_selects_that_area(seeded, monkeypatch):
     conn, settings, _idFolderPath = seeded
     area = conn.execute("SELECT folder_path FROM areas LIMIT 1").fetchone()
-    indexes = _capture_indexes(monkeypatch, "A  areas", "A10-19", "→ open")
+    indexes = _capture_indexes(monkeypatch, "A areas", "A10-19", "→ open")
     browse(log=log, dbConn=conn, settings=settings, startPath=area["folder_path"]).get()
     index, labels = indexes[1]
     assert labels[index].startswith("A10-19")
+
+
+# ---------------------------------------------------------------------- #
+# the picker labels the same things the `fd` listing labels
+# ---------------------------------------------------------------------- #
+
+def _labels_offered(monkeypatch, *choices):
+    """*walk the picker by label prefix, recording the options offered at each level*"""
+    seen = []
+    offered = []
+
+    def fakeSelect(options, title="", readKey=None, stream=None, initialIndex=0):
+        offered.append([label for _value, label in options])
+        if len(seen) >= len(choices):
+            return None
+        wanted = choices[len(seen)]
+        seen.append(wanted)
+        for value, label in options:
+            if label.startswith(wanted):
+                return value
+        raise AssertionError(f"no option starting {wanted!r} in {offered[-1]}")
+
+    monkeypatch.setattr(picker, "select_one", fakeSelect)
+    return offered
+
+
+def test_the_picker_labels_an_area_with_its_emoji(seeded, monkeypatch):
+    """*the same row rendered in two places should read the same in both*"""
+    conn, settings, _idFolderPath = seeded
+    offered = _labels_offered(monkeypatch, "A areas")
+    browse(log=log, dbConn=conn, settings=settings).get()
+    assert "A10-19 🏥 Health" in offered[1]
+
+
+def test_the_picker_labels_a_category_with_its_emoji(seeded, monkeypatch):
+    conn, settings, _idFolderPath = seeded
+    offered = _labels_offered(monkeypatch, "A areas", "A10-19")
+    browse(log=log, dbConn=conn, settings=settings).get()
+    assert "A11 🩺 Doctors" in offered[2]
+
+
+def test_the_picker_leaves_ids_and_domains_without_an_emoji(seeded, monkeypatch):
+    conn, settings, _idFolderPath = seeded
+    offered = _labels_offered(monkeypatch, "A areas", "A10-19", "A11")
+    browse(log=log, dbConn=conn, settings=settings).get()
+    assert "A areas" in offered[0]
+    assert "A11.10 Cardiologist" in offered[3]
+
+
+def test_the_picker_falls_back_for_a_blank_area_emoji(seeded, monkeypatch):
+    conn, settings, _idFolderPath = seeded
+    conn.execute("UPDATE areas SET emoji = '' WHERE decade_start = 10 AND domain = 'areas'")
+    conn.commit()
+    offered = _labels_offered(monkeypatch, "A areas")
+    browse(log=log, dbConn=conn, settings=settings).get()
+    assert "A10-19 📁 Health" in offered[1]
