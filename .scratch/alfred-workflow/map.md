@@ -1,0 +1,63 @@
+# Map: Alfred workflow for the aardvark CLI
+
+Label: `wayfinder:map`
+
+## Destination
+
+A decided, ready-to-build specification for an Alfred 5 workflow that drives the `aardvark` CLI from the keyboard: which commands it surfaces, how each one is entered and confirmed, what the CLI has to grow to support it, and how the workflow is installed and kept current. The destination is a spec to hand to TDD implementation, not the implementation itself.
+
+Two deliberate exceptions carry real code into the map, both because the decisions genuinely cannot be made on paper: the prototype tickets produce runnable Alfred workflow fragments so the interaction can be felt before it is locked, and the measurement they take is the input to the decision. Everything else is planning.
+
+## Notes
+
+**Domain.** `aardvark-jd` is a Python CLI (`aardvark` / `av`, same entry point) implementing a PARA + Johnny Decimal filing system over a folder tree, indexed in SQLite, mirrored out to craft.do, Todoist, Google Drive and Dropbox. Repo: `~/git_repos/_packages_/python/aardvark-jd`, branch `feature/cd-command` at charting time. See `CONTEXT.md` for the glossary this effort extends.
+
+**Skills every session should consult.** `mattpocock-skills:grilling` and `mattpocock-skills:domain-modeling` for decision tickets; `mattpocock-skills:research` for research tickets; `mattpocock-skills:prototype` for prototype tickets.
+
+**Standing preferences for this effort.** UK English. No mid-sentence line breaks in Markdown. Comments in source are UPPERCASE. Immutability by default. A short plan and explicit approval before non-trivial implementation. Implementation, when it happens, follows the user's global TDD rules (test-first, 80 per cent coverage) and Gitflow.
+
+**Research findings** are written to `.scratch/alfred-workflow/research/` on the current branch rather than to throwaway `research/<name>` branches, because this repo's Gitflow rules require a branch name to be proposed before it is created.
+
+### Settled while charting (2026-09-03)
+
+These are foundational choices made during the charting grilling. They are premises for the tickets below, not tickets themselves.
+
+- **Destination is a spec.** Prototypes produce runnable fragments; the build proper is a focused session after the map closes.
+- **The workflow lives inside the aardvark-jd repo**, in a directory such as `alfred/`, shipped with the package. It is a thin skin over the CLI and version-drifts with the CLI's command surface, so it belongs in the same repo at the same commit. Alfred's `user.workflow.<UUID>` directory gets pointed at the repo copy for live editing.
+- **Command scope.** In scope: the read/navigate commands (`fd`, `open`, `cd`), the sync commands (`craft_sync`, `todoist_sync`, `gdrive_sync`, `repair_emoji`), and the mutating commands (`add_area`, `add_category`, `add_id`, `add_project`, `archive`, `set_emoji`). Out of scope: the setup commands, which are one-time and browser-interactive.
+- **Alfred owns the interaction.** Every CLI prompt has a suppressing flag (`-e`, `-t`, `-y`, `-w`), so the CLI runs headless and Alfred replicates the prompts it needs in its own UI. No handing off to a terminal to finish a command.
+- **One keyword.** A single `av` keyword with script-filter drill-down, rather than a keyword per command. `av` is free across the user's 88 installed workflows; `fd` and `open` are both already taken by other workflows, which rules out the obvious direct-keyword names.
+- **The workflow finds the binary via the CLI itself.** A new `aardvark install_alfred` command deploys the workflow and bakes in the interpreter path it is running from (the CLI knows its own `sys.executable`; nothing else can answer this without guessing). A workflow configuration variable is the manual override.
+- **Install is two-track.** `install_alfred` for the author: a live link to the repo copy, so repo edits take effect immediately. An exported `.alfredworkflow` committed to the repo for anyone installing the package from PyPI or conda.
+- **Script filters are fed by a new `--json` output mode on the CLI**, not by parsing human-readable stdout and not by importing `aardvark_jd.db` from the workflow. Measured: `aardvark fd` returns the whole tree in 240 ms cold, where `import aardvark_jd.db` alone costs 460 ms, so shelling out is both faster and less coupled. The JSON covers the read commands and the mutating commands' result objects (so Alfred can report what happened and reveal the new folder), and it must carry every per-entity mirror URL rather than just firing them.
+- **Multi-argument entry is a hybrid.** Alfred picks the category from a list, then one free-text field takes `title :: description`. Chained script filters cost too many round trips for one folder; pure mini-syntax makes the user remember references Alfred could have shown them.
+- **Mutating commands stay backgrounded.** Alfred fires the command, posts a notification immediately, and lets the existing drift markers catch mirror failures later. This is what the CLI already promises, and it is the reason Alfred is faster than the terminal.
+- **Alfred replicates both dropped prompts.** Run headless, `add_*` currently skips spell-check silently and takes the offline fallback emoji, because every prompt in the codebase is `isatty`-guarded. Alfred gets its own emoji surface and its own suspect-token confirmation. The emoji one is the risk: it sits a Claude API call with a 15-second timeout in an interactive path.
+- **Alfred does the filtering, not aardvark.** One call fetches the whole index on keyword entry; Alfred's own matching filters client-side, instantly, and learns the user's selection order in a way `fd`'s keyword search cannot. **Corrected 2026-09-03**: that matching is **word-prefix**, not true fuzzy subsequence matching, and it applies only in Alfred's "Alfred Filters Results" mode. This assumes the index stays small enough to ship whole, which a prototype must test at realistic scale rather than at today's size.
+- **`cd` becomes a terminal handoff, not a reveal.** Alfred cannot change a shell's working directory, so the resolved path opens a new tab in the frontmost iTerm window (falling back to a new window, and to `Terminal.app` for anyone else). Calling this action `cd` in Alfred would be a lie; the glossary needs a name for it.
+- **Mirrors are chosen by modifier key.** The CLI opens Craft, Todoist and Drive together; in Alfred, Enter keeps that behaviour and modifiers open one each, plus Finder. This is the single largest gain over the terminal and costs one `mods` block per item.
+- **Testing lives in the package.** The real logic — JSON item construction, argument parsing, path discovery — sits in `aardvark_jd/alfred/` where the existing pytest setup reaches it, with the Alfred-invoked entry points kept to a few lines each and excluded from coverage. No AppleScript-driven end-to-end tests of Alfred itself.
+- **Errors are results, not exceptions.** A script filter cannot raise, so an error returns a single row carrying the diagnosis. Where a fix is obvious — binary not found, entity not yet synced — Enter on that row performs it.
+- **What ships to other people.** The workflow is documented in the README and the docs, and the exported `.alfredworkflow` ships with the package. The `--json` contract is explicitly internal and unstable, so it can be reshaped without a deprecation cycle.
+
+## Decisions so far
+
+<!-- one line per closed ticket -->
+
+- [How is an Alfred 5 workflow authored, and what exactly can a Script Filter return?](issues/01-alfred-workflow-authoring.md): the format is well enough documented to build against, and **Alfred ships first-party template workflows inside its own app bundle** which settle what it actually writes. Four findings constrain the design: Alfred's `PATH` is a documented six entries under `/bin/zsh --no-rcs`, so **no conda, venv, pipx or uv binary is reachable** and the baked-in `sys.executable` is what Alfred's own docs endorse; **configuration defaults live in `info.plist` and user overrides in `prefs.plist`**, which the docs say to gitignore, giving a clean two-layer design; a mod's `variables` **replace** the item's wholesale with no merge, so shared keys repeat in every mod; and `uid` **surrenders result ordering to Alfred** unless paired with `skipknowledge`, with knowledge keyed on the `uid` strings, so the contract needs stable identifiers. Also found: `cache` with `loosereload` (5.5+) addresses the 240 ms cold `fd` directly, one Open URL object can serve all four mirrors via the `alfredworkflow` JSON envelope, and entry points should be **External Scripts** (`type: 8`) with real script files, not inline bodies. **The map's "fuzzy matching" premise was an overstatement and has been corrected above.** The Alfred forum was unreachable (HTTP 403 to every automated fetch), so nothing rests on a forum post.
+
+- [How does a workflow get from a repo directory into Alfred, and stay linked to it?](issues/02-alfred-deployment-mechanics.md): the `user.workflow.<UUID>` directory name is **arbitrary and referenced by nothing** — six installed workflows do not use it at all, and Alfred's scripting dictionary confirms the folder name *is* the workflow UID — so `install_alfred` should create a legible `workflows/aardvark-jd`. **Alfred does not gratuitously rewrite `info.plist`**: two `alfredapp`-authored workflows are byte-for-byte identical to what the vendor committed, after import and use, which is a green light for committing the plist rather than generating it. What it *does* rewrite on edit is narrow and semantic — a **reordered `objects` array** (the real churn risk), `uidata` canvas coordinates, and the `disabled` flag — with zero formatting noise. `.alfredworkflow` is a **zip**, so scripted export is straightforward. Configuration values can be set from outside Alfred by the supported AppleScript `set configuration … in workflow …`. And one trap worth the ticket: `~/Library/Application Support/Alfred/Alfred.alfredpreferences` **also exists on this machine but is vestigial**, so an installer falling back to the default path would write where Alfred never looks and appear to succeed — **the fallback must be a hard failure**. Three questions needing writes into the live preferences folder were deliberately left, and became [Verify what Alfred writes, and whether it follows a symlink](issues/14-verify-alfred-write-behaviour.md).
+
+## Not yet specified
+
+- **A direct-keyword layer beside `av`.** Whether one or two daily-driver commands deserve their own top-level keywords, and which. The obvious names (`fd`, `open`) are taken, so any answer needs a prefix scheme. Deliberately deferred: the only honest input is a week of real usage, which does not exist yet.
+- **Frecency and recall.** Whether the workflow should surface recently-used or recently-created entities ahead of the plain index order, and whether that state lives in Alfred's own knowledge or in the index. Shape unclear until the payload decision (ticket 05) settles what Alfred is holding.
+- **Universal Actions.** Acting on a Finder selection or a selected path from elsewhere in macOS — "file this into aardvark", "which JD code is this folder?". Plausibly the most valuable thing here after the basics, but it is a different input model from the keyword surface and cannot be specified until the keyword surface exists.
+- **What happens on a fresh machine.** Installation ordering when the package, the Alfred prefs and the folder tree all arrive by different routes. Ticket 12 decides binary resolution specifically; the broader first-run story is fog until it lands.
+
+## Out of scope
+
+- **The setup commands** (`init`, `connect_craft`, `connect_todoist`, `connect_dropbox`, `connect_gdrive`, `completion`, `shell_init`). One-time, browser-interactive OAuth flows and one-off token pastes. No worse in a terminal, and an Alfred surface for them would be built once and never used.
+- **Polling the drift markers to notify on sync failure.** Attractive, but as a periodic background check rather than as something bolted onto a command's return path — which makes it a different feature with a different trigger, past this map's destination.
+- **End-to-end tests that drive Alfred itself via AppleScript.** Slow, flaky, and they test Alfred rather than this code.
+- **A stable, public `--json` API.** Documenting the contract as public would prevent reshaping it the first time the workflow needs a new field. Internal and unstable until it has settled in use.

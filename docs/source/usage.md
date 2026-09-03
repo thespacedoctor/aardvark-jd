@@ -10,10 +10,12 @@
         aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
         aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
         aardvark fd [<term>...] [-s <pathToSettingsFile>]
+        aardvark cd <target> [-s <pathToSettingsFile>]
         aardvark open [<path>] [-s <pathToSettingsFile>]
         aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
         aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
         aardvark completion <shell>
+        aardvark shell_init <shell>
         aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
         aardvark craft_sync [-s <pathToSettingsFile>]
         aardvark connect_todoist <apiToken> [-s <pathToSettingsFile>]
@@ -30,10 +32,12 @@
         add_project                            create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank
         archive                                retire an area, category or ID to the nearest archive folder, freeing its number
         fd                                     browse the index as a tree, or find in it by Johnny Decimal ref, keyword or phrase
+        cd                                     change directory into a domain, area, category or ID's folder
         open                                   open the mirrored entities for a path, or pick one interactively
         set_emoji                              change the emoji on an existing folder, moving it and repointing the index
         repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
         completion                             print the shell completion script for `bash` or `zsh`
+        shell_init                             print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`
         connect_craft                          connect a craft.do space and run the initial full mirror
         craft_sync                             re-run the craft.do mirror on demand, to backfill or repair drift
         connect_todoist                        connect a Todoist account and run the initial full mirror
@@ -55,6 +59,7 @@
         title                                  a title
         description                            a description
         term                                   a Johnny Decimal reference, or a search word or phrase
+        target                                 a domain letter ("A"), area ("A10-19"), category ("A11") or ID ("A11.10") to change into
         path                                   a filesystem path to resolve to its mirrored entities (default: pick one interactively)
         shell                                  "bash" or "zsh"
         apiUrl                                 a craft.do API connection's unique base URL

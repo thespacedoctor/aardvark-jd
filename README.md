@@ -27,9 +27,10 @@ Documentation for aardvark is hosted by [Read the Docs](https://aardvark-jd.read
 * `add_area` / `add_category` / `add_id` to grow the Johnny Decimal index under Areas or Resources, with auto-numbering
 * `add_project` to spin up a new (optionally templated) project folder under Projects
 * `search` the index by keyword or phrase, or with no argument to print the whole index as a tree; pass a Johnny Decimal reference (`A`, `A10-19`, `A11`, `A11.10`) to browse or jump straight to that branch
+* `cd <target>` to change directory straight into a domain, area, category or ID's folder - tab-completes the same references as `fd` (needs `av shell_init`, see Shell completion below)
 * `archive <ref>` to retire an area, category or project ID - the folder moves to its nearest `09_archive` folder on disk (and in Google Drive, best-effort in Craft/Todoist), the entry is flagged archived in the database, and its Johnny Decimal number becomes free for reuse
 * `open` with no argument launches an arrow-key picker through Areas/Resources/Projects down to an ID, seeded from the current directory when it resolves to one
-* shell tab completion for commands, references and flag values - `aardvark completion zsh|bash`
+* shell tab completion for commands, references and flag values, and (via `aardvark shell_init zsh|bash`) a working `cd` - see Shell completion below
 * every non-ID folder is suffixed with a relevant emoji, suggested by Claude and confirmable at the prompt (or set outright with `--emoji`)
 * `set_emoji` / `repair_emoji` to change an emoji after the fact, moving the folder and repointing the index together
 * `connect_craft` / `craft_sync` to mirror the whole index into a craft.do space, with a Finder link (and, once `connect_dropbox` is set up, a Dropbox share link) on every synced document
@@ -83,13 +84,13 @@ This builds the full PARA + Johnny Decimal folder tree, creates the `aardvark.db
 
 ## Shell completion
 
-Add tab completion for commands, Johnny Decimal references and flag values by evaluating the generated script in your shell's startup file:
+Add tab completion for commands, Johnny Decimal references and flag values, plus a working `aardvark cd`/`av cd`, by evaluating the generated script in your shell's startup file:
 
 ```bash
-echo 'eval "$(aardvark completion zsh)"' >> ~/.zshrc    # zsh
-echo 'eval "$(aardvark completion bash)"' >> ~/.bashrc  # bash
+echo 'eval "$(aardvark shell_init zsh)"' >> ~/.zshrc    # zsh
+echo 'eval "$(aardvark shell_init bash)"' >> ~/.bashrc  # bash
 ```
 
-Both `aardvark` and `av` complete once this is loaded.
+Both `aardvark` and `av` complete once this is loaded, and `aardvark cd <target>`/`av cd <target>` moves the shell straight into that area's, category's or ID's folder. A plain subprocess cannot change its parent shell's working directory - `shell_init` wraps `aardvark`/`av` in a shell function that does the `cd` for you, which is why it, not `aardvark completion`, is the recommended install line. `aardvark completion zsh|bash` still exists on its own for the `~/.zsh/completions/_aardvark` fpath-cache route, where it does not include the `cd` wrapper.
 
 You are now ready to start using aardvark - see the [quickstart](https://aardvark-jd.readthedocs.io/en/main/quickstart.html) for the full command reference.

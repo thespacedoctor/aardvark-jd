@@ -11,10 +11,12 @@ Usage:
     aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
     aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
     aardvark fd [<term>...] [-s <pathToSettingsFile>]
+    aardvark cd <target> [-s <pathToSettingsFile>]
     aardvark open [<path>] [-s <pathToSettingsFile>]
     aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
     aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
     aardvark completion <shell>
+    aardvark shell_init <shell>
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
     aardvark craft_sync [-s <pathToSettingsFile>]
     aardvark connect_todoist <apiToken> [-s <pathToSettingsFile>]
@@ -31,10 +33,12 @@ Commands:
     add_project                            create a new project (a Johnny Decimal ID) in an existing project category, from a template or blank
     archive                                retire an area, category or ID to the nearest archive folder, freeing its number
     fd                                     browse the index as a tree, or find in it by Johnny Decimal ref, keyword or phrase
+    cd                                     change directory into a domain, area, category or ID's folder
     open                                   open the mirrored entities for a path, or pick one interactively
     set_emoji                              change the emoji on an existing folder, moving it and repointing the index
     repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
     completion                             print the shell completion script for `bash` or `zsh`
+    shell_init                             print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`
     connect_craft                          connect a craft.do space and run the initial full mirror
     craft_sync                             re-run the craft.do mirror on demand, to backfill or repair drift
     connect_todoist                        connect a Todoist account and run the initial full mirror
@@ -56,6 +60,7 @@ Arguments:
     title                                  a title
     description                            a description
     term                                   a Johnny Decimal reference, or a search word or phrase
+    target                                 a domain letter ("A"), area ("A10-19"), category ("A11") or ID ("A11.10") to change into
     path                                   a filesystem path to resolve to its mirrored entities (default: pick one interactively)
     shell                                  "bash" or "zsh"
     apiUrl                                 a craft.do API connection's unique base URL
@@ -84,8 +89,8 @@ import sys
 from fundamentals import tools, times
 
 from aardvark_jd import (
-    background_sync, codes, completion, db, dropbox_ignore, folders, help_text, paths,
-    settings_writer,
+    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text,
+    paths, settings_writer,
 )
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
@@ -118,18 +123,25 @@ def main(arguments=None):
     """
     *The main function used when `cl_utils.py` is run as a single script from the cl, or when installed as a cl command*
     """
-    # THE COMPLETION HELPER AND THE HELP SCREENS ARE HANDLED BEFORE
-    # `fundamentals.tools` RUNS. `__complete` IS NOT DECLARED IN THE docopt
-    # USAGE BLOCK AT ALL (docopt WOULD REJECT IT), AND EVEN IF IT WERE, A
-    # TAB-COMPLETION MUST NOT PAY FOR SETTINGS-FILE CREATION, LOGGING SETUP
-    # OR A SCHEMA MIGRATION - IT HAS TO BE FAST AND STRICTLY READ-ONLY.
+    # THE COMPLETION HELPER, `cd`, `shell_init` AND THE HELP SCREENS ARE ALL
+    # HANDLED BEFORE `fundamentals.tools` RUNS. `__complete` IS NOT DECLARED
+    # IN THE docopt USAGE BLOCK AT ALL (docopt WOULD REJECT IT), AND EVEN IF
+    # IT WERE, A TAB-COMPLETION MUST NOT PAY FOR SETTINGS-FILE CREATION,
+    # LOGGING SETUP OR A SCHEMA MIGRATION - IT HAS TO BE FAST AND STRICTLY
+    # READ-ONLY. `cd` RUNS ON EVERY DIRECTORY JUMP, SO IT NEEDS THE SAME
+    # GUARANTEE - SEE `change_dir.py`.
     if arguments is None:
         argv = sys.argv[1:]
         if argv[:1] == [completion.COMPLETION_COMMAND]:
             completion.emit(argv[1:])
             return
+        if argv[:1] == ["cd"]:
+            sys.exit(change_dir.emit(argv[1:]))
         if argv[:1] == ["completion"]:
             print(completion.script(argv[1] if len(argv) > 1 else ""))
+            return
+        if argv[:1] == ["shell_init"]:
+            print(completion.shell_init_script(argv[1] if len(argv) > 1 else ""))
             return
         if "--help-all" in argv:
             print(help_text.full_help(__doc__))
