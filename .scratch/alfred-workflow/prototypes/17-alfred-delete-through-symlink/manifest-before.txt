@@ -1,0 +1,7 @@
+06b222887d9193f874f99517c1cd9aa5831a6fd52fd00da2bb93298c228b0af1  target/CANARY-top.txt
+16503a92e3845aed7ba0d108145d13c3d0e7cbf60a5bab0de9596f52d69ba36c  target/info.plist
+f5f77b21c01c3d67922dd51ac6b5b791d0543f0862b739081cc59e0bd3e5ac61  target/nested/CANARY-nested.txt
+6abf2597566ee4d41dea3c3d83b564b9861f93f6aab0e462a64f51c5cfee7797  target/nested/deeper/CANARY-deeper.txt
+890813004a60c61cda31b4aeb3c4e692ffcc5b90751be90e40a4883dadcd4a7c  target/script.sh
+target inode=1669721738 links=6
+created 16:29:21

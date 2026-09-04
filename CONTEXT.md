@@ -73,7 +73,10 @@ _Avoid_: database, cache.
 
 **Mirror**:
 An external service the tree is reproduced into: craft.do, Todoist, Google Drive
-or Dropbox.
+or Dropbox. _Avoid_: calling a surface a mirror. A mirror holds a copy of the tree; a surface holds none.
+
+**Surface**:
+A place the system is driven from, holding no copy of the tree: the command line, and the Alfred workflow. A surface reads the index and invokes commands; it is never synced to, and it never drifts.
 
 **Sync**:
 Reconciling a mirror with the tree by re-walking the whole tree. There is only one
@@ -121,3 +124,47 @@ A spell-correction suggestion the user declined. Recorded permanently.
 The accumulated dismissals, kept in `<root>/.aardvark-vocabulary` and synced so it
 follows the user between machines. _Avoid_: whitelist, allowlist, custom
 dictionary.
+
+## The aardvark workflow
+
+The Alfred surface has no name of its own. It is **the aardvark workflow**: lowercase, descriptive, the same words in the README, the docs and `install_alfred`'s help text.
+
+**Handoff**:
+Opening a new terminal tab at an entity's folder. Distinct from `cd`, which is the shell function that moves the *current* shell, and which the workflow cannot do. _Avoid_: calling the handoff `cd`.
+
+**Reveal**:
+Showing an entity's folder in Finder, selected but not opened. The third destination beside the mirrors and the handoff.
+
+**JSON contract**:
+The agreed shape of the CLI's `--json` output, which the workflow reads instead of parsing human-readable stdout. Versioned, and internal to this repo rather than a public API. Short form: the contract.
+
+**Index payload**:
+The whole index as one JSON contract response, fetched in a single call so the surface can filter it without going back to the CLI. A payload is one transfer; the contract is the shape every payload takes.
+
+**Confirmation screen**:
+The screen a mutating command's entry flow ends on, showing what is about to be created and requiring one more Return to create it. Corrections and alternatives are offered as rows on this screen rather than as steps before it.
+
+**Binary pointer**:
+The per-machine file recording where this machine's `aardvark` executable is, written on install and read by the workflow. Per-machine and never synced, because the path differs between machines. _Avoid_: config, setting — a configuration variable is Alfred's and syncs; the pointer does not.
+
+**Error row**:
+A failure reported as a single result the user can see and often act on, rather than as a raised exception. A surface that cannot raise says what went wrong in a row, and where the fix is obvious the row performs it.
+
+## Alfred's language
+
+These are Alfred's terms, not aardvark's. They keep Alfred's meanings exactly, so that Alfred's own documentation reads against this glossary without translation.
+
+**Workflow**:
+Alfred's unit of packaging: a directory of connected objects and scripts with a bundle ID, installed into Alfred's preferences.
+
+**Script Filter**:
+The workflow object that runs a script on each keystroke and returns a list of results for Alfred to display and filter.
+
+**Modifier**:
+A held key (⌘, ⌥, ⌃, ⇧, fn) that changes what a result does on Return, and what it says while held.
+
+**Keyword**:
+The word typed into Alfred to reach a workflow object. The aardvark workflow has one: `av`.
+
+**Configuration variable**:
+A value Alfred stores for a workflow, with a default set by the workflow author and an override set by the user. Synced with Alfred's preferences, and therefore never the place for per-machine state.

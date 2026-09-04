@@ -1,0 +1,35 @@
+
+=== step 1 - baseline, symlink live, before any GUI   (10:38:00)
+  workflows in prefs folder: 90
+  aardvark-test is: symlink
+  symlinked      info.plist=68c002d65bcbc11f  prefs.plist={}
+                 default=ORIGINAL_DEFAULT
+                 objects order=['AAAA1111']
+  imported       not imported yet
+
+=== 2a open-close untouched   (13:49:20)
+  workflows in prefs folder: 90
+  aardvark-test is: symlink
+  symlinked      info.plist=68c002d65bcbc11f  prefs.plist={}
+                 default=ORIGINAL_DEFAULT
+                 objects order=['AAAA1111']
+  imported       not imported yet
+
+=== 2b nudged object   (13:49:57)
+  workflows in prefs folder: 90
+  aardvark-test is: symlink
+  symlinked      info.plist=e356911d9007472d  prefs.plist={}
+                 default=ORIGINAL_DEFAULT
+                 objects order=['AAAA1111']
+  imported       not imported yet
+
+=== 3 imported with value set   (13:51:17)
+  workflows in prefs folder: 91
+  aardvark-test is: symlink
+  symlinked      info.plist=e356911d9007472d  prefs.plist={}
+                 default=ORIGINAL_DEFAULT
+                 objects order=['AAAA1111']
+  imported       info.plist=b9d7ce46b987b0a5  prefs.plist={"probe_var"=>"CHANGED_VALUE"}
+                 default=ORIGINAL_DEFAULT
+                 objects order=['AAAA1111']
+                 at /Users/Dave/Dropbox/Apps/alfred/Alfred.alfredpreferences/workflows/user.workflow.345BFD45-1F2C-439C-B0C3-FA842C17F1EB

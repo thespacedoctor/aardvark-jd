@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bundleid</key>
+	<string>com.aardvark-jd.wayfinder-ticket-14-probe</string>
+	<key>category</key>
+	<string>Tools</string>
+	<key>connections</key>
+	<dict/>
+	<key>createdby</key>
+	<string>ticket 14 probe</string>
+	<key>description</key>
+	<string>THROWAWAY. Probes what Alfred writes. Delete me.</string>
+	<key>disabled</key>
+	<false/>
+	<key>name</key>
+	<string>aardvark ticket-14 probe</string>
+	<key>objects</key>
+	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<true/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>0</integer>
+				<key>keyword</key>
+				<string>avprobe</string>
+				<key>queuedelaycustom</key>
+				<integer>1</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<false/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>probing…</string>
+				<key>script</key>
+				<string></string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string>filter.sh</string>
+				<key>subtext</key>
+				<string>ticket 14 throwaway probe</string>
+				<key>title</key>
+				<string>aardvark probe</string>
+				<key>type</key>
+				<integer>8</integer>
+				<key>withspace</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>AAAA1111-2222-3333-4444-555566667777</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+	</array>
+	<key>readme</key>
+	<string>Throwaway probe for wayfinder ticket 14. Safe to delete.</string>
+	<key>uidata</key>
+	<dict>
+		<key>AAAA1111-2222-3333-4444-555566667777</key>
+		<dict>
+			<key>xpos</key>
+			<real>705</real>
+			<key>ypos</key>
+			<real>395</real>
+		</dict>
+	</dict>
+	<key>userconfigurationconfig</key>
+	<array>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>ORIGINAL_DEFAULT</string>
+				<key>pairs</key>
+				<array>
+					<array>
+						<string>Original</string>
+						<string>ORIGINAL_DEFAULT</string>
+					</array>
+					<array>
+						<string>Changed</string>
+						<string>CHANGED_VALUE</string>
+					</array>
+				</array>
+			</dict>
+			<key>description</key>
+			<string>Which file does my value land in?</string>
+			<key>label</key>
+			<string>Probe Value</string>
+			<key>type</key>
+			<string>popupbutton</string>
+			<key>variable</key>
+			<string>probe_var</string>
+		</dict>
+	</array>
+	<key>variablesdontexport</key>
+	<array/>
+	<key>version</key>
+	<string>0.0.1</string>
+	<key>webaddress</key>
+	<string></string>
+</dict>
+</plist>
