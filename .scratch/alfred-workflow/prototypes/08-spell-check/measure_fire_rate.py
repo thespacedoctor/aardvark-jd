@@ -2,7 +2,9 @@
 
 import os
 import re
+import statistics
 import sys
+import time
 
 sys.path.insert(0, "/Users/Dave/git_repos/_packages_/python/aardvark-jd")
 
@@ -61,3 +63,19 @@ print()
 for name, hits in fired:
     pairs = ", ".join(f"{t} -> {s}" for t, s in hits)
     print(f"  {name!r}: {pairs}")
+
+# LATENCY ACROSS THE WHOLE CORPUS, WARM. TIMING ONE TITLE SAYS NOTHING - `suggest`
+# IS CHEAP ON A DICTIONARY HIT AND PAYS THE EDIT-DISTANCE SEARCH ONLY ON A MISS,
+# SO THE SPREAD IS THE POINT.
+timings = []
+for name, title in titles:
+    start = time.perf_counter()
+    for token in spell_check.tokenise(title):
+        spell_check.suggest(token)
+    timings.append((time.perf_counter() - start) * 1000.0)
+
+if timings:
+    print()
+    print(f"per-title check latency, warm, over {len(timings)} titles:")
+    print(f"  min {min(timings):.4f} ms, median {statistics.median(timings):.4f} ms, "
+          f"max {max(timings):.4f} ms")
