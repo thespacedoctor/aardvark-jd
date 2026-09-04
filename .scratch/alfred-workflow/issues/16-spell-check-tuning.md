@@ -1,7 +1,8 @@
 # Is the spell-checker's tuning wrong?
 
 Type: grilling
-Status: open
+Status: resolved
+Assignee: Dave
 
 ## Question
 
@@ -30,3 +31,43 @@ Decide:
 - **Does any of this change the non-interactive path?** Scripts and Alfred get one stderr note per suspect token instead of a prompt. A noisier checker makes that path noisier too, and nothing reads those notes.
 
 - **Does the docstring's 18 per cent claim need correcting?** It is a token-level rate from a synthetic technical vocabulary, and ticket 08 read it as a per-title rate — the real per-title rate is 1.4 per cent, and the real token-level rate on live titles is 1.5 per cent. Whether or not the tuning changes, the figure in the module docstring invites the same misreading again.
+
+## Resolution (2026-09-04)
+
+**Two changes, both measured: fix the tie-break, and move the floor from 6 to 5. No wordlist change.** The sweep is in [the ticket 16 probe](../prototypes/16-spell-check-tuning/report.md), run against ticket 08's corpus and seed so the numbers compare directly.
+
+### The tie-break is wrong, and fixing it is free
+
+`suggest` prefers the shortest distance-1 candidate. A dropped letter is the commonest real typo and leaves a token *shorter* than its correction, so the shipped rule picks against the commonest case by construction. Replacing `min(len(word), word)` with `min(-len(word), word)` takes right offers from 57.6 to **75.0 per cent** and wrong offers from 25.0 to **7.6 per cent** at the current floor.
+
+It costs nothing. The tie-break decides *which* candidate is offered, never *whether* one exists, so the fire rate is identical either way — verified as a constant column down the whole sweep. The wrong offers that read as broken largely stop: `setings → stings` becomes `settings`, `servies → series` becomes `services`.
+
+Worth recording so it is not re-litigated: **"prefer the longest candidate" and "assume a dropped letter first" are the same rule.** At edit distance 1 a candidate is only ever one shorter, the same length, or one longer — verified, the observed offsets are exactly `[-1, 0, +1]` — so descending length *is* deletion-first ordering. Ship the simpler expression and document the reasoning.
+
+### The floor moves to 5
+
+Dropped-letter recall goes from 61.0 to **87.8 per cent** and the silent rate from 17.4 to **5.4 per cent**. The whole cost is four more suspect tokens across the 141 real titles, and all four are proper nouns or product names — `ciara`, `lagan`, `macos`, `silla` — which is precisely the population the learned vocabulary retires at one dismissal each. Per-title fire rate goes from 1.4 to **4.3 per cent**, one title in twenty-three.
+
+The acceptance criterion, stated before the threshold rather than fitted to it: **at most 5 per cent of titles firing.** Ticket 08 established that the Alfred surface costs no keystrokes for a fired check (the corrections are rows on the confirmation screen), and one prompt in twenty-three is tolerable on the terminal path.
+
+**Floor 4 is rejected on its own numbers**: identical recall to floor 5, and 12.8 per cent of titles firing — one in eight. It is the only floor that sees the corpus's single genuine typo, `woth`, and it still offers the wrong word, because `with` and `worth` are both distance 1 and `with` loses the tie under either rule. That trades a silent miss for a wrong offer, which is the worse failure.
+
+### American spellings: no change, and the ticket's premise was overstated
+
+The 1,903 `-ize`/`-ization`/`-izer`/`-yze` twins the `en_GB-ise` list omits were generated and the sweep re-run against the extended list. On the 141 human-typed titles: **no effect whatsoever**. On the wide 11,264-folder sweep: 98 distinct suspect tokens fall to 95.
+
+The ticket feared this class recurs where jargon self-silences. It does not: dismissals are keyed per token, so `normalize` is dismissed once and stays dismissed, and the entire population is three tokens. The figure is also an over-estimate, since the mechanical generation admits non-words — `wize`, `promize`, `precize`, `paradize` and `franchize` are all in the extended list — so a curated `en_GB` list would silence the same three tokens at most, while masking any genuine typo landing on one of those non-words.
+
+### The docstring is corrected
+
+The module docstring's "18 per cent" is a token-level rate on a synthetic technical vocabulary, and it has already been misread once as a per-title rate. It states both rates with their denominators instead: per-title 1.4 per cent today, 4.3 per cent under the new tuning; token-level 1.5 per cent on live titles. The `MINIMUM_TOKEN_LENGTH` comment is rewritten too — it currently claims the floor "does most of the work", which is true of the false-positive rate but silently omits that the floor is also what made the commonest typo class undetectable.
+
+### Consequences
+
+- **Non-interactive path.** Scripts and Alfred get one stderr note per suspect token, so that path goes from 1.4 to 4.3 per cent of titles carrying a note. Nothing reads them; accepted, no change.
+- **This is a CLI change, not an Alfred one.** It alters terminal behaviour too, and it does not block [ticket 13](13-assemble-the-spec.md) — the Alfred surface is rows on a confirmation screen regardless of which tokens fire. It ships as its own test-first slice, independent of the Alfred build.
+- One note to ticket 13: the spec's spell-check section should quote **4.3 per cent** as the expected fire rate, not ticket 08's 1.4 per cent, since the confirmation screen will carry correction rows about three times as often as ticket 08 measured.
+
+### Validity
+
+The two review subagents dispatched against the sweep script both failed on a session rate limit, so the checks they were given were run directly: the trial set is identical across floors (92 typos, compared equal), the suffix chain in the `-ize` generator does not shadow itself, and the longest/deletion-first equivalence is confirmed empirically. One limitation stands: because ticket 08's injector corrupts only six-plus-character tokens, the recall figures do not measure typos in five-character words, which floor 5 also begins to check. Their false alarms *are* measured, in the fires/title column.

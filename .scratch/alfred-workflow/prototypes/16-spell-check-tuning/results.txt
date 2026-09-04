@@ -1,0 +1,37 @@
+wordlist: 87851 words
+unique human-typed titles (depth 1-3): 141
+
+=== recall and fire rate, by floor and tie-break ===
+floor tie-break              right   wrong  silent  fires/title  suspects
+    4 shortest (shipped)     60.9%   33.7%    5.4%        12.8%         8
+    4 longest                87.0%    7.6%    5.4%        12.8%         8
+    4 same first letter      85.9%    8.7%    5.4%        12.8%         8
+    4 deletion first         87.0%    7.6%    5.4%        12.8%         8
+    5 shortest (shipped)     60.9%   33.7%    5.4%         4.3%         6
+    5 longest                87.0%    7.6%    5.4%         4.3%         6
+    5 same first letter      85.9%    8.7%    5.4%         4.3%         6
+    5 deletion first         87.0%    7.6%    5.4%         4.3%         6
+    6 shortest (shipped)     57.6%   25.0%   17.4%         1.4%         2
+    6 longest                75.0%    7.6%   17.4%         1.4%         2
+    6 same first letter      73.9%    8.7%   17.4%         1.4%         2
+    6 deletion first         75.0%    7.6%   17.4%         1.4%         2
+    7 shortest (shipped)     30.4%   13.0%   56.5%         1.4%         2
+    7 longest                42.4%    1.1%   56.5%         1.4%         2
+    7 same first letter      42.4%    1.1%   56.5%         1.4%         2
+    7 deletion first         42.4%    1.1%   56.5%         1.4%         2
+
+=== by typo kind, floor 6 versus floor 5, shipped versus deletion-first ===
+  floor 6, shortest (shipped)   drop=36.6% substitute=71.4% transpose=78.3%
+    wrong offers: imates->mates (wanted images), imagea->image (wanted images), setings->stings (wanted settings), archiv->archie (wanted archive), servies->series (wanted services), assefs->asses (wanted assets)
+  floor 6, deletion first       drop=61.0% substitute=82.1% transpose=91.3%
+    wrong offers: imates->inmates (wanted images), imagea->imaged (wanted images), assefs->assess (wanted assets), evenst->evenest (wanted events), toloing->soloing (wanted tooling), caemon->caedmon (wanted daemon)
+  floor 5, shortest (shipped)   drop=43.9% substitute=71.4% transpose=78.3%
+    wrong offers: imates->mates (wanted images), imagea->image (wanted images), sytem->stem (wanted system), setings->stings (wanted settings), archiv->archie (wanted archive), famil->fail (wanted family)
+  floor 5, deletion first       drop=87.8% substitute=82.1% transpose=91.3%
+    wrong offers: imates->inmates (wanted images), imagea->imaged (wanted images), assefs->assess (wanted assets), evenst->evenest (wanted events), toloing->soloing (wanted tooling), caemon->caedmon (wanted daemon)
+
+=== what an -ize-tolerant wordlist silences ===
+  folder names at any depth: 11264
+  -ize forms added to the list: 1903
+  shipped en_GB-ise    narrow: 2 titles / 2 tokens   wide: 388 titles / 98 tokens
+  with -ize forms      narrow: 2 titles / 2 tokens   wide: 360 titles / 95 tokens
