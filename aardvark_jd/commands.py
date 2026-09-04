@@ -54,6 +54,8 @@ COMMANDS = (
      ("ref", COMPLETER_FREE)),
     ("repair_emoji", ADVANCED, "fix drifted folder names/emoji and backfill missing reserved scaffolding",
      ()),
+    ("install_alfred", ADVANCED, "install the aardvark workflow into Alfred, and record where aardvark lives on this Mac",
+     ()),
     ("completion", ADVANCED, "print the shell completion script for `bash` or `zsh`",
      ("shell",)),
     ("shell_init", ADVANCED, "print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`",

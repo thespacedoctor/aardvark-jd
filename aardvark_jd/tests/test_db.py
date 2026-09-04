@@ -431,3 +431,23 @@ def test_drifted_mirrors_are_returned_in_sync_order(dbConn):
 def test_an_unknown_mirror_name_is_rejected_by_the_schema(dbConn):
     with pytest.raises(sqlite3.IntegrityError):
         db.record_sync_failure(dbConn, "notion", "boom", "unknown")
+
+
+def test_entities_with_links_can_fetch_one_entity_without_scanning_the_index(dbConn):
+    """*`open --json` needs one record, and paying for a whole-index four-way join to get it is waste*"""
+    areaId = db.insert_area(dbConn, "areas", 10, 19, "Health", "", "🏥", "A10_19_health🏥", "/root/A10_19_health🏥")
+    categoryId = db.insert_category(dbConn, areaId, "areas", 11, "Doctors", "", "🩺", "A11_doctors🩺", "/root/A11_doctors🩺")
+    db.insert_id(dbConn, categoryId, "areas", 11, 10, "Cardiologist", "", "A11.10_cardiologist", "/root/A11.10_cardiologist")
+
+    rows = db.entities_with_links(dbConn, entityType="category", rowKey=str(categoryId))
+
+    assert len(rows) == 1
+    assert rows[0]["entity_type"] == "category"
+    assert rows[0]["title"] == "Doctors"
+
+
+def test_entities_with_links_without_a_filter_still_returns_everything(dbConn):
+    areaId = db.insert_area(dbConn, "areas", 10, 19, "Health", "", "🏥", "A10_19_health🏥", "/root/A10_19_health🏥")
+    db.insert_category(dbConn, areaId, "areas", 11, "Doctors", "", "🩺", "A11_doctors🩺", "/root/A11_doctors🩺")
+
+    assert len(db.entities_with_links(dbConn)) == 2

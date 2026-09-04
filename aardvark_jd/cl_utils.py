@@ -15,6 +15,7 @@ Usage:
     aardvark open [<path>] [--json] [-s <pathToSettingsFile>]
     aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
     aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
+    aardvark install_alfred [--uninstall] [-s <pathToSettingsFile>]
     aardvark completion <shell>
     aardvark shell_init <shell>
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
@@ -37,6 +38,7 @@ Commands:
     open                                   open the mirrored entities for a path, or pick one interactively
     set_emoji                              change the emoji on an existing folder, moving it and repointing the index
     repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
+    install_alfred                         install the aardvark workflow into Alfred, and record where aardvark lives on this Mac
     completion                             print the shell completion script for `bash` or `zsh`
     shell_init                             print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`
     connect_craft                          connect a craft.do space and run the initial full mirror
@@ -76,6 +78,7 @@ Options:
     -v, --version                          show version
     -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
     -t, --template <templateName>          the template to use, skipping the interactive picker
+    --uninstall                            remove the Alfred workflow symlink and this machine's aardvark pointer
     --json                                 print the machine-readable contract instead of prose (internal and unstable)
     --archived                             include the archived entities, alongside the live ones (`--json` only)
     -y, --yes                              skip the confirmation prompt
@@ -107,6 +110,7 @@ from aardvark_jd.connect_todoist import connect_todoist
 from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.gdrive_sync import gdrive_sync
 from aardvark_jd.initialiser import initialiser
+from aardvark_jd.install_alfred import install_alfred
 from aardvark_jd.add_project import add_project
 from aardvark_jd.open_craft import open_craft
 from aardvark_jd.repair_emoji import repair_emoji
@@ -202,6 +206,14 @@ def main(arguments=None):
                 pathToSettingsFile=pathToSettingsFile,
             ).get()
             print(f"aardvark system '{a['systemName']}' initialised at {rootPath}")
+
+        elif a["install_alfred"]:
+            # DELIBERATELY ABOVE THE "NO SYSTEM" CHECK BELOW. ON A FRESH
+            # MACHINE THE ORDER IS INSTALL THE PACKAGE, RUN THIS, THEN POINT
+            # THE CLI AT THE TREE - SO THIS COMMAND CANNOT REQUIRE A SYSTEM
+            # THAT DOES NOT EXIST YET.
+            for message in install_alfred(log=log, uninstall=a["uninstallFlag"]).get():
+                print(message)
 
         else:
             rootPath = (settings.get("system") or {}).get("root_path")
@@ -834,11 +846,11 @@ def _open_json(a, indexDbConn, settings):
         indexDbConn, targetPath, rootPath=rootPath,
     )
 
-    matches = [
-        record
-        for record in json_output.entity_records(db.entities_with_links(indexDbConn))
-        if record["type"] == entityType and record["row_key"] == str(entityKey)
-    ]
+    # ONE ROW, NOT THE WHOLE INDEX: THE BULK READ IS THERE TO MAKE A WHOLE
+    # DUMP CHEAP, NOT TO MAKE A SINGLE LOOKUP EXPENSIVE.
+    matches = json_output.entity_records(
+        db.entities_with_links(indexDbConn, entityType=entityType, rowKey=entityKey)
+    )
     if not matches:
         # A `system_folder` OR THE SPACE ROOT ITSELF: REAL, MIRRORED, AND
         # DELIBERATELY ABSENT FROM THE CONTRACT, WHICH DESCRIBES AREAS,

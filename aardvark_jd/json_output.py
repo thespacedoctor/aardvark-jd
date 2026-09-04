@@ -11,9 +11,23 @@ Author
 
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Protocol
 
 from aardvark_jd import codes, doc_links, folders
+
+
+class RowLike(Protocol):
+    """
+    *anything a record can be built from: a `sqlite3.Row` or a plain dict*
+
+    `sqlite3.Row` is **not** a `Mapping` - it has no `.get()`, `.items()` or
+    `.values()` - but subscripting it by column name is all these renderers
+    ever do, so that is what they ask for.
+    """
+
+    def __getitem__(self, key: str) -> Any:
+        ...
+
 
 AARDVARK_JSON_VERSION = 1
 NO_SYSTEM_KIND = "no_system"
@@ -25,7 +39,7 @@ _EXHAUSTION_KINDS = {
 }
 
 
-def _entity_code(row: Mapping[str, Any]) -> str:
+def _entity_code(row: RowLike) -> str:
     if row["entity_type"] == "area":
         return codes.format_area_code(
             row["domain"], row["decade_start"], row["decade_end"]
@@ -37,9 +51,7 @@ def _entity_code(row: Mapping[str, Any]) -> str:
     raise ValueError(f"Unknown entity type: {row['entity_type']}")
 
 
-def entity_record(
-    row: Mapping[str, Any], links: Mapping[str, str | None]
-) -> dict[str, Any]:
+def entity_record(row: RowLike, links: Mapping[str, str | None]) -> dict[str, Any]:
     """
     *render one live entity as an internal JSON record*
 
@@ -74,7 +86,7 @@ def entity_record(
     }
 
 
-def entity_records(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def entity_records(rows: Iterable[RowLike]) -> list[dict[str, Any]]:
     """
     *render live entity rows while extracting their joined mirror URLs*
 
@@ -100,7 +112,7 @@ def entity_records(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def archived_record(row: Mapping[str, Any]) -> dict[str, Any]:
+def archived_record(row: RowLike) -> dict[str, Any]:
     """
     *render one archived entity and its mirror-link snapshot as an internal JSON record*
 

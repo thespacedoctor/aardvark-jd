@@ -14,6 +14,7 @@
         aardvark open [<path>] [--json] [-s <pathToSettingsFile>]
         aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
         aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
+        aardvark install_alfred [--uninstall] [-s <pathToSettingsFile>]
         aardvark completion <shell>
         aardvark shell_init <shell>
         aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
@@ -36,6 +37,7 @@
         open                                   open the mirrored entities for a path, or pick one interactively
         set_emoji                              change the emoji on an existing folder, moving it and repointing the index
         repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
+        install_alfred                         install the aardvark workflow into Alfred, and record where aardvark lives on this Mac
         completion                             print the shell completion script for `bash` or `zsh`
         shell_init                             print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`
         connect_craft                          connect a craft.do space and run the initial full mirror
@@ -75,6 +77,7 @@
         -v, --version                          show version
         -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
         -t, --template <templateName>          the template to use, skipping the interactive picker
+        --uninstall                            remove the Alfred workflow symlink and this machine's aardvark pointer
         --json                                 print the machine-readable contract instead of prose (internal and unstable)
         --archived                             include the archived entities, alongside the live ones (`--json` only)
         -y, --yes                              skip the confirmation prompt

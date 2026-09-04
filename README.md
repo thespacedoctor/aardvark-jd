@@ -94,4 +94,35 @@ echo 'eval "$(aardvark shell_init bash)"' >> ~/.bashrc  # bash
 
 Both `aardvark` and `av` complete once this is loaded, and `aardvark cd <target>`/`av cd <target>` moves the shell straight into that area's, category's or ID's folder. A plain subprocess cannot change its parent shell's working directory - `shell_init` wraps `aardvark`/`av` in a shell function that does the `cd` for you, which is why it, not `aardvark completion`, is the recommended install line. `aardvark completion zsh|bash` still exists on its own for the `~/.zsh/completions/_aardvark` fpath-cache route, where it does not include the `cd` wrapper.
 
+## The Alfred workflow
+
+On macOS, aardvark ships an [Alfred 5](https://www.alfredapp.com) workflow that drives the same index from the keyboard. Install it with:
+
+```bash
+aardvark install_alfred
+```
+
+That does two things: it records where this Mac's `aardvark` command lives, and it links the packaged workflow into Alfred. Alfred runs scripts with a fixed six-entry `PATH` that carries no conda, venv, pipx or uv binary, so the recorded path is how the workflow finds aardvark at all.
+
+Type `av` in Alfred to search the whole index at once - by Johnny Decimal reference, title, folder name or description. On the result you want:
+
+| Key | What it does |
+| --- | --- |
+| ↩ | Opens every mirror the entity is synced to, the same as `aardvark open` |
+| ⌘ | Reveals the folder in Finder |
+| ⌥ | Opens a terminal tab at the folder |
+| ⌃ | Shows Craft, Todoist, Google Drive and Dropbox as four rows, offering to sync any that is not yet mirrored |
+
+Two settings are available under Alfred's **Configure Workflow…**: `AARDVARK_TERMINAL_APP`, the app the ⌥ handoff opens (empty means iTerm when it is installed, and Terminal otherwise), and `AARDVARK_BINARY`, an explicit path to the `aardvark` command that overrides the recorded one.
+
+Remove the workflow with:
+
+```bash
+aardvark install_alfred --uninstall
+```
+
+Removing it through Alfred's own interface is safe - Alfred unlinks the workflow rather than deleting through the link, so nothing inside the package is touched. `--uninstall` is the documented route only because it also removes the recorded path.
+
+**On a fresh Mac, the order is:** install the package, run `aardvark install_alfred`, then point the CLI at your tree (`aardvark init`, or an existing `~/.config/aardvark/aardvark.yaml`). `install_alfred` deliberately does not need a system to exist yet, so it can run first.
+
 You are now ready to start using aardvark - see the [quickstart](https://aardvark-jd.readthedocs.io/en/main/quickstart.html) for the full command reference.

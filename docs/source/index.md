@@ -6,6 +6,7 @@
 :maxdepth: 4
 
 quickstart
+alfred
 :::
 
 :::{toctree}

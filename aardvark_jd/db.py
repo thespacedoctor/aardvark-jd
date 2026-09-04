@@ -1103,6 +1103,8 @@ LEFT JOIN gdrive_links
     AND gdrive_links.entity_key = entities.row_key
 LEFT JOIN dropbox_links
     ON dropbox_links.folder_path = entities.folder_path
+WHERE (:entityType IS NULL OR entities.entity_type = :entityType)
+    AND (:rowKey IS NULL OR entities.row_key = :rowKey)
 ORDER BY
     CASE entities.domain
         WHEN 'areas' THEN 0
@@ -1115,19 +1117,35 @@ ORDER BY
 """
 
 
-def entities_with_links(dbConn: sqlite3.Connection) -> list[sqlite3.Row]:
+def entities_with_links(dbConn: sqlite3.Connection, entityType=None, rowKey=None) -> list[sqlite3.Row]:
     """
-    *fetch every live entity and its mirror URLs in index order with one read-only query*
+    *fetch live entities and their mirror URLs in index order with one read-only query*
+
+    Unfiltered, this is the whole-index dump the Alfred surface ships. The
+    optional filter narrows it to a single entity, so a caller wanting one
+    record does not pay for a four-way join across the whole index.
 
     **Key Arguments:**
 
     - ``dbConn`` -- an open SQLite connection
+    - ``entityType`` -- restrict to `area`, `category` or `id`. Default `None`, meaning all three.
+    - ``rowKey`` -- restrict to one row's stringified primary key. Default `None`, meaning all rows.
 
     **Return:**
 
     - ``rows`` -- the live area, category and ID rows with joined mirror URLs
+
+    **Usage:**
+
+    ```python
+    from aardvark_jd import db
+    rows = db.entities_with_links(dbConn)
+    ```
     """
-    return dbConn.execute(_ENTITIES_WITH_LINKS_SQL).fetchall()
+    return dbConn.execute(
+        _ENTITIES_WITH_LINKS_SQL,
+        {"entityType": entityType, "rowKey": None if rowKey is None else str(rowKey)},
+    ).fetchall()
 
 
 def get_dropbox_link(dbConn, folderPath):

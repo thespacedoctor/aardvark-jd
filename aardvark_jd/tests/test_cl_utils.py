@@ -842,3 +842,17 @@ def test_a_missing_system_under_json_is_an_error_envelope_not_prose(isolatedHome
     # STDOUT CARRIES THE OBJECT AND NOTHING ELSE. THE PROSE IS NOT REPEATED
     # ON STDERR EITHER - IT IS THE OBJECT'S OWN `message` NOW.
     assert "no aardvark system found" not in captured.err
+
+
+def test_the_very_first_json_invocation_on_a_machine_prints_only_the_object(isolatedHome, capsys):
+    """*set-up announces the settings file it writes on its first run, and prose in front of the object would make the whole stream unparseable*"""
+    import json as jsonModule
+
+    # NO PRIOR `aardvark` CALL: THIS IS THE RUN THAT CREATES
+    # `~/.config/aardvark/aardvark.yaml`.
+    with pytest.raises(SystemExit):
+        cl_utils.main(docopt(doc, ["fd", "--json"]))
+
+    captured = capsys.readouterr()
+    assert jsonModule.loads(captured.out)["error"]["kind"] == "no_system"
+    assert "Default settings have been added" in captured.err

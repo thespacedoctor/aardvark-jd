@@ -37,6 +37,11 @@ transients_cache/
 test_database.sql
 /logs/log.html
 
+# The Alfred workflow's user configuration overrides. Alfred writes changed
+# configuration values here and leaves the defaults in `info.plist`, so this
+# file is one machine's personal settings and is never committed.
+aardvark_jd/resources/alfred/prefs.plist
+
 path_to_settings.yaml
 blog-post.md
 blog-post.rst
