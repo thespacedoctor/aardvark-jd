@@ -167,6 +167,10 @@ One uniform shape across all seven mutating commands:
 
 **Implementation note for ticket 13, and input to tickets 07 and 08:** `emoji_source` and `corrections` are information the `add_*` / `set_emoji` worker classes currently compute internally and discard — their `.get()` methods return only `(code, folderPath)` and friends. Delivering this result object requires those methods to return the emoji provenance and the applied corrections (either by widening the return tuple or via an attribute on the worker). Tickets 07 (emoji surface) and 08 (spell-check surface) decide whether those steps stay in the CLI or move to Alfred; whichever way they land, the CLI path still needs to report what it did here.
 
+> **Amended 2026-09-03 by [ticket 08](08-spell-check-surface.md).** That decision landed and it changes this section. The spell-check moves to Alfred as rows on the confirmation screen, which needs suggestions **offered and not yet accepted** — not the applied substitutions `corrections` describes above. Worse, `--json` implies non-interactivity and headless `add_*` skips the check entirely, so `corrections` would be `[]` in exactly the case Alfred needs it filled. Two consequences for ticket 13: `--json` must **run** suspect-token detection even though it never prompts, and the contract needs a field carrying offered suggestions (token, suggested word, position) kept distinct from `corrections`' existing meaning. `corrections` itself is unchanged and still reports what the CLI path applied.
+>
+> `emoji_source` also loses its `claude` value, per [ticket 07](07-emoji-surface.md).
+
 ### 8. Where the code lives
 
 A single new pure module, `aardvark_jd/json_output.py`, beside `doc_links.py` and `labels.py` as another shared renderer. It holds `entity_record(row, links)`, `read_envelope(system, entities, archived=None)`, `result_envelope(action, ...)`, `error_envelope(exc)` and the `kind`-token mapping — all pure functions over dicts and rows, no I/O, fully unit-tested. `cl_utils.main` / `_dispatch` call it and `print(json.dumps(payload, ensure_ascii=False))`.
