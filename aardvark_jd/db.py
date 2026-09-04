@@ -1061,6 +1061,75 @@ def entity_rows_for_path_prefix(dbConn):
     return rows
 
 
+_ENTITIES_WITH_LINKS_SQL = """
+WITH entities AS (
+    SELECT
+        'area' AS entity_type, CAST(area_id AS TEXT) AS row_key,
+        domain, title, description, emoji, folder_path,
+        decade_start, decade_end, NULL AS ac_number, NULL AS item_number,
+        decade_start AS group_number, 0 AS type_rank
+    FROM areas
+    UNION ALL
+    SELECT
+        'category', CAST(category_id AS TEXT),
+        domain, title, description, emoji, folder_path,
+        NULL, NULL, ac_number, NULL,
+        ac_number, 1
+    FROM categories
+    UNION ALL
+    SELECT
+        'id', CAST(id_id AS TEXT),
+        domain, title, description, '' AS emoji, folder_path,
+        NULL, NULL, ac_number, item_number,
+        ac_number, 2
+    FROM ids
+)
+SELECT
+    entities.entity_type, entities.row_key, entities.domain,
+    entities.title, entities.description, entities.emoji,
+    entities.folder_path, entities.decade_start, entities.decade_end,
+    entities.ac_number, entities.item_number,
+    craft_links.craft_url, todoist_links.todoist_url,
+    gdrive_links.gdrive_url, dropbox_links.dropbox_url
+FROM entities
+LEFT JOIN craft_links
+    ON craft_links.entity_type = entities.entity_type
+    AND craft_links.entity_key = entities.row_key
+LEFT JOIN todoist_links
+    ON todoist_links.entity_type = entities.entity_type
+    AND todoist_links.entity_key = entities.row_key
+LEFT JOIN gdrive_links
+    ON gdrive_links.entity_type = entities.entity_type
+    AND gdrive_links.entity_key = entities.row_key
+LEFT JOIN dropbox_links
+    ON dropbox_links.folder_path = entities.folder_path
+ORDER BY
+    CASE entities.domain
+        WHEN 'areas' THEN 0
+        WHEN 'resources' THEN 1
+        WHEN 'projects' THEN 2
+    END,
+    entities.group_number,
+    entities.type_rank,
+    entities.item_number
+"""
+
+
+def entities_with_links(dbConn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """
+    *fetch every live entity and its mirror URLs in index order with one read-only query*
+
+    **Key Arguments:**
+
+    - ``dbConn`` -- an open SQLite connection
+
+    **Return:**
+
+    - ``rows`` -- the live area, category and ID rows with joined mirror URLs
+    """
+    return dbConn.execute(_ENTITIES_WITH_LINKS_SQL).fetchall()
+
+
 def get_dropbox_link(dbConn, folderPath):
     """
     *look up a folder's cached Dropbox share link, if any*

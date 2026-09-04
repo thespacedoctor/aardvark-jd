@@ -258,6 +258,97 @@ def test_entity_rows_for_path_prefix(dbConn):
     assert any(entityType == "id" for entityType, _key in rowsByType)
 
 
+def test_entities_with_links_returns_each_live_entity_type_with_link_columns(dbConn):
+    areaId = db.insert_area(
+        dbConn, "areas", 10, 19, "Health", "Wellbeing", "🏥", "A10_19_health🏥", "/root/A10_19_health🏥"
+    )
+    categoryId = db.insert_category(
+        dbConn, areaId, "areas", 11, "Doctors", "Clinicians", "🩺", "A11_doctors🩺", "/root/A10_19_health🏥/A11_doctors🩺"
+    )
+    idId = db.insert_id(
+        dbConn, categoryId, "areas", 11, 10, "Cardiologist", "", "A11.10_cardiologist", "/root/A10_19_health🏥/A11_doctors🩺/A11.10_cardiologist"
+    )
+    db.upsert_craft_link(dbConn, "id", str(idId), craftUrl="https://craft.example/id")
+    db.upsert_todoist_link(dbConn, "id", str(idId), todoistUrl="https://todoist.example/id")
+    db.upsert_gdrive_link(dbConn, "id", str(idId), gdriveUrl="https://drive.example/id")
+    db.upsert_dropbox_link(
+        dbConn,
+        "/root/A10_19_health🏥/A11_doctors🩺/A11.10_cardiologist",
+        "https://dropbox.example/id",
+    )
+
+    rows = db.entities_with_links(dbConn)
+
+    assert [row["entity_type"] for row in rows] == ["area", "category", "id"]
+    assert [row["row_key"] for row in rows] == [str(areaId), str(categoryId), str(idId)]
+    assert set(rows[0].keys()) == {
+        "entity_type", "row_key", "domain", "title", "description", "emoji", "folder_path",
+        "decade_start", "decade_end", "ac_number", "item_number", "craft_url", "todoist_url",
+        "gdrive_url", "dropbox_url",
+    }
+    assert rows[0]["decade_start"] == 10
+    assert rows[1]["ac_number"] == 11
+    assert rows[2]["emoji"] == ""
+    assert rows[2]["craft_url"] == "https://craft.example/id"
+    assert rows[2]["todoist_url"] == "https://todoist.example/id"
+    assert rows[2]["gdrive_url"] == "https://drive.example/id"
+    assert rows[2]["dropbox_url"] == "https://dropbox.example/id"
+
+
+def test_entities_with_links_keeps_entities_without_mirror_links(dbConn):
+    db.insert_area(
+        dbConn, "areas", 10, 19, "Health", "", "🏥", "A10_19_health🏥", "/root/A10_19_health🏥"
+    )
+
+    row = db.entities_with_links(dbConn)[0]
+
+    assert row["entity_type"] == "area"
+    assert row["craft_url"] is None
+    assert row["todoist_url"] is None
+    assert row["gdrive_url"] is None
+    assert row["dropbox_url"] is None
+
+
+def test_entities_with_links_returns_rows_in_index_order(dbConn):
+    laterAreaId = db.insert_area(
+        dbConn, "areas", 20, 29, "Learning", "", "📚", "A20_29_learning📚", "/root/A20_29_learning📚"
+    )
+    laterCategoryId = db.insert_category(
+        dbConn, laterAreaId, "areas", 21, "Courses", "", "🎓", "A21_courses🎓", "/root/A20_29_learning📚/A21_courses🎓"
+    )
+    laterIdId = db.insert_id(
+        dbConn, laterCategoryId, "areas", 21, 11, "Second", "", "A21.11_second", "/root/A20_29_learning📚/A21_courses🎓/A21.11_second"
+    )
+    earlierIdId = db.insert_id(
+        dbConn, laterCategoryId, "areas", 21, 10, "First", "", "A21.10_first", "/root/A20_29_learning📚/A21_courses🎓/A21.10_first"
+    )
+    resourceAreaId = db.insert_area(
+        dbConn, "resources", 10, 19, "Reference", "", "📖", "R10_19_reference📖", "/root/R10_19_reference📖"
+    )
+    resourceCategoryId = db.insert_category(
+        dbConn, resourceAreaId, "resources", 11, "Manuals", "", "📘", "R11_manuals📘", "/root/R10_19_reference📖/R11_manuals📘"
+    )
+    earlierAreaId = db.insert_area(
+        dbConn, "areas", 10, 19, "Health", "", "🏥", "A10_19_health🏥", "/root/A10_19_health🏥"
+    )
+    earlierCategoryId = db.insert_category(
+        dbConn, earlierAreaId, "areas", 11, "Doctors", "", "🩺", "A11_doctors🩺", "/root/A10_19_health🏥/A11_doctors🩺"
+    )
+
+    rows = db.entities_with_links(dbConn)
+
+    assert [(row["entity_type"], row["row_key"]) for row in rows] == [
+        ("area", str(earlierAreaId)),
+        ("category", str(earlierCategoryId)),
+        ("area", str(laterAreaId)),
+        ("category", str(laterCategoryId)),
+        ("id", str(earlierIdId)),
+        ("id", str(laterIdId)),
+        ("area", str(resourceAreaId)),
+        ("category", str(resourceCategoryId)),
+    ]
+
+
 def test_dropbox_link_round_trip(dbConn):
     assert db.get_dropbox_link(dbConn, "/root/03_AREAS") is None
 

@@ -9,9 +9,9 @@
         aardvark add_id <category> <title> <description> [-w] [-s <pathToSettingsFile>]
         aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
         aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
-        aardvark fd [<term>...] [-s <pathToSettingsFile>]
+        aardvark fd [<term>...] [--json] [--archived] [-s <pathToSettingsFile>]
         aardvark cd <target> [-s <pathToSettingsFile>]
-        aardvark open [<path>] [-s <pathToSettingsFile>]
+        aardvark open [<path>] [--json] [-s <pathToSettingsFile>]
         aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
         aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
         aardvark completion <shell>
@@ -75,6 +75,8 @@
         -v, --version                          show version
         -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
         -t, --template <templateName>          the template to use, skipping the interactive picker
+        --json                                 print the machine-readable contract instead of prose (internal and unstable)
+        --archived                             include the archived entities, alongside the live ones (`--json` only)
         -y, --yes                              skip the confirmation prompt
         -w, --wait                             wait for the remote mirrors to sync, instead of syncing in the background
         -s, --settings <pathToSettingsFile>    the settings file
