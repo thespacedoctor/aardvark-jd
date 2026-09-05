@@ -10,11 +10,12 @@ Usage:
     aardvark add_id <category> <title> <description> [-w] [-s <pathToSettingsFile>]
     aardvark add_project <category> <projectTitle> [-t <templateName>] [-w] [-s <pathToSettingsFile>]
     aardvark archive <ref> [-y] [-w] [-s <pathToSettingsFile>]
-    aardvark fd [<term>...] [-s <pathToSettingsFile>]
+    aardvark fd [<term>...] [--json] [--archived] [-s <pathToSettingsFile>]
     aardvark cd <target> [-s <pathToSettingsFile>]
-    aardvark open [<path>] [-s <pathToSettingsFile>]
+    aardvark open [<path>] [--json] [-s <pathToSettingsFile>]
     aardvark set_emoji <ref> <emoji> [-w] [-s <pathToSettingsFile>]
     aardvark repair_emoji [-w] [-s <pathToSettingsFile>]
+    aardvark install_alfred [--uninstall] [-s <pathToSettingsFile>]
     aardvark completion <shell>
     aardvark shell_init <shell>
     aardvark connect_craft <apiUrl> <apiToken> [-s <pathToSettingsFile>]
@@ -37,6 +38,7 @@ Commands:
     open                                   open the mirrored entities for a path, or pick one interactively
     set_emoji                              change the emoji on an existing folder, moving it and repointing the index
     repair_emoji                           fix drifted folder names/emoji and backfill missing reserved scaffolding
+    install_alfred                         install the aardvark workflow into Alfred, and record where aardvark lives on this Mac
     completion                             print the shell completion script for `bash` or `zsh`
     shell_init                             print the shell integration script (`av cd` support plus completion) for `bash` or `zsh`
     connect_craft                          connect a craft.do space and run the initial full mirror
@@ -76,12 +78,16 @@ Options:
     -v, --version                          show version
     -e, --emoji <emoji>                    the emoji to use, skipping the suggestion and prompt
     -t, --template <templateName>          the template to use, skipping the interactive picker
+    --uninstall                            remove the Alfred workflow symlink and this machine's aardvark pointer
+    --json                                 print the machine-readable contract instead of prose (internal and unstable)
+    --archived                             include the archived entities, alongside the live ones (`--json` only)
     -y, --yes                              skip the confirmation prompt
     -w, --wait                             wait for the remote mirrors to sync, instead of syncing in the background
     -s, --settings <pathToSettingsFile>    the settings file
 """
 
 import contextlib
+import json
 import os
 import re
 import sys
@@ -89,9 +95,10 @@ import sys
 from fundamentals import tools, times
 
 from aardvark_jd import (
-    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text, labels,
-    paths, settings_writer,
+    background_sync, change_dir, codes, completion, db, dropbox_ignore, folders, help_text,
+    json_output, labels, locate, paths, settings_writer,
 )
+from aardvark_jd.__version__ import __version__
 from aardvark_jd.add_area import add_area
 from aardvark_jd.add_category import add_category
 from aardvark_jd.add_id import add_id
@@ -103,6 +110,7 @@ from aardvark_jd.connect_todoist import connect_todoist
 from aardvark_jd.craft_sync import craft_sync
 from aardvark_jd.gdrive_sync import gdrive_sync
 from aardvark_jd.initialiser import initialiser
+from aardvark_jd.install_alfred import install_alfred
 from aardvark_jd.add_project import add_project
 from aardvark_jd.open_craft import open_craft
 from aardvark_jd.repair_emoji import repair_emoji
@@ -155,16 +163,28 @@ def main(arguments=None):
     # first, so pre-create it here to avoid a FileNotFoundError.
     os.makedirs(os.path.expanduser("~/.config/aardvark"), exist_ok=True)
 
-    su = tools(
-        arguments=arguments,
-        docString=__doc__,
-        logLevel="WARNING",
-        options_first=False,
-        projectName="aardvark",
-        distributionName="aardvark-jd",
-        defaultSettingsFile=True,
+    # ON ITS VERY FIRST RUN `fundamentals.tools` ANNOUNCES THE SETTINGS FILE
+    # IT JUST WROTE, ON STDOUT. UNDER `--json` THAT PROSE WOULD LAND IN
+    # FRONT OF THE CONTRACT OBJECT AND MAKE THE WHOLE STREAM UNPARSEABLE, SO
+    # THE WHOLE OF SET-UP'S STDOUT GOES TO STDERR - WHERE HUMAN PROSE
+    # BELONGS ANYWAY. THE ANNOUNCEMENT COMES FROM THE CONSTRUCTOR, NOT FROM
+    # `setup()`, SO BOTH SIT INSIDE THE REDIRECT.
+    setUpOutput = (
+        contextlib.redirect_stdout(sys.stderr)
+        if _json_requested(arguments)
+        else contextlib.nullcontext()
     )
-    arguments, settings, log, dbConn = su.setup()
+    with setUpOutput:
+        su = tools(
+            arguments=arguments,
+            docString=__doc__,
+            logLevel="WARNING",
+            options_first=False,
+            projectName="aardvark",
+            distributionName="aardvark-jd",
+            defaultSettingsFile=True,
+        )
+        arguments, settings, log, dbConn = su.setup()
 
     a = {}
     for arg, val in list(arguments.items()):
@@ -187,10 +207,27 @@ def main(arguments=None):
             ).get()
             print(f"aardvark system '{a['systemName']}' initialised at {rootPath}")
 
+        elif a["install_alfred"]:
+            # DELIBERATELY ABOVE THE "NO SYSTEM" CHECK BELOW. ON A FRESH
+            # MACHINE THE ORDER IS INSTALL THE PACKAGE, RUN THIS, THEN POINT
+            # THE CLI AT THE TREE - SO THIS COMMAND CANNOT REQUIRE A SYSTEM
+            # THAT DOES NOT EXIST YET.
+            for message in install_alfred(log=log, uninstall=a["uninstallFlag"]).get():
+                print(message)
+
         else:
             rootPath = (settings.get("system") or {}).get("root_path")
             if not rootPath:
-                print("no aardvark system found - run `aardvark init <systemName> <parentPath>` first", file=sys.stderr)
+                # UNDER `--json` EVEN THIS EXIT HAS TO BE A PARSEABLE OBJECT ON
+                # STDOUT: THE ALFRED WORKFLOW HAS NO ERROR CHANNEL AND RENDERS
+                # WHATEVER IT READS THERE AS A ROW.
+                if a.get("jsonFlag"):
+                    _print_json(json_output.error_envelope_for_kind(
+                        json_output.NO_SYSTEM_KIND,
+                        "no aardvark system found - run `aardvark init <systemName> <parentPath>` first",
+                    ))
+                else:
+                    print("no aardvark system found - run `aardvark init <systemName> <parentPath>` first", file=sys.stderr)
                 sys.exit(1)
 
             # RE-ASSERT THE DROPBOX IGNORE ON THE INDEX DIRECTORY BEFORE OPENING
@@ -313,7 +350,13 @@ def main(arguments=None):
                 indexDbConn.close()
 
     except CLEAR_ERRORS as error:
-        print(f"error: {error}", file=sys.stderr)
+        # THE SAME FORK AS THE "NO SYSTEM" EXIT ABOVE, AND FOR THE SAME
+        # REASON. THE NON-ZERO EXIT STAYS EITHER WAY: IT IS A SECONDARY
+        # SIGNAL FOR SHELL USE, WHILE ALFRED READS STDOUT REGARDLESS.
+        if a.get("jsonFlag"):
+            _print_json(json_output.error_envelope(error))
+        else:
+            print(f"error: {error}", file=sys.stderr)
         sys.exit(1)
 
     endTime = times.get_now_sql_datetime()
@@ -596,7 +639,14 @@ def _dispatch(a, log, indexDbConn, settings):
         _hand_off_sync(a, log, indexDbConn, settings)
 
     elif a["fd"]:
-        _search(a, log, indexDbConn)
+        if a.get("jsonFlag"):
+            _fd_json(a, log, indexDbConn, settings)
+        else:
+            if a.get("archivedFlag"):
+                raise ValueError(
+                    "`--archived` is only meaningful with `--json` - run `aardvark fd --json --archived`"
+                )
+            _search(a, log, indexDbConn)
 
     elif a["archive"]:
         if not a["yesFlag"] and sys.stdin.isatty():
@@ -617,6 +667,10 @@ def _dispatch(a, log, indexDbConn, settings):
         _hand_off_sync(a, log, indexDbConn, settings)
 
     elif a["open"]:
+        if a.get("jsonFlag"):
+            _open_json(a, indexDbConn, settings)
+            return
+
         targetPath = a["path"]
         if not targetPath and sys.stdin.isatty():
             targetPath = browse(log=log, dbConn=indexDbConn, settings=settings).get()
@@ -628,6 +682,185 @@ def _dispatch(a, log, indexDbConn, settings):
         ).get()
         for serviceLabel, url in openedUrls:
             print(f"opened {label}  {serviceLabel}  {url}")
+
+
+def _json_requested(arguments):
+    """
+    *decide whether this run has to keep stdout free for the contract*
+
+    Asked **before** docopt has run, so it reads the raw arguments: either
+    the dict a caller passed in, or the command line itself.
+
+    **Key Arguments:**
+
+    - ``arguments`` -- the docopt arguments dict, or `None` when reading `sys.argv`
+
+    **Return:**
+
+    - ``jsonRequested`` -- `True` if `--json` was asked for
+    """
+    if arguments is None:
+        return "--json" in sys.argv[1:]
+    return bool(arguments.get("--json"))
+
+
+def _print_json(payload):
+    """
+    *write one contract object to stdout*
+
+    The only glue between the pure renderers in `json_output` and the
+    terminal, which is why it is the one place excluded from coverage.
+
+    **Key Arguments:**
+
+    - ``payload`` -- the JSON-ready dict to print
+    """
+    print(json.dumps(payload, ensure_ascii=False))  # pragma: no cover
+
+
+def _codes_under_ref(ref, records):
+    """
+    *narrow a whole-index dump to one Johnny Decimal subtree, without a second query*
+
+    A domain letter takes its whole domain; an area takes its own decade;
+    a category takes itself and its IDs; an ID takes itself. The dump is
+    already in index order, so filtering it preserves that order.
+
+    **Key Arguments:**
+
+    - ``ref`` -- an upper-cased domain letter, area, category or ID reference
+    - ``records`` -- the whole index's entity records
+
+    **Return:**
+
+    - ``records`` -- the subtree's records, in index order
+    """
+    if ref in codes.LETTER_DOMAIN:
+        domain = codes.LETTER_DOMAIN[ref]
+        return [record for record in records if record["domain"] == domain]
+
+    if codes.is_id_ref(ref):
+        return [record for record in records if record["code"] == ref]
+
+    if codes.parse_area_ref_is_area(ref):
+        domain, decadeStart = codes.split_area_ref(ref)
+        # AN AREA OWNS THE CATEGORIES WHOSE NUMBER FALLS IN ITS DECADE, AND
+        # THEIR IDS. THE CODE STRING CARRIES ENOUGH TO SAY SO WITHOUT
+        # RE-READING THE INDEX.
+        return [
+            record for record in records
+            if record["domain"] == domain
+            and _decade_of(record) == decadeStart
+        ]
+
+    domain, acNumber = codes.split_category_ref(ref)
+    categoryCode = codes.format_category_code(domain, acNumber)
+    return [
+        record for record in records
+        if record["code"] == categoryCode or record["code"].startswith(f"{categoryCode}.")
+    ]
+
+
+def _decade_of(record):
+    """
+    *the decade an entity's Johnny Decimal code belongs to*
+
+    **Key Arguments:**
+
+    - ``record`` -- one entity record
+
+    **Return:**
+
+    - ``decadeStart`` -- the decade-start number, e.g. `10` for `A11.10`
+    """
+    number = int(record["code"][1:3])
+    return number - (number % 10)
+
+
+def _fd_json(a, log, indexDbConn, settings):
+    """
+    *print the index, a subtree, or a keyword search, as the JSON contract*
+
+    One bulk read serves every shape: the whole index, a Johnny Decimal
+    subtree and a keyword search alike, because the per-entity mirror
+    lookups `open` uses would otherwise cost four queries per entity.
+
+    **Key Arguments:**
+
+    - ``a`` -- the friendly-named docopt arguments dict
+    - ``log`` -- logger
+    - ``indexDbConn`` -- an open SQLite connection to the active system's index
+    - ``settings`` -- the aardvark settings dict
+    """
+    records = json_output.entity_records(db.entities_with_links(indexDbConn))
+    terms = a["term"] or []
+
+    if len(terms) == 1:
+        ref = terms[0].upper()
+        try:
+            if codes.is_jd_ref(ref) or codes.is_id_ref(ref) or ref in codes.LETTER_DOMAIN:
+                records = _codes_under_ref(ref, records)
+                terms = []
+        except (ValueError, KeyError):
+            # NOT A RESOLVABLE REF AFTER ALL - FALL THROUGH TO KEYWORD SEARCH,
+            # EXACTLY AS THE HUMAN-READABLE PATH DOES.
+            pass
+
+    if terms:
+        # KEYWORD MATCHES KEEP `bm25` RANK ORDER RATHER THAN INDEX ORDER.
+        byCode = {(record["type"], record["code"]): record for record in records}
+        records = [
+            byCode[(row["entity_type"], row["code"])]
+            for row in search(log=log, dbConn=indexDbConn, terms=terms).get()
+            if (row["entity_type"], row["code"]) in byCode
+        ]
+
+    archived = None
+    if a.get("archivedFlag"):
+        archived = [
+            json_output.archived_record(row)
+            for row in db.list_archived_entities(indexDbConn)
+        ]
+
+    system = json_output.system_block(settings, __version__)
+    _print_json(json_output.read_envelope(system, records, archived=archived))
+
+
+def _open_json(a, indexDbConn, settings):
+    """
+    *resolve a path to its entity record, opening nothing*
+
+    `--json` implies non-interactivity, so there is no picker fallback
+    here, and an entity synced to nothing is not an error - the record
+    simply carries `null` for every mirror it has not reached yet.
+
+    **Key Arguments:**
+
+    - ``a`` -- the friendly-named docopt arguments dict
+    - ``indexDbConn`` -- an open SQLite connection to the active system's index
+    - ``settings`` -- the aardvark settings dict
+    """
+    rootPath = (settings.get("system") or {}).get("root_path")
+    targetPath = a["path"] or os.getcwd()
+    entityType, entityKey, _folderPath, label = locate.entity_for_path(
+        indexDbConn, targetPath, rootPath=rootPath,
+    )
+
+    # ONE ROW, NOT THE WHOLE INDEX: THE BULK READ IS THERE TO MAKE A WHOLE
+    # DUMP CHEAP, NOT TO MAKE A SINGLE LOOKUP EXPENSIVE.
+    matches = json_output.entity_records(
+        db.entities_with_links(indexDbConn, entityType=entityType, rowKey=entityKey)
+    )
+    if not matches:
+        # A `system_folder` OR THE SPACE ROOT ITSELF: REAL, MIRRORED, AND
+        # DELIBERATELY ABSENT FROM THE CONTRACT, WHICH DESCRIBES AREAS,
+        # CATEGORIES AND IDS ONLY.
+        raise ValueError(
+            f"'{label}' is a system folder, so it is not found in the index - "
+            f"`--json` covers areas, categories and IDs"
+        )
+
+    _print_json(json_output.result_envelope("open", entity=matches[0], label=label))
 
 
 def _id_row_for_ref(indexDbConn, ref):

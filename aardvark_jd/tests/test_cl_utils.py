@@ -630,3 +630,229 @@ def test_fd_on_a_category_ref_prints_the_emoji_in_the_tree(isolatedHome, capsys)
     cl_utils.main(docopt(doc, ["fd", "A11"]))
 
     assert "A11 \N{STETHOSCOPE} Doctors" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# THE `--json` CONTRACT. INTERNAL AND UNSTABLE - SEE `json_output.py` AND
+# `docs/alfred-workflow-spec.md`. THE ALFRED WORKFLOW IS ITS ONLY CONSUMER.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", [
+    "fd --json",
+    "fd --json --archived",
+    "fd cardio --json",
+    "open --json",
+    "open /some/path --json",
+])
+def test_docopt_accepts_the_json_flag_where_the_contract_defines_it(command):
+    args = docopt(doc, command.split(" "))
+    assert args["--json"] is True
+
+
+@pytest.mark.parametrize("command", ["cd A11.10 --json", "repair_emoji --json"])
+def test_docopt_rejects_the_json_flag_where_the_contract_does_not_define_it(command):
+    with pytest.raises(SystemExit):
+        docopt(doc, command.split(" "))
+
+
+def _seededSystem(isolatedHome, capsys):
+    """*a two-domain system with an area, a category and two IDs, ready to dump*"""
+    rootParent = str(isolatedHome / "root_parent")
+    os.makedirs(rootParent)
+    cl_utils.main(docopt(doc, ["init", "TestSystem", rootParent]))
+    cl_utils.main(docopt(doc, ["add_area", "A", "Health", "the body"]))
+    cl_utils.main(docopt(doc, ["add_category", "A10-19", "Doctors", "clinicians"]))
+    cl_utils.main(docopt(doc, ["add_id", "A11", "Cardiologist", "heart"]))
+    cl_utils.main(docopt(doc, ["add_id", "A11", "Dentist", "teeth"]))
+    cl_utils.main(docopt(doc, ["add_area", "R", "Reading", "books"]))
+    capsys.readouterr()
+    return rootParent
+
+
+def test_fd_json_emits_a_versioned_envelope_with_a_system_block(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    assert payload["aardvark_json"] == 1
+    assert payload["system"]["name"] == "TestSystem"
+    assert payload["system"]["root_path"].endswith("TestSystem")
+    assert payload["system"]["generated_at"].endswith("Z")
+    assert payload["system"]["version"]
+
+
+def test_fd_json_is_flat_and_in_index_order(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    assert [entity["code"] for entity in payload["entities"]] == [
+        "A10-19", "A11", "A11.10", "A11.11", "R10-19",
+    ]
+    assert all("children" not in entity for entity in payload["entities"])
+    assert all(entity["archived"] is False for entity in payload["entities"])
+    assert "archived" not in payload
+
+
+def test_fd_json_carries_every_mirror_url_slot_even_when_unsynced(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    urls = payload["entities"][0]["urls"]
+    assert set(urls) == {"finder", "craft", "todoist", "drive", "dropbox"}
+    assert urls["craft"] is None
+
+
+def test_fd_json_on_a_ref_returns_that_subtree_flat(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "A11", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    assert [entity["code"] for entity in payload["entities"]] == ["A11", "A11.10", "A11.11"]
+
+
+def test_fd_json_on_a_keyword_returns_the_search_matches(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "cardiologist", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    assert [entity["code"] for entity in payload["entities"]] == ["A11.10"]
+
+
+def test_fd_json_archived_adds_a_sibling_array_and_leaves_entities_live(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+    cl_utils.main(docopt(doc, ["archive", "A11.11", "-y"]))
+    capsys.readouterr()
+
+    cl_utils.main(docopt(doc, ["fd", "--json", "--archived"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+
+    assert [entity["code"] for entity in payload["entities"]] == ["A10-19", "A11", "A11.10", "R10-19"]
+    assert [entity["code"] for entity in payload["archived"]] == ["A11.11"]
+    assert payload["archived"][0]["archived"] is True
+    assert payload["archived"][0]["urls"]["finder"] is None
+
+
+def test_archived_without_json_fails_loudly_rather_than_silently(isolatedHome, capsys):
+    """*`--archived` only shapes the contract, so on its own it is a mistake worth naming*"""
+    _seededSystem(isolatedHome, capsys)
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["fd", "--archived"]))
+
+    assert excInfo.value.code == 1
+    assert "--archived" in capsys.readouterr().err
+
+
+def test_fd_without_json_still_prints_the_human_tree(isolatedHome, capsys):
+    """*regression guard: the contract must not disturb what `fd` has always printed*"""
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd"]))
+    out = capsys.readouterr().out
+
+    assert "A11.10 Cardiologist" in out
+    assert "aardvark_json" not in out
+
+
+def test_open_json_returns_the_record_without_opening_anything(isolatedHome, monkeypatch, capsys):
+    import json as jsonModule
+
+    from aardvark_jd import open_craft as openCraftModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+    idPath = [entity for entity in payload["entities"] if entity["code"] == "A11.10"][0]["folder_path"]
+
+    def boom(*args, **kwargs):
+        raise AssertionError("`open --json` must not open anything")
+
+    monkeypatch.setattr(openCraftModule, "open_craft", boom)
+
+    cl_utils.main(docopt(doc, ["open", idPath, "--json"]))
+    result = jsonModule.loads(capsys.readouterr().out)["result"]
+
+    assert result["action"] == "open"
+    assert result["label"] == "Cardiologist"
+    assert result["entity"]["code"] == "A11.10"
+
+
+def test_open_json_on_an_entity_synced_to_nothing_is_not_an_error(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    cl_utils.main(docopt(doc, ["fd", "--json"]))
+    payload = jsonModule.loads(capsys.readouterr().out)
+    idPath = [entity for entity in payload["entities"] if entity["code"] == "A11.10"][0]["folder_path"]
+
+    cl_utils.main(docopt(doc, ["open", idPath, "--json"]))
+    result = jsonModule.loads(capsys.readouterr().out)["result"]
+
+    assert all(result["entity"]["urls"][mirror] is None for mirror in ("craft", "todoist", "drive"))
+
+
+def test_a_clear_error_under_json_lands_on_stdout_with_a_stable_kind(isolatedHome, capsys):
+    import json as jsonModule
+
+    _seededSystem(isolatedHome, capsys)
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["open", "/nowhere/at/all", "--json"]))
+
+    captured = capsys.readouterr()
+    assert excInfo.value.code != 0
+    # ALFRED READS STDOUT REGARDLESS OF EXIT CODE, SO THE OBJECT ALWAYS ARRIVES.
+    payload = jsonModule.loads(captured.out)
+    assert payload["aardvark_json"] == 1
+    assert payload["error"]["kind"]
+    assert payload["error"]["message"]
+
+
+def test_a_missing_system_under_json_is_an_error_envelope_not_prose(isolatedHome, capsys):
+    import json as jsonModule
+
+    with pytest.raises(SystemExit) as excInfo:
+        cl_utils.main(docopt(doc, ["fd", "--json"]))
+
+    captured = capsys.readouterr()
+    assert excInfo.value.code == 1
+    assert jsonModule.loads(captured.out)["error"]["kind"] == "no_system"
+    # STDOUT CARRIES THE OBJECT AND NOTHING ELSE. THE PROSE IS NOT REPEATED
+    # ON STDERR EITHER - IT IS THE OBJECT'S OWN `message` NOW.
+    assert "no aardvark system found" not in captured.err
+
+
+def test_the_very_first_json_invocation_on_a_machine_prints_only_the_object(isolatedHome, capsys):
+    """*set-up announces the settings file it writes on its first run, and prose in front of the object would make the whole stream unparseable*"""
+    import json as jsonModule
+
+    # NO PRIOR `aardvark` CALL: THIS IS THE RUN THAT CREATES
+    # `~/.config/aardvark/aardvark.yaml`.
+    with pytest.raises(SystemExit):
+        cl_utils.main(docopt(doc, ["fd", "--json"]))
+
+    captured = capsys.readouterr()
+    assert jsonModule.loads(captured.out)["error"]["kind"] == "no_system"
+    assert "Default settings have been added" in captured.err

@@ -78,6 +78,13 @@ where = ["."]
 exclude = ["tests", "tests.*"]
 
 
+[tool.coverage.run]
+# THE ALFRED-INVOKED ENTRY POINTS ARE A FEW LINES OF RESOLVE-AND-SHELL-OUT
+# GLUE EACH, AND ARE NOT IMPORTABLE MODULES IN ANY CASE. THE LOGIC THEY CALL
+# LIVES IN `aardvark_jd/alfred/` AND IS UNIT-TESTED THERE.
+omit = ["aardvark_jd/resources/alfred/scripts/*"]
+
+
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
