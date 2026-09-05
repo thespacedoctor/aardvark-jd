@@ -11,17 +11,33 @@ value the folder name, the index row and all three mirrors are built
 from, so there is no post-creation rename and no mirror repoint.
 
 It **offers**; it never blocks and never silently rewrites. That is not
-politeness, it is arithmetic - on a realistic technical vocabulary this
-configuration flags 18 per cent of tokens, so a checker that corrected
-without asking would corrupt titles routinely.
+politeness, it is arithmetic - most of what it flags is a proper noun,
+not a typo, so a checker that corrected without asking would corrupt
+titles routinely.
 
-Two rules do almost all the work of keeping that rate down, and they
-matter far more than which wordlist ships (across nine SCOWL sizes the
-false-positive count moved by one under the right tokeniser, and by 21
-under a naive one):
+Three rates, each with its denominator, because they have been confused
+for one another before:
 
-- check only tokens of **six characters or more**, split on `[_\\-\\s.]`
+- **4.3 per cent of titles** fire, measured on 141 real human-typed
+  titles under this tuning. Ticket 08 measured 1.4 per cent under the
+  old floor of six.
+- **1.5 per cent of tokens** on those same live titles.
+- **18 per cent of tokens** on a synthetic technical vocabulary. That
+  figure is a stress test, not what a real tree does, and it is the one
+  previously quoted here without its denominator.
+
+Two rules do most of the work of keeping the false-alarm rate down, and
+they matter far more than which wordlist ships (across nine SCOWL sizes
+the false-positive count moved by one under the right tokeniser, and by
+21 under a naive one):
+
+- check only tokens of **five characters or more**, split on `[_\\-\\s.]`
 - offer only when a **distance-1 dictionary word actually exists**
+
+The floor is a trade, not a free win: it also decides what is checked at
+all, and at six it made dropped letters - the commonest typo class -
+structurally undetectable in the six- and seven-character words that
+dominate real titles.
 
 Distance 2 was measured and rejected: 49 per cent false positives and 850
 times the runtime, to recover four typos in thirty-four.
@@ -47,8 +63,14 @@ _WORDLIST_PATH = os.path.join(
 )
 
 # SHORT TOKENS ARE WHERE THE FALSE POSITIVES LIVE - EVERY THREE-LETTER
-# FRAGMENT IS ONE EDIT FROM SOME DICTIONARY WORD.
-MINIMUM_TOKEN_LENGTH = 6
+# FRAGMENT IS ONE EDIT FROM SOME DICTIONARY WORD - BUT THE FLOOR ALSO DECIDES
+# WHAT IS CHECKED AT ALL, AND AT SIX IT MADE THE COMMONEST TYPO CLASS
+# INVISIBLE: DROPPING A LETTER FROM A SIX-CHARACTER WORD LEAVES FIVE, SO
+# `sysem`, `famil` AND `acive` WERE NEVER CHECKED. FIVE COSTS FOUR MORE
+# SUSPECT TOKENS ACROSS 141 REAL TITLES, ALL PROPER NOUNS THE LEARNED
+# VOCABULARY RETIRES AT ONE DISMISSAL EACH. FOUR IS REJECTED ON ITS OWN
+# NUMBERS: THE SAME RECALL, AND 12.8 PER CENT OF TITLES FIRING.
+MINIMUM_TOKEN_LENGTH = 5
 
 _TOKEN_SEPARATORS = re.compile(r"[_\-\s.]+")
 _ALPHABET = "abcdefghijklmnopqrstuvwxyz"
@@ -173,10 +195,14 @@ def suggest(token):
     candidates = _distance_one_variants(lowered) & words
     if not candidates:
         return None
-    # NO FREQUENCY DATA SHIPS WITH THE LIST, SO PREFER THE SHORTEST
-    # CANDIDATE AND BREAK TIES ALPHABETICALLY - DETERMINISTIC, WHICH MATTERS
-    # MORE HERE THAN CLEVER, SINCE A WRONG OFFER IS ONE KEYSTROKE TO DECLINE.
-    return min(candidates, key=lambda word: (len(word), word))
+    # NO FREQUENCY DATA SHIPS WITH THE LIST, SO PREFER THE LONGEST CANDIDATE
+    # AND BREAK TIES ALPHABETICALLY. "LONGEST FIRST" AND "ASSUME A DROPPED
+    # LETTER FIRST" ARE THE SAME RULE: AT EDIT DISTANCE 1 A CANDIDATE IS ONLY
+    # EVER ONE SHORTER, THE SAME LENGTH, OR ONE LONGER, AND A DROPPED LETTER
+    # IS THE COMMONEST TYPO. PREFERRING THE SHORTEST PICKED AGAINST THAT CASE
+    # BY CONSTRUCTION - MEASURED AT 57.6 PER CENT RIGHT AND 25.0 PER CENT
+    # WRONG, AGAINST 75.0 AND 7.6 PER CENT HERE, AT NO COST TO THE FIRE RATE.
+    return min(candidates, key=lambda word: (-len(word), word))
 
 
 def _apply_case(original, replacement):
@@ -304,7 +330,8 @@ def check_title(title, rootPath=None, settings=None, log=None):
                 title = replaced
         elif rootPath:
             # DECLINING TEACHES IT THE WORD. THIS IS THE WHOLE REASON THE
-            # FEATURE IS TOLERABLE AT AN 18 PER CENT FALSE-POSITIVE RATE.
+            # FEATURE IS TOLERABLE: WHAT IT FLAGS ON A REAL TREE IS MOSTLY
+            # PROPER NOUNS, AND EACH IS RETIRED BY ONE DISMISSAL.
             vocabulary.remember(rootPath, token, log=log)
 
     return title

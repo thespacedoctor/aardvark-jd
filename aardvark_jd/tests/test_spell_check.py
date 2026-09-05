@@ -57,15 +57,53 @@ def test_a_word_two_edits_out_gets_no_suggestion():
     assert spell_check.suggest("crdilgist") is None
 
 
+def test_the_tie_break_prefers_the_longest_candidate():
+    """
+    *a dropped letter is the commonest typo, so the correction is usually longer*
+
+    Preferring the shortest candidate picks against that case by
+    construction, and produces offers that read as broken rather than
+    merely unhelpful.
+    """
+    assert spell_check.suggest("setings") == "settings"      # NOT `stings`
+    assert spell_check.suggest("servies") == "services"      # NOT `series`
+    assert spell_check.suggest("arhive") == "archive"        # NOT `arrive`
+
+
+def test_candidates_of_equal_length_still_break_alphabetically():
+    """*the rule stays deterministic - `candle` and `cradle` are both distance 1*"""
+    assert spell_check.suggest("cadle") == "candle"
+
+
+def test_a_letter_dropped_from_a_six_letter_word_is_now_checked():
+    """
+    *the floor of six made the commonest typo class structurally invisible*
+
+    Dropping a letter from a six-character word leaves five, so every one
+    of these was skipped before the token ever reached `suggest`.
+    """
+    assert spell_check.tokenise("famil acive sysem") == ["famil", "acive", "sysem"]
+    assert spell_check.suggest("famil") == "family"
+    assert spell_check.suggest("acive") == "active"
+    assert spell_check.suggest("sysem") == "system"
+
+
 # ---------------------------------------------------------------- tokenising
 
 def test_tokens_are_split_on_separators_and_short_ones_ignored():
     """*short tokens are where the false positives live*"""
-    assert spell_check.tokenise("Aadvark_notes-and.things xyz") == ["Aadvark", "things"]
+    assert spell_check.tokenise("Aadvark_notes-and.things xyz") == [
+        "Aadvark", "notes", "things",
+    ]
 
 
 def test_tokens_below_the_minimum_length_are_never_checked():
     assert spell_check.tokenise("teh cat sat") == []
+
+
+def test_four_character_tokens_are_still_never_checked():
+    """*floor 4 was rejected on its own numbers - 12.8 per cent of titles firing*"""
+    assert spell_check.tokenise("woth verb tine") == []
 
 
 def test_non_alphabetic_tokens_are_skipped():
