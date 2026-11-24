@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import pytest
 import yaml
@@ -964,11 +965,15 @@ def test_the_sync_label_is_none_when_no_mirror_is_connected(isolatedHome):
     assert cl_utils._hand_off_sync({}, log, None, settings) == "none"
 
 
-def test_add_id_json_carries_the_new_entity_record(isolatedHome, capsys):
+def test_add_id_json_carries_the_new_entity_record(isolatedHome, capsys, monkeypatch):
     """*the success surface is built from this record, which is the whole recall story*"""
     import json as jsonModule
 
     _seededSystem(isolatedHome, capsys)
+
+    # THE FINDER URL IS A MACOS-ONLY HOOKMARK LINK, SO PIN THE PLATFORM (AFTER SEEDING, SO
+    # INIT'S DROPBOX-IGNORE CHECK STILL SEES THE REAL PLATFORM)
+    monkeypatch.setattr(sys, "platform", "darwin")
 
     cl_utils.main(docopt(doc, ["add_id", "A11", "Podiatrist", "feet", "--json"]))
     entity = jsonModule.loads(capsys.readouterr().out)["result"]["entity"]
