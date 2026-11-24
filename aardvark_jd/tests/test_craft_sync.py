@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import pytest
 import yaml
@@ -16,6 +17,14 @@ from aardvark_jd.initialiser import initialiser
 
 log = logging.getLogger("test_craft_sync")
 log.addHandler(logging.NullHandler())
+
+
+@pytest.fixture(autouse=True)
+def _pin_darwin_platform(monkeypatch):
+    # THE FINDER LINK ROW COMES FROM HOOKMARK, WHICH IS MACOS-ONLY (`doc_links.hookmark_url`
+    # RETURNS NONE ELSEWHERE), SO PIN THE PLATFORM TO KEEP THESE TESTS HOST-INDEPENDENT.
+    # TESTS OF THE NO-LINK-ROW PATH STUB `hookmark_url` THEMSELVES.
+    monkeypatch.setattr(sys, "platform", "darwin")
 
 
 class FakeCraftClient(object):
